@@ -9,8 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // Service worker handles offline caching automatically
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-      },
+          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        },
       manifest: {
         name: 'Zone Rush',
         short_name: 'Zone Rush',
