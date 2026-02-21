@@ -54,7 +54,7 @@ export default function GameMap({ zones }: GameMapProps) {
           data: {
             type: "Feature",
             properties: { name: zone.name },
-            geometry: zone.boundary,
+            geometry: zone.boundary as any,
           },
         });
 
