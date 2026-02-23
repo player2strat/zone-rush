@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, updateDoc, collection,
-  getDocs, setDoc, arrayUnion, query, where,
+  getDocs, setDoc, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { dealChallenges } from '../lib/dealChallenges'
