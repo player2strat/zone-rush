@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  doc, getDoc, onSnapshot, collection, query, where, getDocs,
+  doc, getDoc, onSnapshot, collection,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 
@@ -128,16 +128,19 @@ export default function GamePage() {
 
         setMyTeam(foundTeam)
 
-        // Fetch challenge details for the hand
-        if (foundTeam && foundTeam.hand.length > 0) {
-          const challengeDocs: Challenge[] = []
-          for (const chId of foundTeam.hand) {
-            const chDoc = await getDoc(doc(db, 'challenges', chId))
-            if (chDoc.exists()) {
-              challengeDocs.push({ id: chDoc.id, ...chDoc.data() } as Challenge)
+// Fetch challenge details for the hand
+        if (foundTeam) {
+          const teamHand = (foundTeam as TeamData).hand
+          if (teamHand && teamHand.length > 0) {
+            const challengeDocs: Challenge[] = []
+            for (const chId of teamHand) {
+              const chDoc = await getDoc(doc(db, 'challenges', chId))
+              if (chDoc.exists()) {
+                challengeDocs.push({ id: chDoc.id, ...chDoc.data() } as Challenge)
+              }
             }
+            setChallenges(challengeDocs)
           }
-          setChallenges(challengeDocs)
         }
 
         setLoading(false)
