@@ -5,7 +5,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
   updateDoc, setDoc, getDoc, getDocs, serverTimestamp,
@@ -96,7 +96,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 export default function GMDashboard() {
   const { gameId } = useParams<{ gameId: string }>()
-  const navigate = useNavigate()
   const user = auth.currentUser
 
   // Core state
@@ -234,7 +233,6 @@ export default function GMDashboard() {
 
       const review = getReviewState(sub.id)
       const claimThreshold = game.settings.claim_threshold ?? 6
-      const zoneBonusPoints = game.settings.zone_bonus_points ?? 3
 
       // --- Calculate points ---
       const basePoints = DIFFICULTY_PTS[challenge.difficulty] || 3
