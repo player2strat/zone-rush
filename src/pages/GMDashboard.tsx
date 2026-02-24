@@ -1,16 +1,26 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (Day 10)
-// Real-time submission review, scoring engine, and zone claim logic
-// This is the GM's "mission control" — designed for laptop/desktop use
+// Zone Rush — GM Dashboard (Day 11)
+// Real-time submission review, scoring engine, zone claim logic,
+// mini zone map, and GPS proximity warnings
+//
+// CHANGES FROM DAY 10:
+// - NEW: Mini map in right sidebar showing claimed zones in team colors
+// - NEW: GPS proximity warning — flags submissions outside the claimed zone
+// - NEW: Import zones data + GameMap + geo utilities
+// - CHANGED: zoneOwnership now also feeds into the mini GameMap component
 // =============================================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
   updateDoc, setDoc, getDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import { zones as allZoneData } from '../lib/zones'
+import { isPointInPolygon } from '../lib/geo'
+import GameMap from '../components/GameMap'
+import type { ZoneOwner } from '../components/GameMap'
 
 // --------------- Types ---------------
 
@@ -120,6 +130,12 @@ export default function GMDashboard() {
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
 
+  // ✅ NEW: Zone data lookup for GPS proximity checks
+  const zoneDataMap = useMemo(
+    () => new Map(allZoneData.map((z) => [z.id, z])),
+    []
+  )
+
   // ---------- Listeners ----------
 
   // Game doc
@@ -221,6 +237,21 @@ export default function GMDashboard() {
     })
   }
 
+  // ---------- GPS Proximity Check ----------
+
+  /**
+   * ✅ NEW: Check if a submission's GPS falls inside its claimed zone.
+   * Returns: 'inside' | 'outside' | 'unknown' (no GPS or no zone data)
+   */
+  const checkGpsProximity = (sub: SubmissionData): 'inside' | 'outside' | 'unknown' => {
+    if (!sub.gps_lat || !sub.gps_lng || !sub.zone_id) return 'unknown'
+    const zone = zoneDataMap.get(sub.zone_id)
+    if (!zone?.boundary?.coordinates) return 'unknown'
+    return isPointInPolygon(sub.gps_lat, sub.gps_lng, zone.boundary.coordinates)
+      ? 'inside'
+      : 'outside'
+  }
+
   // ---------- Scoring + Approve ----------
 
   const handleApprove = async (sub: SubmissionData) => {
@@ -270,7 +301,6 @@ export default function GMDashboard() {
       const newPoints = currentPoints + totalPointsEarned
       completedChallenges.push(sub.challenge_id)
 
-      // Determine zone status
       let newStatus: 'none' | 'claimed' = newPoints >= claimThreshold ? 'claimed' : 'none'
 
       await setDoc(scoreRef, {
@@ -282,7 +312,6 @@ export default function GMDashboard() {
       })
 
       // --- 3. Check zone ownership across all teams ---
-      // If this team just claimed, check if another team had it — that's a steal
       if (newStatus === 'claimed') {
         const allScoresSnap = await getDocs(
           collection(db, 'games', gameId, 'zone_scores')
@@ -299,8 +328,6 @@ export default function GMDashboard() {
           }
         })
 
-        // Update all zone_scores for this zone: only the highest-scoring team
-        // that meets the threshold gets 'claimed'
         for (const d of allScoresSnap.docs) {
           const data = d.data() as ZoneScoreData
           if (data.zone_id === zoneId) {
@@ -323,7 +350,6 @@ export default function GMDashboard() {
         collection(db, 'games', gameId, 'zone_scores')
       )
 
-      // Build a map: teamId → { totalPoints, zonesClaimed }
       const teamTotals = new Map<string, { points: number; claimed: number }>()
       teamScoresSnap.forEach((d) => {
         const data = d.data() as ZoneScoreData
@@ -333,7 +359,6 @@ export default function GMDashboard() {
         teamTotals.set(data.team_id, existing)
       })
 
-      // Update each team's total_points and zones_claimed
       for (const [teamId, totals] of teamTotals) {
         const teamRef = doc(db, 'games', gameId, 'teams', teamId)
         await updateDoc(teamRef, {
@@ -414,7 +439,7 @@ export default function GMDashboard() {
 
   const pendingCount = submissions.filter((s) => s.status === 'pending').length
 
-  // Zone ownership map: zoneId → { teamId, teamColor, teamName, points }
+  // Zone ownership map (internal format with extra data)
   const zoneOwnership = new Map<
     string,
     { teamId: string; teamColor: string; teamName: string; points: number }
@@ -432,6 +457,21 @@ export default function GMDashboard() {
       }
     }
   }
+
+  // ✅ NEW: Convert to GameMap's ZoneOwner format for the mini map
+  const mapZoneOwnership = useMemo(() => {
+    const m = new Map<string, ZoneOwner>()
+    for (const [zoneId, owner] of zoneOwnership) {
+      m.set(zoneId, { teamColor: owner.teamColor, teamName: owner.teamName })
+    }
+    return m
+  }, [zoneScores, teams])
+
+  // ✅ NEW: Filter zones data to ones active in this game
+  const activeZones = useMemo(
+    () => allZoneData.filter((z) => game?.zones?.includes(z.id)),
+    [game?.zones]
+  )
 
   // Team scoreboard data, sorted by points descending
   const scoreboard = teams
@@ -681,6 +721,9 @@ export default function GMDashboard() {
                 const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || '#FFD166'
                 const basePts = DIFFICULTY_PTS[challenge?.difficulty || 'medium'] || 3
 
+                // ✅ NEW: GPS proximity check
+                const gpsCheck = checkGpsProximity(sub)
+
                 return (
                   <div
                     key={sub.id}
@@ -813,7 +856,7 @@ export default function GMDashboard() {
                       )}
                     </div>
 
-                    {/* Metadata row: GPS, zone, time */}
+                    {/* Metadata row: GPS, zone, time + ✅ NEW: proximity indicator */}
                     <div
                       style={{
                         display: 'flex',
@@ -842,7 +885,55 @@ export default function GMDashboard() {
                             : ''}
                         </span>
                       )}
+
+                      {/* ✅ NEW: GPS proximity badge */}
+                      {gpsCheck === 'inside' && (
+                        <span style={{ color: '#06D6A0', fontWeight: 600 }}>
+                          ✓ GPS in zone
+                        </span>
+                      )}
+                      {gpsCheck === 'outside' && (
+                        <span style={{ color: '#EF476F', fontWeight: 700 }}>
+                          ⚠ GPS OUTSIDE zone
+                        </span>
+                      )}
                     </div>
+
+                    {/* ✅ NEW: GPS proximity warning banner (pending submissions only) */}
+                    {gpsCheck === 'outside' && sub.status === 'pending' && (
+                      <div
+                        style={{
+                          background: 'rgba(239,71,111,0.06)',
+                          border: '1px solid rgba(239,71,111,0.2)',
+                          borderRadius: 8,
+                          padding: '8px 14px',
+                          marginBottom: 14,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: '1rem' }}>🚩</span>
+                        <div>
+                          <p style={{
+                            color: '#EF476F',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            marginBottom: 2,
+                          }}>
+                            GPS Location Mismatch
+                          </p>
+                          <p style={{
+                            color: '#999',
+                            fontSize: '0.72rem',
+                            lineHeight: 1.4,
+                          }}>
+                            Player's GPS was outside {sub.zone_id?.replace('zone_district_', 'District ')} when they submitted.
+                            This could be a GPS glitch or they may not have been in the zone.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* ====== PENDING: Review controls ====== */}
                     {sub.status === 'pending' && (
@@ -1053,7 +1144,7 @@ export default function GMDashboard() {
           )}
         </div>
 
-        {/* ====== RIGHT: SCOREBOARD ====== */}
+        {/* ====== RIGHT: SCOREBOARD + MINI MAP ====== */}
         <div
           style={{
             padding: '20px',
@@ -1172,7 +1263,7 @@ export default function GMDashboard() {
             Zone Control
           </p>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
             {game.zones.map((zoneId) => {
               const owner = zoneOwnership.get(zoneId)
               return (
@@ -1233,6 +1324,51 @@ export default function GMDashboard() {
                 </div>
               )
             })}
+          </div>
+
+          {/* ====== ✅ NEW: MINI MAP ====== */}
+          <p
+            style={{
+              fontSize: '0.72rem',
+              color: '#FFD166',
+              textTransform: 'uppercase',
+              letterSpacing: 1.5,
+              fontWeight: 700,
+              marginBottom: 12,
+            }}
+          >
+            Live Map
+          </p>
+
+          <div
+            style={{
+              height: 240,
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: '1px solid #1a1a1a',
+              background: '#111',
+            }}
+          >
+            {activeZones.length > 0 ? (
+              <GameMap
+                zones={activeZones}
+                zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined}
+                compact
+              />
+            ) : (
+              <div
+                style={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#333',
+                  fontSize: '0.78rem',
+                }}
+              >
+                No zone data loaded
+              </div>
+            )}
           </div>
         </div>
       </div>

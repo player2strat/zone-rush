@@ -1,3 +1,14 @@
+// =============================================================================
+// Zone Rush — Game Page (Day 11)
+// Player's 4-tab view: Hand, Map, Chat, History
+//
+// CHANGES FROM DAY 10:
+// - NEW: allTeams state — captures all teams (not just player's) for ownership map
+// - NEW: zoneScores state + Firestore listener on zone_scores sub-collection
+// - NEW: zoneOwnership computed from zoneScores + allTeams → passed to GameMap
+// - CHANGED: GameMap now receives zoneOwnership prop for live zone coloring
+// =============================================================================
+
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -7,6 +18,7 @@ import {
 import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
 import GameMap from '../components/GameMap'
+import type { ZoneOwner } from '../components/GameMap'
 import { zones as localZones } from '../lib/zones'
 
 // --------------- Types ---------------
@@ -57,12 +69,20 @@ interface Challenge {
   category: string
 }
 
-// Submission status for badge display
 interface SubmissionStatus {
   challenge_id: string
   status: 'pending' | 'approved' | 'rejected'
   gm_notes?: string
   submitted_at: any
+}
+
+// ✅ NEW: Zone score type for ownership tracking
+interface ZoneScoreData {
+  team_id: string
+  zone_id: string
+  points: number
+  status: 'none' | 'claimed'
+  challenges_completed: string[]
 }
 
 // --------------- Helpers ---------------
@@ -118,8 +138,14 @@ export default function GamePage() {
   const [discarding, setDiscarding] = useState(false)
   const [submittingChallenge, setSubmittingChallenge] = useState<number | null>(null)
 
-  // ✅ NEW: Submission statuses for badge display
+  // Submission statuses for badge display
   const [submissions, setSubmissions] = useState<Map<string, SubmissionStatus>>(new Map())
+
+  // ✅ NEW: All teams (for zone ownership colors on map)
+  const [allTeams, setAllTeams] = useState<TeamData[]>([])
+
+  // ✅ NEW: Zone scores (for zone ownership)
+  const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
 
   // Listen to game document
   useEffect(() => {
@@ -133,6 +159,7 @@ export default function GamePage() {
   }, [gameId])
 
   // Find player's team and listen for updates
+  // ✅ CHANGED: Also captures allTeams for zone ownership map
   useEffect(() => {
     if (!gameId || !user) return
 
@@ -140,14 +167,18 @@ export default function GamePage() {
       collection(db, 'games', gameId, 'teams'),
       async (snapshot) => {
         let foundTeam: TeamData | null = null
+        const teamsArr: TeamData[] = []
+
         snapshot.forEach((d) => {
           const team = { id: d.id, ...d.data() } as TeamData
+          teamsArr.push(team)
           if (team.members.includes(user.uid)) {
             foundTeam = team
           }
         })
 
         setMyTeam(foundTeam)
+        setAllTeams(teamsArr) // ✅ NEW: store all teams
 
         // Fetch challenge details for the hand
         if (foundTeam) {
@@ -171,7 +202,21 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, user])
 
-  // ✅ NEW: Listen to submissions for this team to show status badges
+  // ✅ NEW: Listen to zone_scores for real-time zone ownership
+  useEffect(() => {
+    if (!gameId) return
+    const unsub = onSnapshot(
+      collection(db, 'games', gameId, 'zone_scores'),
+      (snap) => {
+        const scores: ZoneScoreData[] = []
+        snap.forEach((d) => scores.push(d.data() as ZoneScoreData))
+        setZoneScores(scores)
+      }
+    )
+    return () => unsub()
+  }, [gameId])
+
+  // Listen to submissions for this team to show status badges
   useEffect(() => {
     if (!gameId || !myTeam) return
 
@@ -186,8 +231,6 @@ export default function GamePage() {
       snapshot.forEach((d) => {
         const data = d.data()
         const existing = statusMap.get(data.challenge_id)
-        // If multiple submissions for the same challenge, prefer the latest one
-        // or approved > pending > rejected
         if (
           !existing ||
           data.status === 'approved' ||
@@ -289,12 +332,27 @@ export default function GamePage() {
   const discardsUsed = myTeam?.discards_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
 
-  // ✅ NEW: Count submissions by status for the header
+  // Count submissions by status for the header
   const pendingCount = Array.from(submissions.values()).filter(s => s.status === 'pending').length
   const approvedCount = Array.from(submissions.values()).filter(s => s.status === 'approved').length
 
-  // ✅ NEW: Filter local zones to only the ones active in this game
+  // Filter local zones to only the ones active in this game
   const activeZones = localZones.filter(z => game?.zones?.includes(z.id))
+
+  // ✅ NEW: Compute zone ownership map for the GameMap component
+  // Maps zoneId → { teamColor, teamName } for all claimed zones
+  const zoneOwnership = new Map<string, ZoneOwner>()
+  for (const zs of zoneScores) {
+    if (zs.status === 'claimed') {
+      const team = allTeams.find(t => t.id === zs.team_id)
+      if (team) {
+        zoneOwnership.set(zs.zone_id, {
+          teamColor: team.color,
+          teamName: team.name,
+        })
+      }
+    }
+  }
 
   if (loading) {
     return (
@@ -344,7 +402,7 @@ export default function GamePage() {
       display: 'flex',
       flexDirection: 'column',
     }}>
-      {/* ✅ IMPROVED: Top bar with team info + timer + score summary */}
+      {/* Top bar with team info + timer + score summary */}
       <div style={{
         padding: '12px 20px',
         borderBottom: '1px solid #1a1a1a',
@@ -373,7 +431,7 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* ✅ NEW: Quick stats row */}
+        {/* Quick stats row */}
         {submissions.size > 0 && (
           <div style={{
             display: 'flex', gap: 12, marginTop: 8,
@@ -387,6 +445,12 @@ export default function GamePage() {
             {pendingCount > 0 && (
               <span style={{ color: '#FFD166' }}>
                 ⏳ {pendingCount} pending
+              </span>
+            )}
+            {/* ✅ NEW: Show zones claimed count */}
+            {zoneOwnership.size > 0 && (
+              <span style={{ color: '#9B5DE5' }}>
+                🗺️ {zoneOwnership.size} zone{zoneOwnership.size !== 1 ? 's' : ''} claimed
               </span>
             )}
           </div>
@@ -459,7 +523,7 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* ✅ NEW: Pulse animation for pending badges */}
+            {/* Pulse animation for pending badges */}
             <style>{`
               @keyframes pendingPulse {
                 0%, 100% { opacity: 1; }
@@ -473,7 +537,6 @@ export default function GamePage() {
                 const profile = PROFILE_STYLES[ch.player_profile] || { color: '#888', label: ch.player_profile }
                 const isExpanded = selectedCard === index && !discardMode
 
-                // ✅ NEW: Get submission status for this challenge
                 const sub = submissions.get(ch.id)
                 const badge = sub ? STATUS_BADGE[sub.status] : null
                 const isCompleted = sub?.status === 'approved'
@@ -509,7 +572,7 @@ export default function GamePage() {
                       opacity: isCompleted && !isExpanded ? 0.65 : 1,
                     }}
                   >
-                    {/* Card header — difficulty + points + verification */}
+                    {/* Card header */}
                     <div style={{
                       display: 'flex', justifyContent: 'space-between',
                       alignItems: 'center', marginBottom: 10,
@@ -529,7 +592,6 @@ export default function GamePage() {
                           {profile.label}
                         </span>
 
-                        {/* ✅ NEW: Submission status badge */}
                         {badge && (
                           <span style={{
                             fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px',
@@ -566,7 +628,7 @@ export default function GamePage() {
                       {ch.description}
                     </p>
 
-                    {/* ✅ NEW: GM rejection notes shown below description */}
+                    {/* GM rejection notes */}
                     {sub?.status === 'rejected' && sub.gm_notes && (
                       <div style={{
                         background: 'rgba(239,71,111,0.06)',
@@ -585,7 +647,7 @@ export default function GamePage() {
                       </div>
                     )}
 
-                    {/* Discard mode — show discard button on each card */}
+                    {/* Discard button */}
                     {discardMode && (
                       <button
                         onClick={(e) => {
@@ -613,10 +675,9 @@ export default function GamePage() {
                       </button>
                     )}
 
-                    {/* Expanded details (normal mode only) */}
+                    {/* Expanded details */}
                     {isExpanded && (
                       <div style={{ marginTop: 4 }}>
-                        {/* Time estimate */}
                         <div style={{
                           display: 'flex', gap: 16, marginBottom: 10,
                           fontSize: '0.78rem', color: '#666', flexWrap: 'wrap',
@@ -630,7 +691,6 @@ export default function GamePage() {
                           )}
                         </div>
 
-                        {/* Tier 2 */}
                         {ch.tier2 && (
                           <div style={{
                             background: 'rgba(155,93,229,0.08)',
@@ -649,7 +709,6 @@ export default function GamePage() {
                           </div>
                         )}
 
-                        {/* Submit button — changes based on submission status */}
                         {sub?.status === 'approved' ? (
                           <div style={{
                             width: '100%', background: 'rgba(6,214,160,0.08)',
@@ -713,15 +772,56 @@ export default function GamePage() {
         )}
 
         {/* ==================== MAP TAB ==================== */}
-        {/* ✅ NEW: Wired to GameMap component with zone boundaries */}
+        {/* ✅ CHANGED: Now passes zoneOwnership for live zone coloring */}
         {activeTab === 'map' && (
           <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 130px)' }}>
             {activeZones.length > 0 ? (
-              <GameMap zones={activeZones} />
+              <GameMap
+                zones={activeZones}
+                zoneOwnership={zoneOwnership.size > 0 ? zoneOwnership : undefined}
+              />
             ) : (
               <div style={{ textAlign: 'center', marginTop: 60, color: '#555', padding: '0 20px' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🗺️</p>
                 <p>No zones loaded for this game.</p>
+              </div>
+            )}
+
+            {/* ✅ NEW: Zone ownership legend overlay */}
+            {zoneOwnership.size > 0 && (
+              <div style={{
+                position: 'absolute',
+                bottom: 20,
+                left: 12,
+                background: 'rgba(10,10,10,0.85)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid #222',
+                borderRadius: 10,
+                padding: '10px 14px',
+                zIndex: 10,
+              }}>
+                <p style={{
+                  fontSize: '0.65rem', color: '#666', textTransform: 'uppercase',
+                  letterSpacing: 1, fontWeight: 700, marginBottom: 6,
+                }}>
+                  Zone Control
+                </p>
+                {Array.from(zoneOwnership.entries()).map(([zoneId, owner]) => (
+                  <div key={zoneId} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 3,
+                  }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: 2,
+                      background: owner.teamColor,
+                    }} />
+                    <span style={{
+                      fontSize: '0.72rem', color: '#aaa',
+                    }}>
+                      {zoneId.replace('zone_district_', 'D')} — {owner.teamName}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -806,10 +906,7 @@ export default function GamePage() {
           teamId={myTeam.id}
           challenge={challenges[submittingChallenge]}
           onClose={() => setSubmittingChallenge(null)}
-          onSubmitted={() => {
-            // Submission created — the Firestore listener will auto-update the badge
-            // User stays on success screen and taps "Back to Hand" to close
-          }}
+          onSubmitted={() => {}}
         />
       )}
 
@@ -832,7 +929,6 @@ export default function GamePage() {
           { id: 'chat' as const, icon: '💬', label: 'Chat' },
           { id: 'history' as const, icon: '📋', label: 'History' },
         ]).map((tab) => {
-          // ✅ NEW: Badge dot on History tab when there are pending submissions
           const showDot = tab.id === 'history' && pendingCount > 0 && activeTab !== 'history'
 
           return (

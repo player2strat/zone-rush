@@ -1,54 +1,52 @@
 // =============================================================================
 // Zone Rush — Geo Utilities
-// Point-in-polygon detection for zone identification
+// Point-in-polygon check for GPS proximity warnings
 // =============================================================================
 
 /**
- * Ray-casting algorithm to check if a point is inside a polygon.
- * GeoJSON coordinates are [longitude, latitude] — this handles that.
+ * Ray-casting algorithm to check if a point (lat, lng) is inside a GeoJSON polygon.
+ * GeoJSON coordinates are [lng, lat] — this function expects (lat, lng) as inputs
+ * and handles the coordinate flip internally.
  */
-function pointInRing(lat: number, lng: number, ring: number[][]): boolean {
+export function isPointInPolygon(
+  lat: number,
+  lng: number,
+  coordinates: number[][][]
+): boolean {
+  // coordinates[0] is the outer ring: [[lng, lat], [lng, lat], ...]
+  const ring = coordinates[0]
+  if (!ring || ring.length < 3) return false
+
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    // GeoJSON stores coordinates as [lng, lat], so ring[i][0] = lng, ring[i][1] = lat
-    const xi = ring[i][1], yi = ring[i][0]
-    const xj = ring[j][1], yj = ring[j][0]
+    const [lngI, latI] = ring[i]
+    const [lngJ, latJ] = ring[j]
 
-    if ((yi > lng) !== (yj > lng) && lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi) {
-      inside = !inside
-    }
+    const intersect =
+      lngI > lng !== lngJ > lng &&
+      lat < ((latJ - latI) * (lng - lngI)) / (lngJ - lngI) + latI
+    if (intersect) inside = !inside
   }
   return inside
 }
 
 /**
- * Detect which zone a GPS coordinate falls inside.
- * Returns the zone ID, or empty string if not in any zone.
+ * Approximate distance in meters between two lat/lng points (Haversine formula).
+ * Used for "how far outside the zone" estimates.
  */
-export function detectZone(
-  lat: number | null,
-  lng: number | null,
-  zones: Array<{ id: string; boundary: { type: string; coordinates: number[][][] } }>
-): string {
-  if (lat === null || lng === null) return ''
-
-  for (const zone of zones) {
-    // Handle both Polygon and MultiPolygon types
-    if (zone.boundary.type === 'MultiPolygon') {
-      // MultiPolygon: coordinates is number[][][][]
-      const multiCoords = zone.boundary.coordinates as unknown as number[][][][]
-      for (const polygon of multiCoords) {
-        if (pointInRing(lat, lng, polygon[0])) {
-          return zone.id
-        }
-      }
-    } else {
-      // Polygon: coordinates is number[][][], first ring is the outer boundary
-      if (pointInRing(lat, lng, zone.boundary.coordinates[0])) {
-        return zone.id
-      }
-    }
-  }
-
-  return ''
+export function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000 // Earth radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
