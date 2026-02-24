@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, collection,
+  updateDoc, getDocs, query, where,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 
@@ -41,6 +42,7 @@ interface TeamData {
   zones_claimed: number
   hand: string[]
   taxi_used: boolean
+  discards_used: number
 }
 
 interface Challenge {
@@ -100,6 +102,10 @@ export default function GamePage() {
   const [loading, setLoading] = useState(true)
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
 
+  // Discard state
+  const [discardMode, setDiscardMode] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
+
   // Listen to game document
   useEffect(() => {
     if (!gameId) return
@@ -128,7 +134,7 @@ export default function GamePage() {
 
         setMyTeam(foundTeam)
 
-// Fetch challenge details for the hand
+        // Fetch challenge details for the hand
         if (foundTeam) {
           const teamHand = (foundTeam as TeamData).hand
           if (teamHand && teamHand.length > 0) {
@@ -150,6 +156,69 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, user])
 
+  // ---- Discard handler ----
+  const handleDiscard = async (cardIndex: number) => {
+    if (!gameId || !myTeam || !game || discarding) return
+
+    const discardLimit = game.settings.discard_limit ?? 1
+    const discardsUsed = myTeam.discards_used ?? 0
+
+    if (discardsUsed >= discardLimit) {
+      alert(`You've already used your ${discardLimit === 1 ? 'discard' : `${discardLimit} discards`}.`)
+      return
+    }
+
+    const challengeToRemove = challenges[cardIndex]
+    if (!challengeToRemove) return
+
+    setDiscarding(true)
+
+    try {
+      // Get all active challenges to find a replacement
+      const challengeSnap = await getDocs(collection(db, 'challenges'))
+      const allChallenges: string[] = []
+      challengeSnap.forEach((d) => {
+        const data = d.data()
+        // Only pick active challenges not already in hand
+        if (data.is_active !== false && !myTeam.hand.includes(d.id)) {
+          allChallenges.push(d.id)
+        }
+      })
+
+      if (allChallenges.length === 0) {
+        alert('No replacement challenges available.')
+        setDiscarding(false)
+        return
+      }
+
+      // Pick a random replacement
+      const replacement = allChallenges[Math.floor(Math.random() * allChallenges.length)]
+
+      // Build the new hand — swap out the discarded card
+      const newHand = [...myTeam.hand]
+      const handIndex = newHand.indexOf(challengeToRemove.id)
+      if (handIndex !== -1) {
+        newHand[handIndex] = replacement
+      }
+
+      // Update Firestore: new hand + increment discards_used
+      const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
+      await updateDoc(teamRef, {
+        hand: newHand,
+        discards_used: discardsUsed + 1,
+      })
+
+      // Exit discard mode after successful discard
+      setDiscardMode(false)
+      setSelectedCard(null)
+    } catch (err) {
+      console.error('Discard failed:', err)
+      alert('Something went wrong. Try again.')
+    } finally {
+      setDiscarding(false)
+    }
+  }
+
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
   useEffect(() => {
@@ -169,6 +238,11 @@ export default function GamePage() {
     }, 1000)
     return () => clearInterval(interval)
   }, [game?.ends_at])
+
+  // Compute discard availability
+  const discardLimit = game?.settings.discard_limit ?? 1
+  const discardsUsed = myTeam?.discards_used ?? 0
+  const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
 
   if (loading) {
     return (
@@ -240,26 +314,90 @@ export default function GamePage() {
         {/* HAND TAB */}
         {activeTab === 'hand' && (
           <div>
-            <p style={{
-              fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
-              letterSpacing: 1, marginBottom: 16, fontWeight: 600,
+            {/* Header row with card count + discard button */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: 16,
             }}>
-              Your Challenges ({challenges.length} cards)
-            </p>
+              <p style={{
+                fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
+                letterSpacing: 1, fontWeight: 600, margin: 0,
+              }}>
+                Your Challenges ({challenges.length} cards)
+              </p>
+
+              {/* Discard button */}
+              {canDiscard ? (
+                <button
+                  onClick={() => {
+                    setDiscardMode(!discardMode)
+                    setSelectedCard(null)
+                  }}
+                  style={{
+                    background: discardMode ? 'rgba(239,71,111,0.15)' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${discardMode ? '#EF476F40' : '#222'}`,
+                    color: discardMode ? '#EF476F' : '#888',
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {discardMode ? '✕ Cancel' : `🔄 Discard (${discardLimit - discardsUsed} left)`}
+                </button>
+              ) : (
+                <span style={{
+                  fontSize: '0.72rem', color: '#333', fontStyle: 'italic',
+                }}>
+                  No discards left
+                </span>
+              )}
+            </div>
+
+            {/* Discard mode hint */}
+            {discardMode && (
+              <div style={{
+                background: 'rgba(239,71,111,0.06)',
+                border: '1px solid rgba(239,71,111,0.15)',
+                borderRadius: 8,
+                padding: '10px 14px',
+                marginBottom: 12,
+                fontSize: '0.82rem',
+                color: '#EF476F',
+              }}>
+                Tap the card you want to discard. You'll get a random replacement.
+              </div>
+            )}
 
             <div style={{ display: 'grid', gap: 12 }}>
               {challenges.map((ch, index) => {
                 const diff = DIFFICULTY_STYLES[ch.difficulty] || DIFFICULTY_STYLES.medium
                 const profile = PROFILE_STYLES[ch.player_profile] || { color: '#888', label: ch.player_profile }
-                const isExpanded = selectedCard === index
+                const isExpanded = selectedCard === index && !discardMode
 
                 return (
                   <div
                     key={ch.id}
-                    onClick={() => setSelectedCard(isExpanded ? null : index)}
+                    onClick={() => {
+                      if (discardMode) return  // Don't expand in discard mode
+                      setSelectedCard(isExpanded ? null : index)
+                    }}
                     style={{
-                      background: isExpanded ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${isExpanded ? diff.color + '40' : '#1a1a1a'}`,
+                      background: discardMode
+                        ? 'rgba(239,71,111,0.03)'
+                        : isExpanded
+                        ? 'rgba(255,255,255,0.04)'
+                        : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${
+                        discardMode
+                          ? 'rgba(239,71,111,0.2)'
+                          : isExpanded
+                          ? diff.color + '40'
+                          : '#1a1a1a'
+                      }`,
                       borderRadius: 12,
                       padding: '16px 18px',
                       cursor: 'pointer',
@@ -302,12 +440,40 @@ export default function GamePage() {
                     {/* Challenge description */}
                     <p style={{
                       color: '#e0e0e0', fontSize: '0.92rem', lineHeight: 1.6,
-                      marginBottom: isExpanded ? 12 : 0,
+                      marginBottom: (isExpanded || discardMode) ? 12 : 0,
                     }}>
                       {ch.description}
                     </p>
 
-                    {/* Expanded details */}
+                    {/* Discard mode — show discard button on each card */}
+                    {discardMode && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (window.confirm(`Discard this challenge?\n\n"${ch.description}"\n\nYou'll get a random replacement.`)) {
+                            handleDiscard(index)
+                          }
+                        }}
+                        disabled={discarding}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(239,71,111,0.12)',
+                          border: '1px solid rgba(239,71,111,0.3)',
+                          color: '#EF476F',
+                          padding: '10px 16px',
+                          borderRadius: 8,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          cursor: discarding ? 'wait' : 'pointer',
+                          fontFamily: 'inherit',
+                          opacity: discarding ? 0.5 : 1,
+                        }}
+                      >
+                        {discarding ? 'Swapping...' : '🗑 Discard This Card'}
+                      </button>
+                    )}
+
+                    {/* Expanded details (normal mode only) */}
                     {isExpanded && (
                       <div style={{ marginTop: 4 }}>
                         {/* Time estimate */}
