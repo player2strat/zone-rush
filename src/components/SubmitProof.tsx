@@ -7,6 +7,8 @@ import { useState, useRef, useEffect } from 'react'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, storage, auth } from '../lib/firebase'
+import { zones } from '../lib/zones'
+import { detectZone } from '../lib/geo'
 
 interface SubmitProofProps {
   gameId: string
@@ -125,7 +127,7 @@ export default function SubmitProof({
         game_id: gameId,
         team_id: teamId,
         challenge_id: challenge.id,
-        zone_id: '',  // TODO: detect from GPS + zone boundaries
+        zone_id: detectZone(gpsLat, gpsLng, zones),
         submitted_by: user.uid,
         media_url: downloadURL,
         media_type: mediaType,

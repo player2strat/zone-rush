@@ -1,17 +1,13 @@
-// =============================================================================
-// Zone Rush — Game Page
-// 4-tab layout: Hand, Map, Chat, History
-// Loads team data + challenge cards from Firestore
-// =============================================================================
-
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, collection,
-  updateDoc, getDocs,
+  updateDoc, getDocs, query, where,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
+import GameMap from '../components/GameMap'
+import { zones as localZones } from '../lib/zones'
 
 // --------------- Types ---------------
 
@@ -61,6 +57,14 @@ interface Challenge {
   category: string
 }
 
+// Submission status for badge display
+interface SubmissionStatus {
+  challenge_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  gm_notes?: string
+  submitted_at: any
+}
+
 // --------------- Helpers ---------------
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string; label: string; pts: number }> = {
@@ -89,6 +93,12 @@ const TIME_LABELS: Record<string, string> = {
   long: '~30 min',
 }
 
+const STATUS_BADGE: Record<string, { bg: string; border: string; color: string; label: string; icon: string }> = {
+  pending:  { bg: 'rgba(255,209,102,0.10)', border: 'rgba(255,209,102,0.3)', color: '#FFD166', label: 'Pending Review', icon: '⏳' },
+  approved: { bg: 'rgba(6,214,160,0.10)',   border: 'rgba(6,214,160,0.3)',   color: '#06D6A0', label: 'Approved',       icon: '✅' },
+  rejected: { bg: 'rgba(239,71,111,0.10)',  border: 'rgba(239,71,111,0.3)',  color: '#EF476F', label: 'Rejected',       icon: '❌' },
+}
+
 // --------------- Component ---------------
 
 export default function GamePage() {
@@ -107,6 +117,9 @@ export default function GamePage() {
   const [discardMode, setDiscardMode] = useState(false)
   const [discarding, setDiscarding] = useState(false)
   const [submittingChallenge, setSubmittingChallenge] = useState<number | null>(null)
+
+  // ✅ NEW: Submission statuses for badge display
+  const [submissions, setSubmissions] = useState<Map<string, SubmissionStatus>>(new Map())
 
   // Listen to game document
   useEffect(() => {
@@ -158,6 +171,42 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, user])
 
+  // ✅ NEW: Listen to submissions for this team to show status badges
+  useEffect(() => {
+    if (!gameId || !myTeam) return
+
+    const q = query(
+      collection(db, 'submissions'),
+      where('game_id', '==', gameId),
+      where('team_id', '==', myTeam.id),
+    )
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const statusMap = new Map<string, SubmissionStatus>()
+      snapshot.forEach((d) => {
+        const data = d.data()
+        const existing = statusMap.get(data.challenge_id)
+        // If multiple submissions for the same challenge, prefer the latest one
+        // or approved > pending > rejected
+        if (
+          !existing ||
+          data.status === 'approved' ||
+          (data.status === 'pending' && existing.status === 'rejected')
+        ) {
+          statusMap.set(data.challenge_id, {
+            challenge_id: data.challenge_id,
+            status: data.status,
+            gm_notes: data.gm_notes,
+            submitted_at: data.submitted_at,
+          })
+        }
+      })
+      setSubmissions(statusMap)
+    })
+
+    return () => unsub()
+  }, [gameId, myTeam?.id])
+
   // ---- Discard handler ----
   const handleDiscard = async (cardIndex: number) => {
     if (!gameId || !myTeam || !game || discarding) return
@@ -176,12 +225,10 @@ export default function GamePage() {
     setDiscarding(true)
 
     try {
-      // Get all active challenges to find a replacement
       const challengeSnap = await getDocs(collection(db, 'challenges'))
       const allChallenges: string[] = []
       challengeSnap.forEach((d) => {
         const data = d.data()
-        // Only pick active challenges not already in hand
         if (data.is_active !== false && !myTeam.hand.includes(d.id)) {
           allChallenges.push(d.id)
         }
@@ -193,24 +240,20 @@ export default function GamePage() {
         return
       }
 
-      // Pick a random replacement
       const replacement = allChallenges[Math.floor(Math.random() * allChallenges.length)]
 
-      // Build the new hand — swap out the discarded card
       const newHand = [...myTeam.hand]
       const handIndex = newHand.indexOf(challengeToRemove.id)
       if (handIndex !== -1) {
         newHand[handIndex] = replacement
       }
 
-      // Update Firestore: new hand + increment discards_used
       const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
       await updateDoc(teamRef, {
         hand: newHand,
         discards_used: discardsUsed + 1,
       })
 
-      // Exit discard mode after successful discard
       setDiscardMode(false)
       setSelectedCard(null)
     } catch (err) {
@@ -246,6 +289,13 @@ export default function GamePage() {
   const discardsUsed = myTeam?.discards_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
 
+  // ✅ NEW: Count submissions by status for the header
+  const pendingCount = Array.from(submissions.values()).filter(s => s.status === 'pending').length
+  const approvedCount = Array.from(submissions.values()).filter(s => s.status === 'approved').length
+
+  // ✅ NEW: Filter local zones to only the ones active in this game
+  const activeZones = localZones.filter(z => game?.zones?.includes(z.id))
+
   if (loading) {
     return (
       <div style={{
@@ -253,7 +303,16 @@ export default function GamePage() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'DM Sans', sans-serif",
       }}>
-        Loading game...
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 32, height: 32, border: '3px solid #222',
+            borderTopColor: '#FFD166', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 12px',
+          }} />
+          <p>Loading game...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
       </div>
     )
   }
@@ -285,35 +344,62 @@ export default function GamePage() {
       display: 'flex',
       flexDirection: 'column',
     }}>
-      {/* Top bar */}
+      {/* ✅ IMPROVED: Top bar with team info + timer + score summary */}
       <div style={{
         padding: '12px 20px',
         borderBottom: '1px solid #1a1a1a',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        background: '#0d0d0d',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 10, height: 10, borderRadius: 3,
-            background: myTeam.color,
-          }} />
-          <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{myTeam.name}</span>
-        </div>
         <div style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '0.85rem',
-          color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
-          fontWeight: 600,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}>
-          {timeLeft}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: 3,
+              background: myTeam.color,
+            }} />
+            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{myTeam.name}</span>
+          </div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.85rem',
+            color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
+            fontWeight: 600,
+          }}>
+            {timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
+          </div>
         </div>
+
+        {/* ✅ NEW: Quick stats row */}
+        {submissions.size > 0 && (
+          <div style={{
+            display: 'flex', gap: 12, marginTop: 8,
+            fontSize: '0.72rem', color: '#555',
+          }}>
+            {approvedCount > 0 && (
+              <span style={{ color: '#06D6A0' }}>
+                ✅ {approvedCount} approved
+              </span>
+            )}
+            {pendingCount > 0 && (
+              <span style={{ color: '#FFD166' }}>
+                ⏳ {pendingCount} pending
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px 100px' }}>
-        {/* HAND TAB */}
+      <div style={{
+        flex: 1, overflow: 'auto',
+        padding: activeTab === 'map' ? '0' : '16px 20px 100px',
+      }}>
+
+        {/* ==================== HAND TAB ==================== */}
         {activeTab === 'hand' && (
           <div>
             {/* Header row with card count + discard button */}
@@ -325,10 +411,9 @@ export default function GamePage() {
                 fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
                 letterSpacing: 1, fontWeight: 600, margin: 0,
               }}>
-                Your Challenges ({challenges.length} cards)
+                Your Challenges ({challenges.length})
               </p>
 
-              {/* Discard button */}
               {canDiscard ? (
                 <button
                   onClick={() => {
@@ -374,28 +459,45 @@ export default function GamePage() {
               </div>
             )}
 
+            {/* ✅ NEW: Pulse animation for pending badges */}
+            <style>{`
+              @keyframes pendingPulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+              }
+            `}</style>
+
             <div style={{ display: 'grid', gap: 12 }}>
               {challenges.map((ch, index) => {
                 const diff = DIFFICULTY_STYLES[ch.difficulty] || DIFFICULTY_STYLES.medium
                 const profile = PROFILE_STYLES[ch.player_profile] || { color: '#888', label: ch.player_profile }
                 const isExpanded = selectedCard === index && !discardMode
 
+                // ✅ NEW: Get submission status for this challenge
+                const sub = submissions.get(ch.id)
+                const badge = sub ? STATUS_BADGE[sub.status] : null
+                const isCompleted = sub?.status === 'approved'
+
                 return (
                   <div
                     key={ch.id}
                     onClick={() => {
-                      if (discardMode) return  // Don't expand in discard mode
+                      if (discardMode) return
                       setSelectedCard(isExpanded ? null : index)
                     }}
                     style={{
                       background: discardMode
                         ? 'rgba(239,71,111,0.03)'
+                        : isCompleted
+                        ? 'rgba(6,214,160,0.03)'
                         : isExpanded
                         ? 'rgba(255,255,255,0.04)'
                         : 'rgba(255,255,255,0.02)',
                       border: `1px solid ${
                         discardMode
                           ? 'rgba(239,71,111,0.2)'
+                          : isCompleted
+                          ? 'rgba(6,214,160,0.2)'
                           : isExpanded
                           ? diff.color + '40'
                           : '#1a1a1a'
@@ -404,6 +506,7 @@ export default function GamePage() {
                       padding: '16px 18px',
                       cursor: 'pointer',
                       transition: 'all 0.15s',
+                      opacity: isCompleted && !isExpanded ? 0.65 : 1,
                     }}
                   >
                     {/* Card header — difficulty + points + verification */}
@@ -411,7 +514,7 @@ export default function GamePage() {
                       display: 'flex', justifyContent: 'space-between',
                       alignItems: 'center', marginBottom: 10,
                     }}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
                           borderRadius: 20, background: diff.bg, color: diff.color,
@@ -425,6 +528,20 @@ export default function GamePage() {
                         }}>
                           {profile.label}
                         </span>
+
+                        {/* ✅ NEW: Submission status badge */}
+                        {badge && (
+                          <span style={{
+                            fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px',
+                            borderRadius: 20, background: badge.bg,
+                            border: `1px solid ${badge.border}`,
+                            color: badge.color,
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            animation: sub?.status === 'pending' ? 'pendingPulse 2s ease-in-out infinite' : 'none',
+                          }}>
+                            {badge.icon} {badge.label}
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: '0.9rem' }}>
@@ -441,11 +558,32 @@ export default function GamePage() {
 
                     {/* Challenge description */}
                     <p style={{
-                      color: '#e0e0e0', fontSize: '0.92rem', lineHeight: 1.6,
+                      color: isCompleted ? '#888' : '#e0e0e0',
+                      fontSize: '0.92rem', lineHeight: 1.6,
                       marginBottom: (isExpanded || discardMode) ? 12 : 0,
+                      textDecoration: isCompleted ? 'line-through' : 'none',
                     }}>
                       {ch.description}
                     </p>
+
+                    {/* ✅ NEW: GM rejection notes shown below description */}
+                    {sub?.status === 'rejected' && sub.gm_notes && (
+                      <div style={{
+                        background: 'rgba(239,71,111,0.06)',
+                        border: '1px solid rgba(239,71,111,0.15)',
+                        borderRadius: 8, padding: '8px 12px', marginBottom: 10,
+                      }}>
+                        <p style={{
+                          fontSize: '0.7rem', color: '#EF476F', fontWeight: 700,
+                          textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
+                        }}>
+                          GM Feedback
+                        </p>
+                        <p style={{ color: '#ccc', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                          {sub.gm_notes}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Discard mode — show discard button on each card */}
                     {discardMode && (
@@ -481,14 +619,14 @@ export default function GamePage() {
                         {/* Time estimate */}
                         <div style={{
                           display: 'flex', gap: 16, marginBottom: 10,
-                          fontSize: '0.78rem', color: '#666',
+                          fontSize: '0.78rem', color: '#666', flexWrap: 'wrap',
                         }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
                           {ch.is_time_based && (
-                            <span style={{ color: '#FFD166' }}>Timed challenge</span>
+                            <span style={{ color: '#FFD166' }}>⏱ Timed challenge</span>
                           )}
                           {ch.phone_free_eligible && (
-                            <span style={{ color: '#06D6A0' }}>Phone-free eligible</span>
+                            <span style={{ color: '#06D6A0' }}>📵 Phone-free eligible</span>
                           )}
                         </div>
 
@@ -511,27 +649,50 @@ export default function GamePage() {
                           </div>
                         )}
 
-                      {/* Submit button — opens submission overlay */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSubmittingChallenge(index)
-                          }}
-                          style={{
-                            width: '100%',
-                            background: `${diff.color}20`,
-                            border: `1px solid ${diff.color}40`,
-                            color: diff.color,
-                            padding: '12px 20px',
-                            borderRadius: 8,
-                            fontSize: '0.9rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                          }}
-                        >
-                          Submit Proof
-                        </button>
+                        {/* Submit button — changes based on submission status */}
+                        {sub?.status === 'approved' ? (
+                          <div style={{
+                            width: '100%', background: 'rgba(6,214,160,0.08)',
+                            border: '1px solid rgba(6,214,160,0.2)',
+                            padding: '12px 20px', borderRadius: 8,
+                            textAlign: 'center', color: '#06D6A0',
+                            fontSize: '0.88rem', fontWeight: 600,
+                          }}>
+                            ✅ Challenge Complete — {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
+                          </div>
+                        ) : sub?.status === 'pending' ? (
+                          <div style={{
+                            width: '100%', background: 'rgba(255,209,102,0.08)',
+                            border: '1px solid rgba(255,209,102,0.2)',
+                            padding: '12px 20px', borderRadius: 8,
+                            textAlign: 'center', color: '#FFD166',
+                            fontSize: '0.88rem', fontWeight: 600,
+                            animation: 'pendingPulse 2s ease-in-out infinite',
+                          }}>
+                            ⏳ Waiting for GM review...
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSubmittingChallenge(index)
+                            }}
+                            style={{
+                              width: '100%',
+                              background: `${diff.color}20`,
+                              border: `1px solid ${diff.color}40`,
+                              color: diff.color,
+                              padding: '12px 20px',
+                              borderRadius: 8,
+                              fontSize: '0.9rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {sub?.status === 'rejected' ? '🔄 Resubmit Proof' : '📸 Submit Proof'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -540,38 +701,105 @@ export default function GamePage() {
             </div>
 
             {challenges.length === 0 && (
-              <p style={{ color: '#555', textAlign: 'center', marginTop: 40 }}>
-                No challenges dealt yet. Waiting for GM to start the game.
-              </p>
+              <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🃏</p>
+                <p>No challenges dealt yet.</p>
+                <p style={{ fontSize: '0.82rem', color: '#333', marginTop: 4 }}>
+                  Waiting for GM to start the game.
+                </p>
+              </div>
             )}
           </div>
         )}
 
-        {/* MAP TAB — placeholder */}
+        {/* ==================== MAP TAB ==================== */}
+        {/* ✅ NEW: Wired to GameMap component with zone boundaries */}
         {activeTab === 'map' && (
-          <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
-            <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🗺️</p>
-            <p>Zone map coming soon</p>
+          <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 130px)' }}>
+            {activeZones.length > 0 ? (
+              <GameMap zones={activeZones} />
+            ) : (
+              <div style={{ textAlign: 'center', marginTop: 60, color: '#555', padding: '0 20px' }}>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🗺️</p>
+                <p>No zones loaded for this game.</p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* CHAT TAB — placeholder */}
+        {/* ==================== CHAT TAB ==================== */}
         {activeTab === 'chat' && (
           <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
             <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
-            <p>Team chat coming soon</p>
+            <p style={{ fontWeight: 600, color: '#888' }}>Team ↔ GM Chat</p>
+            <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 8, lineHeight: 1.6, maxWidth: 280, margin: '8px auto 0' }}>
+              Chat with the Game Master for questions, disputes, or hints.
+              Coming in the next update.
+            </p>
           </div>
         )}
 
-        {/* HISTORY TAB — placeholder */}
+        {/* ==================== HISTORY TAB ==================== */}
         {activeTab === 'history' && (
-          <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
-            <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>📋</p>
-            <p>Challenge history coming soon</p>
+          <div>
+            {submissions.size > 0 ? (
+              <>
+                <p style={{
+                  fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
+                  letterSpacing: 1, fontWeight: 600, marginBottom: 16,
+                }}>
+                  Submissions ({submissions.size})
+                </p>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {Array.from(submissions.entries()).map(([challengeId, sub]) => {
+                    const ch = challenges.find(c => c.id === challengeId)
+                    const badge = STATUS_BADGE[sub.status]
+                    return (
+                      <div key={challengeId} style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid #1a1a1a',
+                        borderRadius: 10, padding: '12px 16px',
+                      }}>
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between',
+                          alignItems: 'center', marginBottom: 6,
+                        }}>
+                          <span style={{
+                            fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px',
+                            borderRadius: 20, background: badge.bg,
+                            border: `1px solid ${badge.border}`,
+                            color: badge.color,
+                          }}>
+                            {badge.icon} {badge.label}
+                          </span>
+                        </div>
+                        <p style={{ color: '#bbb', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                          {ch?.description || `Challenge ${challengeId}`}
+                        </p>
+                        {sub.gm_notes && sub.status === 'rejected' && (
+                          <p style={{ color: '#EF476F', fontSize: '0.78rem', marginTop: 6 }}>
+                            GM: {sub.gm_notes}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>📋</p>
+                <p style={{ fontWeight: 600, color: '#888' }}>No submissions yet</p>
+                <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 8 }}>
+                  Complete challenges from your Hand tab to see them here.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
-        {/* Submission overlay */}
+
+      {/* Submission overlay */}
       {submittingChallenge !== null && challenges[submittingChallenge] && gameId && myTeam && (
         <SubmitProof
           gameId={gameId}
@@ -579,10 +807,12 @@ export default function GamePage() {
           challenge={challenges[submittingChallenge]}
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {
-            // Stay on success screen — user taps "Back to Hand" to close
+            // Submission created — the Firestore listener will auto-update the badge
+            // User stays on success screen and taps "Back to Hand" to close
           }}
         />
       )}
+
       {/* Bottom tab bar */}
       <div style={{
         position: 'fixed',
@@ -596,34 +826,49 @@ export default function GamePage() {
         padding: '10px 0 24px',
         zIndex: 100,
       }}>
-        {[
+        {([
           { id: 'hand' as const, icon: '🃏', label: 'Hand' },
           { id: 'map' as const, icon: '🗺️', label: 'Map' },
           { id: 'chat' as const, icon: '💬', label: 'Chat' },
           { id: 'history' as const, icon: '📋', label: 'History' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: activeTab === tab.id ? '#FFD166' : '#555',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '0.72rem',
-              fontWeight: activeTab === tab.id ? 700 : 400,
-              padding: '4px 16px',
-            }}
-          >
-            <span style={{ fontSize: '1.2rem' }}>{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
+        ]).map((tab) => {
+          // ✅ NEW: Badge dot on History tab when there are pending submissions
+          const showDot = tab.id === 'history' && pendingCount > 0 && activeTab !== 'history'
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: activeTab === tab.id ? '#FFD166' : '#555',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.72rem',
+                fontWeight: activeTab === tab.id ? 700 : 400,
+                padding: '4px 16px',
+                position: 'relative',
+              }}
+            >
+              <span style={{ fontSize: '1.2rem', position: 'relative' }}>
+                {tab.icon}
+                {showDot && (
+                  <span style={{
+                    position: 'absolute', top: -2, right: -6,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: '#FFD166',
+                  }} />
+                )}
+              </span>
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

@@ -35,3 +35,11 @@ export interface Submission {
   phone_free_claimed: boolean;
   submitted_at: any;
 }
+
+export interface ZoneScore {
+  team_id: string
+  zone_id: string
+  points: number
+  status: 'none' | 'claimed'
+  challenges_completed: string[]
+}

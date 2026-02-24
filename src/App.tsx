@@ -11,6 +11,7 @@ import JoinGame from './pages/JoinGame'
 import LobbyPage from './pages/LobbyPage'
 import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
+import GMDashboard from './pages/GMDashboard'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/game/:gameId" element={<GamePage />} />
         <Route path="/admin/seed" element={<AdminSeed />} />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/gm/:gameId" element={<GMDashboard />} />
       </Routes>
     </BrowserRouter>
   )
