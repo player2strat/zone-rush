@@ -315,8 +315,8 @@ export default function SubmitProof({
                 src={preview || ''}
                 alt="Preview"
                 style={{
-                  width: '100%', borderRadius: 10, maxHeight: 260,
-                  objectFit: 'cover', background: '#111',
+                  width: '100%', borderRadius: 10, maxHeight: 140,
+                  objectFit: 'contain', background: '#111',
                 }}
               />
             )}
