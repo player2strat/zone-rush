@@ -127,6 +127,8 @@ export default function GMDashboard() {
   // Filter: show pending, approved, rejected, or all
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
 
+  const [showFullMap, setShowFullMap] = useState(false)
+
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
 
@@ -1326,23 +1328,48 @@ export default function GMDashboard() {
             })}
           </div>
 
-          {/* ====== ✅ NEW: MINI MAP ====== */}
-          <p
+        {/* ====== LIVE MAP (interactive + expandable) ====== */}
+          <div
             style={{
-              fontSize: '0.72rem',
-              color: '#FFD166',
-              textTransform: 'uppercase',
-              letterSpacing: 1.5,
-              fontWeight: 700,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               marginBottom: 12,
             }}
           >
-            Live Map
-          </p>
+            <p
+              style={{
+                fontSize: '0.72rem',
+                color: '#FFD166',
+                textTransform: 'uppercase',
+                letterSpacing: 1.5,
+                fontWeight: 700,
+                margin: 0,
+              }}
+            >
+              Live Map
+            </p>
+            <button
+              onClick={() => setShowFullMap(true)}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid #222',
+                color: '#888',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              ⛶ Expand
+            </button>
+          </div>
 
           <div
             style={{
-              height: 240,
+              height: 260,
               borderRadius: 10,
               overflow: 'hidden',
               border: '1px solid #1a1a1a',
@@ -1353,7 +1380,6 @@ export default function GMDashboard() {
               <GameMap
                 zones={activeZones}
                 zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined}
-                compact
               />
             ) : (
               <div
@@ -1370,6 +1396,65 @@ export default function GMDashboard() {
               </div>
             )}
           </div>
+
+          {/* ====== FULL-SCREEN MAP OVERLAY ====== */}
+          {showFullMap && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999,
+                background: '#0a0a0a',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderBottom: '1px solid #1a1a1a',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#0d0d0d',
+                  flexShrink: 0,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '0.82rem',
+                    color: '#FFD166',
+                    fontWeight: 700,
+                    margin: 0,
+                  }}
+                >
+                  🗺️ Zone Map — {game.name}
+                </p>
+                <button
+                  onClick={() => setShowFullMap(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid #222',
+                    color: '#ccc',
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+              <div style={{ flex: 1 }}>
+                <GameMap
+                  zones={activeZones}
+                  zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
