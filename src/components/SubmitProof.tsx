@@ -298,8 +298,8 @@ export default function SubmitProof({
                 src={preview || ''}
                 controls
                 style={{
-                  width: '100%', borderRadius: 10, maxHeight: 260,
-                  background: '#111', objectFit: 'cover',
+                  width: '100%', borderRadius: 10, maxHeight: 140,
+                  background: '#111', objectFit: 'contain',
                 }}
               />
             ) : file.type.startsWith('audio/') ? (
