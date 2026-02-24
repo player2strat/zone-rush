@@ -50,3 +50,20 @@ export function distanceMeters(
       Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
+/**
+ * Detect which zone a player is currently in based on GPS coordinates.
+ * Returns the zone ID or null if outside all zones.
+ */
+export function detectZone(
+  lat: number | null,
+  lng: number | null,
+  zones: { id: string; boundary: { coordinates: number[][][] } }[]
+): string | null {
+  if (!lat || !lng) return null
+  for (const zone of zones) {
+    if (isPointInPolygon(lat, lng, zone.boundary.coordinates)) {
+      return zone.id
+    }
+  }
+  return null
+}
