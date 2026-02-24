@@ -107,11 +107,9 @@ export default function LobbyPage() {
         snapshot.forEach((doc) => {
           teamDocs.push({ id: doc.id, ...doc.data() } as TeamData)
         })
-        // Sort teams by name for consistent display
         teamDocs.sort((a, b) => a.name.localeCompare(b.name))
         setTeams(teamDocs)
 
-        // Check if current user is already on a team
         if (user) {
           const myTeam = teamDocs.find((t) => t.members.includes(user.uid))
           setPlayerTeamId(myTeam?.id || null)
@@ -129,7 +127,7 @@ export default function LobbyPage() {
     }
   }, [game?.status, gameId, navigate])
 
-// Join a team (auto-assign to smallest team, or create new one)
+  // Join a team (auto-assign to smallest team, or create new one)
   const handleJoinTeam = async (targetTeamId?: string) => {
     if (!user || !game || !gameId) return
     setJoining(true)
@@ -147,7 +145,6 @@ export default function LobbyPage() {
           member_names: arrayUnion(displayName),
         })
       } else {
-        // Read current teams fresh from Firestore (not stale local state)
         const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
         const currentTeams: TeamData[] = []
         teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
@@ -189,11 +186,10 @@ export default function LobbyPage() {
     setJoining(false)
   }
 
- // GM starts the game — deal cards, then set status to active
+  // GM starts the game — deal cards, then set status to active
   const handleStartGame = async () => {
     if (!gameId || !game) return
 
-    // Validate: at least 2 teams with at least 1 player each
     const activeTeams = teams.filter((t) => t.members.length > 0)
     if (activeTeams.length < 1) {
       setError('Need at least 1 team with players to start')
@@ -201,16 +197,14 @@ export default function LobbyPage() {
     }
 
     try {
-      // Step 1: Deal challenge cards to each team
       const teamIds = activeTeams.map((t) => t.id)
       const handSize = game.settings.hand_size || 6
-      const city = 'nyc' // Alpha is NYC only — reads from game doc later
+      const city = 'nyc'
 
-     console.log('DEALING:', { gameId, city, zones: game.zones, handSize, teamIds })
+      console.log('DEALING:', { gameId, city, zones: game.zones, handSize, teamIds })
       await dealChallenges(gameId, city, game.zones, handSize, teamIds)
       console.log('DEALING COMPLETE — cards should be in Firestore')
 
-      // Step 2: Set game to active with timestamps
       const now = new Date()
       const endTime = new Date(now.getTime() + game.settings.duration_minutes * 60 * 1000)
 
@@ -219,13 +213,11 @@ export default function LobbyPage() {
         started_at: now,
         ends_at: endTime,
       })
-
     } catch (err: any) {
       setError('Failed to start: ' + err.message)
     }
   }
 
-  // Copy join code to clipboard
   const copyCode = () => {
     if (game?.join_code) {
       navigator.clipboard.writeText(game.join_code)
@@ -309,7 +301,7 @@ export default function LobbyPage() {
           </div>
         </div>
 
-        {/* Join Code — big and prominent */}
+        {/* Join Code */}
         <div
           onClick={copyCode}
           style={{
@@ -323,39 +315,24 @@ export default function LobbyPage() {
           }}
         >
           <p style={{
-            fontSize: '0.72rem',
-            color: '#997a3d',
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-            marginBottom: 8,
+            fontSize: '0.72rem', color: '#997a3d',
+            textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8,
           }}>
             Join Code (tap to copy)
           </p>
           <p style={{
-            fontSize: '2.2rem',
-            fontWeight: 800,
-            color: '#FFD166',
-            letterSpacing: 6,
-            fontFamily: "'JetBrains Mono', monospace",
-            margin: 0,
+            fontSize: '2.2rem', fontWeight: 800, color: '#FFD166',
+            letterSpacing: 6, fontFamily: "'JetBrains Mono', monospace", margin: 0,
           }}>
             {game.join_code}
           </p>
-          <p style={{
-            fontSize: '0.78rem',
-            color: '#666',
-            marginTop: 8,
-          }}>
+          <p style={{ fontSize: '0.78rem', color: '#666', marginTop: 8 }}>
             Share this code with your players
           </p>
         </div>
 
         {/* Player count */}
-        <p style={{
-          color: '#888',
-          fontSize: '0.88rem',
-          marginBottom: 16,
-        }}>
+        <p style={{ color: '#888', fontSize: '0.88rem', marginBottom: 16 }}>
           {totalPlayers} player{totalPlayers !== 1 ? 's' : ''} joined · {teams.length}/{game.max_teams} teams
         </p>
 
@@ -379,27 +356,16 @@ export default function LobbyPage() {
                       width: 12, height: 12, borderRadius: 3,
                       background: team.color,
                     }} />
-                    <span style={{
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.95rem',
-                    }}>
+                    <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem' }}>
                       {team.name}
                     </span>
                     {isMyTeam && (
-                      <span style={{
-                        fontSize: '0.7rem',
-                        color: team.color,
-                        fontWeight: 600,
-                      }}>
+                      <span style={{ fontSize: '0.7rem', color: team.color, fontWeight: 600 }}>
                         (you)
                       </span>
                     )}
                   </div>
-                  <span style={{
-                    fontSize: '0.78rem',
-                    color: '#555',
-                  }}>
+                  <span style={{ fontSize: '0.78rem', color: '#555' }}>
                     {team.members.length}/{game.settings.team_size}
                   </span>
                 </div>
@@ -409,20 +375,16 @@ export default function LobbyPage() {
                   {team.member_names.map((name, i) => (
                     <span key={i} style={{
                       background: 'rgba(255,255,255,0.05)',
-                      padding: '3px 10px',
-                      borderRadius: 12,
-                      fontSize: '0.78rem',
-                      color: '#aaa',
+                      padding: '3px 10px', borderRadius: 12,
+                      fontSize: '0.78rem', color: '#aaa',
                     }}>
                       {name}
                     </span>
                   ))}
                   {team.members.length < game.settings.team_size && (
                     <span style={{
-                      padding: '3px 10px',
-                      borderRadius: 12,
-                      fontSize: '0.78rem',
-                      color: '#333',
+                      padding: '3px 10px', borderRadius: 12,
+                      fontSize: '0.78rem', color: '#333',
                       border: '1px dashed #333',
                     }}>
                       waiting...
@@ -438,22 +400,17 @@ export default function LobbyPage() {
                     style={{
                       marginTop: 10,
                       background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid #333',
-                      color: '#aaa',
-                      padding: '6px 14px',
-                      borderRadius: 6,
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
+                      border: '1px solid #333', color: '#aaa',
+                      padding: '6px 14px', borderRadius: 6,
+                      fontSize: '0.78rem', cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
                     Join this team
                   </button>
                 )}
-              </div>
-            )
-          })}
-          {/* Switch to this team (if on a different team) */}
+
+                {/* Switch to this team (if on a different team) */}
                 {playerTeamId && playerTeamId !== team.id && team.members.length < game.settings.team_size && (
                   <button
                     onClick={async () => {
@@ -492,16 +449,17 @@ export default function LobbyPage() {
                       background: 'rgba(255,209,102,0.08)',
                       border: '1px solid rgba(255,209,102,0.2)',
                       color: '#FFD166',
-                      padding: '6px 14px',
-                      borderRadius: 6,
-                      fontSize: '0.78rem',
-                      cursor: 'pointer',
+                      padding: '6px 14px', borderRadius: 6,
+                      fontSize: '0.78rem', cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
                     Switch to this team
                   </button>
                 )}
+              </div>
+            )
+          })}
         </div>
 
         {/* Join button (if not on a team yet) */}
@@ -514,12 +472,9 @@ export default function LobbyPage() {
               background: 'rgba(6,214,160,0.12)',
               border: '1px solid rgba(6,214,160,0.3)',
               color: '#06D6A0',
-              padding: '14px 24px',
-              borderRadius: 10,
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
+              padding: '14px 24px', borderRadius: 10,
+              fontSize: '0.95rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
               marginBottom: 16,
             }}
           >
@@ -530,13 +485,9 @@ export default function LobbyPage() {
         {/* Error */}
         {error && (
           <p style={{
-            color: '#EF476F',
-            fontSize: '0.85rem',
-            marginBottom: 16,
-            padding: '10px 14px',
-            background: 'rgba(239,71,111,0.08)',
-            borderRadius: 8,
-            textAlign: 'center',
+            color: '#EF476F', fontSize: '0.85rem', marginBottom: 16,
+            padding: '10px 14px', background: 'rgba(239,71,111,0.08)',
+            borderRadius: 8, textAlign: 'center',
           }}>
             {error}
           </p>
@@ -545,19 +496,15 @@ export default function LobbyPage() {
         {/* GM Controls */}
         {isGM && (
           <div style={{
-            marginTop: 16,
-            padding: 20,
+            marginTop: 16, padding: 20,
             background: 'rgba(255,209,102,0.05)',
             border: '1px solid rgba(255,209,102,0.15)',
             borderRadius: 12,
           }}>
             <p style={{
-              fontSize: '0.72rem',
-              color: '#FFD166',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              fontWeight: 700,
-              marginBottom: 12,
+              fontSize: '0.72rem', color: '#FFD166',
+              textTransform: 'uppercase', letterSpacing: 1,
+              fontWeight: 700, marginBottom: 12,
             }}>
               Game Master Controls
             </p>
@@ -568,23 +515,18 @@ export default function LobbyPage() {
                 background: 'rgba(255,209,102,0.15)',
                 border: '1px solid rgba(255,209,102,0.3)',
                 color: '#FFD166',
-                padding: '14px 24px',
-                borderRadius: 10,
-                fontSize: '1rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
+                padding: '14px 24px', borderRadius: 10,
+                fontSize: '1rem', fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
               Start Game
             </button>
             <p style={{
-              fontSize: '0.78rem',
-              color: '#666',
-              marginTop: 8,
-              textAlign: 'center',
+              fontSize: '0.78rem', color: '#666',
+              marginTop: 8, textAlign: 'center',
             }}>
-              Need at least 2 teams with players
+              Need at least 1 team with players
             </p>
           </div>
         )}
