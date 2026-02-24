@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, collection,
-  updateDoc, getDocs, query, where,
+  updateDoc, getDocs,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 
