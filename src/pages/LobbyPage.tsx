@@ -195,8 +195,8 @@ export default function LobbyPage() {
 
     // Validate: at least 2 teams with at least 1 player each
     const activeTeams = teams.filter((t) => t.members.length > 0)
-    if (activeTeams.length < 2) {
-      setError('Need at least 2 teams with players to start')
+    if (activeTeams.length < 1) {
+      setError('Need at least 1 team with players to start')
       return
     }
 
@@ -453,6 +453,55 @@ export default function LobbyPage() {
               </div>
             )
           })}
+          {/* Switch to this team (if on a different team) */}
+                {playerTeamId && playerTeamId !== team.id && team.members.length < game.settings.team_size && (
+                  <button
+                    onClick={async () => {
+                      if (!user || !gameId) return
+                      setJoining(true)
+                      try {
+                        const userDoc = await getDoc(doc(db, 'users', user.uid))
+                        const displayName = userDoc.exists()
+                          ? userDoc.data().display_name || user.displayName || 'Player'
+                          : user.displayName || 'Player'
+
+                        // Remove from current team
+                        const currentTeam = teams.find((t) => t.id === playerTeamId)
+                        if (currentTeam) {
+                          const oldRef = doc(db, 'games', gameId, 'teams', playerTeamId)
+                          await updateDoc(oldRef, {
+                            members: currentTeam.members.filter((m) => m !== user.uid),
+                            member_names: currentTeam.member_names.filter((n) => n !== displayName),
+                          })
+                        }
+
+                        // Add to new team
+                        const newRef = doc(db, 'games', gameId, 'teams', team.id)
+                        await updateDoc(newRef, {
+                          members: arrayUnion(user.uid),
+                          member_names: arrayUnion(displayName),
+                        })
+                      } catch (err: any) {
+                        setError('Failed to switch: ' + err.message)
+                      }
+                      setJoining(false)
+                    }}
+                    disabled={joining}
+                    style={{
+                      marginTop: 10,
+                      background: 'rgba(255,209,102,0.08)',
+                      border: '1px solid rgba(255,209,102,0.2)',
+                      color: '#FFD166',
+                      padding: '6px 14px',
+                      borderRadius: 6,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Switch to this team
+                  </button>
+                )}
         </div>
 
         {/* Join button (if not on a team yet) */}
