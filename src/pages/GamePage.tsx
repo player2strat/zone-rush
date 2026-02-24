@@ -11,6 +11,7 @@ import {
   updateDoc, getDocs,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import SubmitProof from '../components/SubmitProof'
 
 // --------------- Types ---------------
 
@@ -105,6 +106,7 @@ export default function GamePage() {
   // Discard state
   const [discardMode, setDiscardMode] = useState(false)
   const [discarding, setDiscarding] = useState(false)
+  const [submittingChallenge, setSubmittingChallenge] = useState<number | null>(null)
 
   // Listen to game document
   useEffect(() => {
@@ -509,12 +511,11 @@ export default function GamePage() {
                           </div>
                         )}
 
-                        {/* Submit button (placeholder for now) */}
+                      {/* Submit button — opens submission overlay */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            // TODO: Navigate to submission screen
-                            alert('Submission screen coming next!')
+                            setSubmittingChallenge(index)
                           }}
                           style={{
                             width: '100%',
@@ -570,7 +571,18 @@ export default function GamePage() {
           </div>
         )}
       </div>
-
+        {/* Submission overlay */}
+      {submittingChallenge !== null && challenges[submittingChallenge] && gameId && myTeam && (
+        <SubmitProof
+          gameId={gameId}
+          teamId={myTeam.id}
+          challenge={challenges[submittingChallenge]}
+          onClose={() => setSubmittingChallenge(null)}
+          onSubmitted={() => {
+            // Stay on success screen — user taps "Back to Hand" to close
+          }}
+        />
+      )}
       {/* Bottom tab bar */}
       <div style={{
         position: 'fixed',
