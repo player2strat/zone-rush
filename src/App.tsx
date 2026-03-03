@@ -12,6 +12,7 @@ import LobbyPage from './pages/LobbyPage'
 import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
+import ZoneManager from './pages/ZoneManager'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -43,16 +44,17 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/map" element={<MapPage />} />
-        <Route path="/create" element={<CreateGame />} />
-        <Route path="/join" element={<JoinGame />} />
-        <Route path="/lobby/:gameId" element={<LobbyPage />} />
-        <Route path="/game/:gameId" element={<GamePage />} />
-        <Route path="/admin/seed" element={<AdminSeed />} />
-        <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/gm/:gameId" element={<GMDashboard />} />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/map" element={<MapPage />} />
+          <Route path="/create" element={<CreateGame />} />
+          <Route path="/join" element={<JoinGame />} />
+          <Route path="/lobby/:gameId" element={<LobbyPage />} />
+          <Route path="/game/:gameId" element={<GamePage />} />
+          <Route path="/gm/:gameId" element={<GMDashboard />} />
+          <Route path="/admin/seed" element={<AdminSeed />} />
+          <Route path="/admin/zones" element={<ZoneManager />} />
+          <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   )

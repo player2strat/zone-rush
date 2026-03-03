@@ -13,7 +13,7 @@ interface ZoneDoc {
   id: string
   name: string
   district_number: number
-  city: string
+  city: string,
 }
 
 // Generate a random 6-character join code (uppercase letters + numbers)
@@ -34,6 +34,7 @@ export default function CreateGame() {
   const [zones, setZones] = useState<ZoneDoc[]>([])
   const [selectedZones, setSelectedZones] = useState<string[]>([])
   const [loadingZones, setLoadingZones] = useState(true)
+  const [cityFilter, setCityFilter] = useState('nyc')
 
   // Game settings — all configurable, stored in Firestore
   const [gameName, setGameName] = useState('')
@@ -50,33 +51,31 @@ export default function CreateGame() {
   const [error, setError] = useState('')
 
   // Load available zones from Firestore
-  useEffect(() => {
-    async function loadZones() {
-      try {
-        const q = query(collection(db, 'zones'), where('city', '==', 'nyc'))
-        const snapshot = await getDocs(q)
-        const zoneDocs: ZoneDoc[] = []
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          zoneDocs.push({
-            id: doc.id,
-            name: data.name,
-            district_number: data.district_number,
-            city: data.city,
-          })
+ useEffect(() => {
+  async function loadZones() {
+    try {
+      const q = query(collection(db, 'zones'), where('city', '==', cityFilter))
+      const snapshot = await getDocs(q)
+      const zoneDocs: ZoneDoc[] = []
+      snapshot.forEach((doc) => {
+        const data = doc.data()
+        zoneDocs.push({
+          id: doc.id,
+          name: data.name,
+          district_number: data.district_number,
+          city: data.city,
         })
-        // Sort by district number
-        zoneDocs.sort((a, b) => a.district_number - b.district_number)
-        setZones(zoneDocs)
-        // Select all by default
-        setSelectedZones(zoneDocs.map((z) => z.id))
-      } catch (err: any) {
-        setError('Failed to load zones: ' + err.message)
-      }
-      setLoadingZones(false)
+      })
+      zoneDocs.sort((a, b) => a.district_number - b.district_number)
+      setZones(zoneDocs)
+      setSelectedZones(zoneDocs.map((z) => z.id))
+    } catch (err: any) {
+      setError('Failed to load zones: ' + err.message)
     }
-    loadZones()
-  }, [])
+    setLoadingZones(false)
+  }
+  loadZones()
+}, [cityFilter])  // ← re-runs when city changes
 
   const toggleZone = (zoneId: string) => {
     setSelectedZones((prev) =>
@@ -176,6 +175,12 @@ export default function CreateGame() {
           </p>
         </div>
 
+        {/* City Selection */}
+            <div style={{ marginBottom: 24 }}>
+            <label style={labelStyle}>City</label>
+            <CityPicker value={cityFilter} onChange={setCityFilter} />
+        </div>
+
         {/* Game Name */}
         <div style={{ marginBottom: 24 }}>
           <label style={labelStyle}>Game Name</label>
@@ -253,7 +258,7 @@ export default function CreateGame() {
               label="Team Size"
               value={teamSize}
               onChange={setTeamSize}
-              min={2}
+              min={1}
               max={6}
             />
             <SettingInput
@@ -385,6 +390,49 @@ function SettingInput({
           +
         </button>
       </div>
+    </div>
+  )
+}
+
+function CityPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [cities, setCities] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    async function load() {
+      const snapshot = await getDocs(collection(db, 'cities'))
+      const list = snapshot.docs
+        .map((d) => ({ id: d.id, name: d.data().name }))
+        .filter((c) => c.name) // skip any incomplete docs
+      setCities(list)
+    }
+    load()
+  }, [])
+
+  if (cities.length <= 1) return null // don't show picker if only one city
+
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {cities.map((city) => (
+        <button
+          key={city.id}
+          onClick={() => onChange(city.id)}
+          style={{
+            background: value === city.id
+              ? 'rgba(255,209,102,0.15)'
+              : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${value === city.id ? 'rgba(255,209,102,0.3)' : '#222'}`,
+            color: value === city.id ? '#FFD166' : '#666',
+            borderRadius: 8,
+            padding: '10px 18px',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+          }}
+        >
+          {city.name}
+        </button>
+      ))}
     </div>
   )
 }

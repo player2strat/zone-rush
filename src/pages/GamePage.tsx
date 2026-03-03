@@ -7,6 +7,7 @@
 // - NEW: zoneScores state + Firestore listener on zone_scores sub-collection
 // - NEW: zoneOwnership computed from zoneScores + allTeams → passed to GameMap
 // - CHANGED: GameMap now receives zoneOwnership prop for live zone coloring
+// - UPDATED: Zones now loaded from Firestore instead of local file
 // =============================================================================
 
 import { useState, useEffect } from 'react'
@@ -19,7 +20,6 @@ import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
-import { zones as localZones } from '../lib/zones'
 
 // --------------- Types ---------------
 
@@ -76,7 +76,7 @@ interface SubmissionStatus {
   submitted_at: any
 }
 
-// ✅ NEW: Zone score type for ownership tracking
+// Zone score type for ownership tracking
 interface ZoneScoreData {
   team_id: string
   zone_id: string
@@ -141,11 +141,30 @@ export default function GamePage() {
   // Submission statuses for badge display
   const [submissions, setSubmissions] = useState<Map<string, SubmissionStatus>>(new Map())
 
-  // ✅ NEW: All teams (for zone ownership colors on map)
+  // All teams (for zone ownership colors on map)
   const [allTeams, setAllTeams] = useState<TeamData[]>([])
 
-  // ✅ NEW: Zone scores (for zone ownership)
+  // Zone scores (for zone ownership)
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
+
+  // Zones loaded from Firestore (replaces local file import)
+  const [localZones, setLocalZones] = useState<any[]>([])
+
+  // Load zones from Firestore
+  useEffect(() => {
+    async function loadZones() {
+      const snapshot = await getDocs(collection(db, 'zones'))
+      const loaded = snapshot.docs.map((d) => {
+        const data = d.data()
+        return {
+          ...data,
+          boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary,
+        }
+      })
+      setLocalZones(loaded)
+    }
+    loadZones()
+  }, [])
 
   // Listen to game document
   useEffect(() => {
@@ -159,7 +178,7 @@ export default function GamePage() {
   }, [gameId])
 
   // Find player's team and listen for updates
-  // ✅ CHANGED: Also captures allTeams for zone ownership map
+  // Also captures allTeams for zone ownership map
   useEffect(() => {
     if (!gameId || !user) return
 
@@ -178,7 +197,7 @@ export default function GamePage() {
         })
 
         setMyTeam(foundTeam)
-        setAllTeams(teamsArr) // ✅ NEW: store all teams
+        setAllTeams(teamsArr)
 
         // Fetch challenge details for the hand
         if (foundTeam) {
@@ -202,7 +221,7 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, user])
 
-  // ✅ NEW: Listen to zone_scores for real-time zone ownership
+  // Listen to zone_scores for real-time zone ownership
   useEffect(() => {
     if (!gameId) return
     const unsub = onSnapshot(
@@ -336,10 +355,10 @@ export default function GamePage() {
   const pendingCount = Array.from(submissions.values()).filter(s => s.status === 'pending').length
   const approvedCount = Array.from(submissions.values()).filter(s => s.status === 'approved').length
 
-  // Filter local zones to only the ones active in this game
-  const activeZones = localZones.filter(z => game?.zones?.includes(z.id))
+  // Filter zones to only the ones active in this game
+  const activeZones = localZones.filter((z: any) => game?.zones?.includes(z.id))
 
-  // ✅ NEW: Compute zone ownership map for the GameMap component
+  // Compute zone ownership map for the GameMap component
   // Maps zoneId → { teamColor, teamName } for all claimed zones
   const zoneOwnership = new Map<string, ZoneOwner>()
   for (const zs of zoneScores) {
@@ -447,7 +466,7 @@ export default function GamePage() {
                 ⏳ {pendingCount} pending
               </span>
             )}
-            {/* ✅ NEW: Show zones claimed count */}
+            {/* Show zones claimed count */}
             {zoneOwnership.size > 0 && (
               <span style={{ color: '#9B5DE5' }}>
                 🗺️ {zoneOwnership.size} zone{zoneOwnership.size !== 1 ? 's' : ''} claimed
@@ -772,7 +791,6 @@ export default function GamePage() {
         )}
 
         {/* ==================== MAP TAB ==================== */}
-        {/* ✅ CHANGED: Now passes zoneOwnership for live zone coloring */}
         {activeTab === 'map' && (
           <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 130px)' }}>
             {activeZones.length > 0 ? (
@@ -787,7 +805,7 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* ✅ NEW: Zone ownership legend overlay */}
+            {/* Zone ownership legend overlay */}
             {zoneOwnership.size > 0 && (
               <div style={{
                 position: 'absolute',

@@ -8,6 +8,7 @@
 // - NEW: GPS proximity warning — flags submissions outside the claimed zone
 // - NEW: Import zones data + GameMap + geo utilities
 // - CHANGED: zoneOwnership now also feeds into the mini GameMap component
+// - UPDATED: Zones now loaded from Firestore instead of local file
 // =============================================================================
 
 import { useState, useEffect, useMemo } from 'react'
@@ -17,7 +18,6 @@ import {
   updateDoc, setDoc, getDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
-import { zones as allZoneData } from '../lib/zones'
 import { isPointInPolygon } from '../lib/geo'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
@@ -116,6 +116,9 @@ export default function GMDashboard() {
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Zones loaded from Firestore (replaces local file import)
+  const [allZoneData, setAllZoneData] = useState<any[]>([])
+
   // Review state — tracks GM's choices per submission
   const [reviewState, setReviewState] = useState<
     Map<string, { tier2Approved: boolean; phoneFreeBonus: number; notes: string }>
@@ -132,10 +135,26 @@ export default function GMDashboard() {
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
 
-  // ✅ NEW: Zone data lookup for GPS proximity checks
+  // Load zones from Firestore
+  useEffect(() => {
+    async function loadZones() {
+      const snapshot = await getDocs(collection(db, 'zones'))
+      const loaded = snapshot.docs.map((d) => {
+        const data = d.data()
+        return {
+          ...data,
+          boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary,
+        }
+      })
+      setAllZoneData(loaded)
+    }
+    loadZones()
+  }, [])
+
+  // Zone data lookup for GPS proximity checks
   const zoneDataMap = useMemo(
-    () => new Map(allZoneData.map((z) => [z.id, z])),
-    []
+    () => new Map(allZoneData.map((z: any) => [z.id, z])),
+    [allZoneData]
   )
 
   // ---------- Listeners ----------
@@ -242,7 +261,7 @@ export default function GMDashboard() {
   // ---------- GPS Proximity Check ----------
 
   /**
-   * ✅ NEW: Check if a submission's GPS falls inside its claimed zone.
+   * Check if a submission's GPS falls inside its claimed zone.
    * Returns: 'inside' | 'outside' | 'unknown' (no GPS or no zone data)
    */
   const checkGpsProximity = (sub: SubmissionData): 'inside' | 'outside' | 'unknown' => {
@@ -369,6 +388,62 @@ export default function GMDashboard() {
         })
       }
 
+    // --- 5. Deal a replacement card to the team ---
+      try {
+        const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
+        const teamSnap = await getDoc(teamRef)
+
+        if (teamSnap.exists()) {
+          const teamData = teamSnap.data() as TeamData
+          const currentHand = teamData.hand || []
+
+          // Remove the approved challenge from hand
+          const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
+
+          // Get all challenge IDs this team has already submitted (approved or pending)
+          const teamSubsSnap = await getDocs(
+            query(
+              collection(db, 'submissions'),
+              where('game_id', '==', gameId),
+              where('team_id', '==', sub.team_id)
+            )
+          )
+          const usedChallengeIds = new Set<string>()
+          teamSubsSnap.forEach((d) => {
+            usedChallengeIds.add(d.data().challenge_id)
+          })
+
+          // Also exclude everything currently in hand
+          updatedHand.forEach((id: string) => usedChallengeIds.add(id))
+
+          // Find eligible challenges (same logic as initial dealing)
+          const gameCity = game?.zones?.[0]?.startsWith('zone_district_') ? 'nyc' : 'nyc'
+          const eligible: string[] = []
+          challenges.forEach((ch, chId) => {
+            if (usedChallengeIds.has(chId)) return
+            if (!ch.points) return // skip invalid
+            // city_tags filter: must include game city or "*"
+            const cityTags = (ch as any).city_tags || ['*']
+            if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
+            eligible.push(chId)
+          })
+
+          if (eligible.length > 0) {
+            // Pick a random replacement
+            const newCardId = eligible[Math.floor(Math.random() * eligible.length)]
+            updatedHand.push(newCardId)
+            console.log('DEALT REPLACEMENT:', newCardId, 'to', sub.team_id)
+          } else {
+            console.log('No eligible challenges left to deal to', sub.team_id)
+          }
+
+          await updateDoc(teamRef, { hand: updatedHand })
+        }
+      } catch (dealErr) {
+        // Don't fail the whole approval if dealing fails
+        console.error('Replacement card dealing failed:', dealErr)
+      }
+
       // Clear review state for this submission
       setReviewState((prev) => {
         const next = new Map(prev)
@@ -460,7 +535,7 @@ export default function GMDashboard() {
     }
   }
 
-  // ✅ NEW: Convert to GameMap's ZoneOwner format for the mini map
+  // Convert to GameMap's ZoneOwner format for the mini map
   const mapZoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
     for (const [zoneId, owner] of zoneOwnership) {
@@ -469,10 +544,10 @@ export default function GMDashboard() {
     return m
   }, [zoneScores, teams])
 
-  // ✅ NEW: Filter zones data to ones active in this game
+  // Filter zones data to ones active in this game
   const activeZones = useMemo(
-    () => allZoneData.filter((z) => game?.zones?.includes(z.id)),
-    [game?.zones]
+    () => allZoneData.filter((z: any) => game?.zones?.includes(z.id)),
+    [game?.zones, allZoneData]
   )
 
   // Team scoreboard data, sorted by points descending
@@ -723,7 +798,7 @@ export default function GMDashboard() {
                 const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || '#FFD166'
                 const basePts = DIFFICULTY_PTS[challenge?.difficulty || 'medium'] || 3
 
-                // ✅ NEW: GPS proximity check
+                // GPS proximity check
                 const gpsCheck = checkGpsProximity(sub)
 
                 return (
@@ -858,7 +933,7 @@ export default function GMDashboard() {
                       )}
                     </div>
 
-                    {/* Metadata row: GPS, zone, time + ✅ NEW: proximity indicator */}
+                    {/* Metadata row: GPS, zone, time + proximity indicator */}
                     <div
                       style={{
                         display: 'flex',
@@ -888,7 +963,7 @@ export default function GMDashboard() {
                         </span>
                       )}
 
-                      {/* ✅ NEW: GPS proximity badge */}
+                      {/* GPS proximity badge */}
                       {gpsCheck === 'inside' && (
                         <span style={{ color: '#06D6A0', fontWeight: 600 }}>
                           ✓ GPS in zone
@@ -901,7 +976,7 @@ export default function GMDashboard() {
                       )}
                     </div>
 
-                    {/* ✅ NEW: GPS proximity warning banner (pending submissions only) */}
+                    {/* GPS proximity warning banner (pending submissions only) */}
                     {gpsCheck === 'outside' && sub.status === 'pending' && (
                       <div
                         style={{

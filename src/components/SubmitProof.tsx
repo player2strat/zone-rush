@@ -5,9 +5,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore'
 import { db, storage, auth } from '../lib/firebase'
-import { zones } from '../lib/zones'
 import { detectZone } from '../lib/geo'
 
 interface SubmitProofProps {
@@ -43,10 +42,26 @@ export default function SubmitProof({
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Zones from Firestore
+  const [zones, setZones] = useState<any[]>([])
+
   // GPS
   const [gpsLat, setGpsLat] = useState<number | null>(null)
   const [gpsLng, setGpsLng] = useState<number | null>(null)
   const [gpsStatus, setGpsStatus] = useState<'loading' | 'success' | 'error'>('loading')
+
+  // Load zones from Firestore
+  useEffect(() => {
+    async function loadZones() {
+      const snapshot = await getDocs(collection(db, 'zones'))
+      const loaded = snapshot.docs.map((d) => {
+        const data = d.data()
+        return { ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
+      })
+      setZones(loaded)
+    }
+    loadZones()
+  }, [])
 
   // Capture GPS on mount
   useEffect(() => {
