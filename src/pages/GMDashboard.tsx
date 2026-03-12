@@ -585,13 +585,19 @@ export default function GMDashboard() {
     }
   }
 
-  const mapZoneOwnership = useMemo(() => {
+ const mapZoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
+    const claimThreshold = game?.settings.claim_threshold ?? 6
     for (const [zoneId, owner] of zoneOwnership) {
-      m.set(zoneId, { teamColor: owner.teamColor, teamName: owner.teamName })
+      m.set(zoneId, {
+        teamColor: owner.teamColor,
+        teamName: owner.teamName,
+        points: owner.points,
+        claimed: owner.points >= claimThreshold,
+      })
     }
     return m
-  }, [zoneScores, teams])
+  }, [zoneScores, teams, game?.settings.claim_threshold])
 
   const activeZones = useMemo(
     () => allZoneData.filter((z: any) => game?.zones?.includes(z.id)),

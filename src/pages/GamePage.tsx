@@ -1,13 +1,10 @@
 // =============================================================================
-// Zone Rush — Game Page (Day 11)
+// Zone Rush — Game Page
 // Player's 4-tab view: Hand, Map, Chat, History
 //
-// CHANGES FROM DAY 10:
-// - NEW: allTeams state — captures all teams (not just player's) for ownership map
-// - NEW: zoneScores state + Firestore listener on zone_scores sub-collection
-// - NEW: zoneOwnership computed from zoneScores + allTeams → passed to GameMap
-// - CHANGED: GameMap now receives zoneOwnership prop for live zone coloring
-// - UPDATED: Zones now loaded from Firestore instead of local file
+// CHANGES:
+// - UPDATED: zoneOwnership now passes points + claimed to GameMap for gradient
+// - UPDATED: GameMap receives closedZones and claimThreshold props
 // =============================================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -84,7 +81,6 @@ interface SubmissionStatus {
   submitted_at: any
 }
 
-// Zone score type for ownership tracking
 interface ZoneScoreData {
   team_id: string
   zone_id: string
@@ -141,28 +137,19 @@ export default function GamePage() {
   const [loading, setLoading] = useState(true)
   const [selectedCard, setSelectedCard] = useState<number | null>(null)
 
-  // Discard state
   const [discardMode, setDiscardMode] = useState(false)
   const [discarding, setDiscarding] = useState(false)
   const [submittingChallenge, setSubmittingChallenge] = useState<number | null>(null)
 
-  // Submission statuses for badge display
   const [submissions, setSubmissions] = useState<Map<string, SubmissionStatus>>(new Map())
-
-  // All teams (for zone ownership colors on map)
   const [allTeams, setAllTeams] = useState<TeamData[]>([])
-
-  // Zone scores (for zone ownership)
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
-
-  // Zones loaded from Firestore (replaces local file import)
   const [localZones, setLocalZones] = useState<any[]>([])
 
-  // Chat state
-    const [chatMessages, setChatMessages] = useState<any[]>([])
-    const [chatInput, setChatInput] = useState('')
-    const [chatSending, setChatSending] = useState(false)
-    const chatBottomRef = useRef<HTMLDivElement>(null)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
 
   // Load zones from Firestore
   useEffect(() => {
@@ -184,7 +171,7 @@ export default function GamePage() {
   useEffect(() => {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
-      () => {}, // success — permission granted, nothing to do
+      () => {},
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
           alert(
@@ -200,9 +187,7 @@ export default function GamePage() {
   useEffect(() => {
     if (!gameId) return
     const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
-      if (snap.exists()) {
-        setGame(snap.data() as GameData)
-      }
+      if (snap.exists()) setGame(snap.data() as GameData)
     })
     return () => unsub()
   }, [gameId])
@@ -217,8 +202,7 @@ export default function GamePage() {
     return () => clearInterval(interval)
   }, [game?.status, gameId])
 
-  // Find player's team and listen for updates
-  // Also captures allTeams for zone ownership map
+  // Find player's team and listen for updates; also captures allTeams
   useEffect(() => {
     if (!gameId || !user) return
 
@@ -231,15 +215,12 @@ export default function GamePage() {
         snapshot.forEach((d) => {
           const team = { id: d.id, ...d.data() } as TeamData
           teamsArr.push(team)
-          if (team.members.includes(user.uid)) {
-            foundTeam = team
-          }
+          if (team.members.includes(user.uid)) foundTeam = team
         })
 
         setMyTeam(foundTeam)
         setAllTeams(teamsArr)
 
-        // Fetch challenge details for the hand
         if (foundTeam) {
           const teamHand = (foundTeam as TeamData).hand
           if (teamHand && teamHand.length > 0) {
@@ -314,7 +295,6 @@ export default function GamePage() {
     if (!gameId || !myTeam) return
     const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
       setChatMessages(msgs)
-      // Auto-scroll to bottom when new messages arrive
       setTimeout(() => {
         chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
       }, 50)
@@ -350,7 +330,7 @@ export default function GamePage() {
     }
   }
 
-  // ---- Discard handler ----
+  // Discard handler
   const handleDiscard = async (cardIndex: number) => {
     if (!gameId || !myTeam || !game || discarding) return
 
@@ -384,12 +364,9 @@ export default function GamePage() {
       }
 
       const replacement = allChallenges[Math.floor(Math.random() * allChallenges.length)]
-
       const newHand = [...myTeam.hand]
       const handIndex = newHand.indexOf(challengeToRemove.id)
-      if (handIndex !== -1) {
-        newHand[handIndex] = replacement
-      }
+      if (handIndex !== -1) newHand[handIndex] = replacement
 
       const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
       await updateDoc(teamRef, {
@@ -422,37 +399,52 @@ export default function GamePage() {
       const hrs = Math.floor(diff / 3600000)
       const mins = Math.floor((diff % 3600000) / 60000)
       const secs = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}` : `${mins}:${String(secs).padStart(2, '0')}`)
+      setTimeLeft(hrs > 0
+        ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+        : `${mins}:${String(secs).padStart(2, '0')}`)
     }, 1000)
     return () => clearInterval(interval)
   }, [game?.ends_at])
 
-  // Compute discard availability
+  // Computed values
   const discardLimit = game?.settings.discard_limit ?? 1
   const discardsUsed = myTeam?.discards_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
 
-  // Count submissions by status for the header
   const pendingCount = Array.from(submissions.values()).filter(s => s.status === 'pending').length
   const approvedCount = Array.from(submissions.values()).filter(s => s.status === 'approved').length
 
-  // Filter zones to only the ones active in this game
   const activeZones = localZones.filter((z: any) => game?.zones?.includes(z.id))
 
-  // Compute zone ownership map for the GameMap component
-  // Maps zoneId → { teamColor, teamName } for all claimed zones
+  // ---- Compute zone ownership for GameMap ----
+  // For each zone, find the team with the most points.
+  // Pass their color, name, total points, and whether they've claimed it.
+  const claimThreshold = game?.settings.claim_threshold ?? 6
   const zoneOwnership = new Map<string, ZoneOwner>()
-  for (const zs of zoneScores) {
-    if (zs.status === 'claimed') {
-      const team = allTeams.find(t => t.id === zs.team_id)
-      if (team) {
-        zoneOwnership.set(zs.zone_id, {
-          teamColor: team.color,
-          teamName: team.name,
-        })
-      }
-    }
+
+  for (const zone of (game?.zones ?? [])) {
+    const scoresForZone = zoneScores.filter(zs => zs.zone_id === zone)
+    if (scoresForZone.length === 0) continue
+
+    // Leading team = highest points in this zone
+    const leading = scoresForZone.reduce((best, curr) =>
+      curr.points > best.points ? curr : best
+    )
+
+    if (leading.points === 0) continue
+
+    const team = allTeams.find(t => t.id === leading.team_id)
+    if (!team) continue
+
+    zoneOwnership.set(zone, {
+      teamColor: team.color,
+      teamName: team.name,
+      points: leading.points,
+      claimed: leading.points >= claimThreshold,
+    })
   }
+
+  // ---- Render ----
 
   if (loading) {
     return (
@@ -502,23 +494,16 @@ export default function GamePage() {
       display: 'flex',
       flexDirection: 'column',
     }}>
-      {/* Top bar with team info + timer + score summary */}
+      {/* Top bar */}
       <div style={{
         padding: '12px 20px',
         borderBottom: '1px solid #1a1a1a',
         background: '#0d0d0d',
         flexShrink: 0,
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 10, height: 10, borderRadius: 3,
-              background: myTeam.color,
-            }} />
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: myTeam.color }} />
             <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{myTeam.name}</span>
           </div>
           <div style={{
@@ -531,26 +516,13 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* Quick stats row */}
         {submissions.size > 0 && (
-          <div style={{
-            display: 'flex', gap: 12, marginTop: 8,
-            fontSize: '0.72rem', color: '#555',
-          }}>
-            {approvedCount > 0 && (
-              <span style={{ color: '#06D6A0' }}>
-                ✅ {approvedCount} approved
-              </span>
-            )}
-            {pendingCount > 0 && (
-              <span style={{ color: '#FFD166' }}>
-                ⏳ {pendingCount} pending
-              </span>
-            )}
-            {/* Show zones claimed count */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: '#555' }}>
+            {approvedCount > 0 && <span style={{ color: '#06D6A0' }}>✅ {approvedCount} approved</span>}
+            {pendingCount > 0 && <span style={{ color: '#FFD166' }}>⏳ {pendingCount} pending</span>}
             {zoneOwnership.size > 0 && (
               <span style={{ color: '#9B5DE5' }}>
-                🗺️ {zoneOwnership.size} zone{zoneOwnership.size !== 1 ? 's' : ''} claimed
+                🗺️ {Array.from(zoneOwnership.values()).filter(z => z.claimed).length} zone{Array.from(zoneOwnership.values()).filter(z => z.claimed).length !== 1 ? 's' : ''} claimed
               </span>
             )}
           </div>
@@ -560,13 +532,12 @@ export default function GamePage() {
       {/* Main content */}
       <div style={{
         flex: 1, overflow: 'auto',
-       padding: activeTab === 'map' || activeTab === 'history' ? '0' : '16px 20px 100px',
+        padding: activeTab === 'map' || activeTab === 'history' ? '0' : '16px 20px 100px',
       }}>
 
         {/* ==================== HAND TAB ==================== */}
         {activeTab === 'hand' && (
           <div>
-            {/* Header row with card count + discard button */}
             <div style={{
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', marginBottom: 16,
@@ -580,10 +551,7 @@ export default function GamePage() {
 
               {canDiscard ? (
                 <button
-                  onClick={() => {
-                    setDiscardMode(!discardMode)
-                    setSelectedCard(null)
-                  }}
+                  onClick={() => { setDiscardMode(!discardMode); setSelectedCard(null) }}
                   style={{
                     background: discardMode ? 'rgba(239,71,111,0.15)' : 'rgba(255,255,255,0.05)',
                     border: `1px solid ${discardMode ? '#EF476F40' : '#222'}`,
@@ -600,30 +568,23 @@ export default function GamePage() {
                   {discardMode ? '✕ Cancel' : `🔄 Discard (${discardLimit - discardsUsed} left)`}
                 </button>
               ) : (
-                <span style={{
-                  fontSize: '0.72rem', color: '#333', fontStyle: 'italic',
-                }}>
+                <span style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic' }}>
                   No discards left
                 </span>
               )}
             </div>
 
-            {/* Discard mode hint */}
             {discardMode && (
               <div style={{
                 background: 'rgba(239,71,111,0.06)',
                 border: '1px solid rgba(239,71,111,0.15)',
-                borderRadius: 8,
-                padding: '10px 14px',
-                marginBottom: 12,
-                fontSize: '0.82rem',
-                color: '#EF476F',
+                borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+                fontSize: '0.82rem', color: '#EF476F',
               }}>
                 Tap the card you want to discard. You'll get a random replacement.
               </div>
             )}
 
-            {/* Pulse animation for pending badges */}
             <style>{`
               @keyframes pendingPulse {
                 0%, 100% { opacity: 1; }
@@ -636,7 +597,6 @@ export default function GamePage() {
                 const diff = DIFFICULTY_STYLES[ch.difficulty] || DIFFICULTY_STYLES.medium
                 const profile = PROFILE_STYLES[ch.player_profile] || { color: '#888', label: ch.player_profile }
                 const isExpanded = selectedCard === index && !discardMode
-
                 const sub = submissions.get(ch.id)
                 const badge = sub ? STATUS_BADGE[sub.status] : null
                 const isCompleted = sub?.status === 'approved'
@@ -651,19 +611,14 @@ export default function GamePage() {
                     style={{
                       background: discardMode
                         ? 'rgba(239,71,111,0.03)'
-                        : isCompleted
-                        ? 'rgba(6,214,160,0.03)'
-                        : isExpanded
-                        ? 'rgba(255,255,255,0.04)'
+                        : isCompleted ? 'rgba(6,214,160,0.03)'
+                        : isExpanded ? 'rgba(255,255,255,0.04)'
                         : 'rgba(255,255,255,0.02)',
                       border: `1px solid ${
-                        discardMode
-                          ? 'rgba(239,71,111,0.2)'
-                          : isCompleted
-                          ? 'rgba(6,214,160,0.2)'
-                          : isExpanded
-                          ? diff.color + '40'
-                          : '#1a1a1a'
+                        discardMode ? 'rgba(239,71,111,0.2)'
+                        : isCompleted ? 'rgba(6,214,160,0.2)'
+                        : isExpanded ? diff.color + '40'
+                        : '#1a1a1a'
                       }`,
                       borderRadius: 12,
                       padding: '16px 18px',
@@ -686,18 +641,15 @@ export default function GamePage() {
                         </span>
                         <span style={{
                           fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
-                          borderRadius: 20, background: `${profile.color}15`,
-                          color: profile.color,
+                          borderRadius: 20, background: `${profile.color}15`, color: profile.color,
                         }}>
                           {profile.label}
                         </span>
-
                         {badge && (
                           <span style={{
                             fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px',
                             borderRadius: 20, background: badge.bg,
-                            border: `1px solid ${badge.border}`,
-                            color: badge.color,
+                            border: `1px solid ${badge.border}`, color: badge.color,
                             display: 'flex', alignItems: 'center', gap: 4,
                             animation: sub?.status === 'pending' ? 'pendingPulse 2s ease-in-out infinite' : 'none',
                           }}>
@@ -783,12 +735,8 @@ export default function GamePage() {
                           fontSize: '0.78rem', color: '#666', flexWrap: 'wrap',
                         }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
-                          {ch.is_time_based && (
-                            <span style={{ color: '#FFD166' }}>⏱ Timed challenge</span>
-                          )}
-                          {ch.phone_free_eligible && (
-                            <span style={{ color: '#06D6A0' }}>📵 Phone-free eligible</span>
-                          )}
+                          {ch.is_time_based && <span style={{ color: '#FFD166' }}>⏱ Timed challenge</span>}
+                          {ch.phone_free_eligible && <span style={{ color: '#06D6A0' }}>📵 Phone-free eligible</span>}
                         </div>
 
                         {ch.tier2 && (
@@ -878,6 +826,8 @@ export default function GamePage() {
               <GameMap
                 zones={activeZones}
                 zoneOwnership={zoneOwnership.size > 0 ? zoneOwnership : undefined}
+                closedZones={game?.closed_zones ?? []}
+                claimThreshold={claimThreshold}
               />
             ) : (
               <div style={{ textAlign: 'center', marginTop: 60, color: '#555', padding: '0 20px' }}>
@@ -886,12 +836,10 @@ export default function GamePage() {
               </div>
             )}
 
-            {/* Zone ownership legend overlay */}
+            {/* Zone legend overlay */}
             {zoneOwnership.size > 0 && (
               <div style={{
-                position: 'absolute',
-                bottom: 20,
-                left: 12,
+                position: 'absolute', bottom: 20, left: 12,
                 background: 'rgba(10,10,10,0.85)',
                 backdropFilter: 'blur(8px)',
                 border: '1px solid #222',
@@ -906,18 +854,15 @@ export default function GamePage() {
                   Zone Control
                 </p>
                 {Array.from(zoneOwnership.entries()).map(([zoneId, owner]) => (
-                  <div key={zoneId} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    marginBottom: 3,
-                  }}>
+                  <div key={zoneId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <div style={{
                       width: 8, height: 8, borderRadius: 2,
                       background: owner.teamColor,
+                      opacity: owner.claimed ? 1 : 0.4,
                     }} />
-                    <span style={{
-                      fontSize: '0.72rem', color: '#aaa',
-                    }}>
+                    <span style={{ fontSize: '0.72rem', color: '#aaa' }}>
                       {zoneId.replace('zone_district_', 'D')} — {owner.teamName}
+                      {!owner.claimed && ' (contesting)'}
                     </span>
                   </div>
                 ))}
@@ -926,159 +871,115 @@ export default function GamePage() {
           </div>
         )}
 
-  {/* ==================== CHAT TAB ==================== */}
-          {activeTab === 'chat' && (
+        {/* ==================== CHAT TAB ==================== */}
+        {activeTab === 'chat' && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)' }}>
             <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: 'calc(100vh - 130px)',
+              flex: 1, overflowY: 'auto', padding: '16px 20px',
+              display: 'flex', flexDirection: 'column', gap: 10,
             }}>
-              {/* Messages area */}
-              <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '16px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}>
-                {chatMessages.length === 0 ? (
-                  <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
-                    <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
-                    <p style={{ fontWeight: 600, color: '#666' }}>No messages yet</p>
-                    <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>
-                      Message the GM with questions or disputes.
-                    </p>
-                  </div>
-                ) : (
-                  chatMessages.map((msg: any) => {
-                    const isFromGM = msg.channel_type === 'gm_to_team' || msg.channel_type === 'gm_broadcast'
-                    const isBroadcast = msg.channel_type === 'gm_broadcast'
+              {chatMessages.length === 0 ? (
+                <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
+                  <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
+                  <p style={{ fontWeight: 600, color: '#666' }}>No messages yet</p>
+                  <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>
+                    Message the GM with questions or disputes.
+                  </p>
+                </div>
+              ) : (
+                chatMessages.map((msg: any) => {
+                  const isFromGM = msg.channel_type === 'gm_to_team' || msg.channel_type === 'gm_broadcast'
+                  const isBroadcast = msg.channel_type === 'gm_broadcast'
 
-                    return (
-                      <div key={msg.id} style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: isFromGM ? 'flex-start' : 'flex-end',
+                  return (
+                    <div key={msg.id} style={{
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: isFromGM ? 'flex-start' : 'flex-end',
+                    }}>
+                      <p style={{
+                        fontSize: '0.68rem', color: '#444', marginBottom: 3,
+                        paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4,
                       }}>
-                        {/* Sender label */}
+                        {isBroadcast ? '📢 GM → All Teams' : isFromGM ? '🎮 GM' : msg.from_name || 'You'}
+                      </p>
+                      <div style={{
+                        maxWidth: '80%',
+                        background: isBroadcast
+                          ? 'rgba(255,209,102,0.1)'
+                          : isFromGM ? 'rgba(255,255,255,0.05)'
+                          : `${myTeam.color}18`,
+                        border: `1px solid ${
+                          isBroadcast ? 'rgba(255,209,102,0.25)'
+                          : isFromGM ? '#222'
+                          : myTeam.color + '35'
+                        }`,
+                        borderRadius: isFromGM ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+                        padding: '10px 14px',
+                      }}>
                         <p style={{
-                          fontSize: '0.68rem',
-                          color: '#444',
-                          marginBottom: 3,
-                          paddingLeft: isFromGM ? 4 : 0,
-                          paddingRight: isFromGM ? 0 : 4,
+                          color: isBroadcast ? '#FFD166' : '#e0e0e0',
+                          fontSize: '0.88rem', lineHeight: 1.55, margin: 0,
                         }}>
-                          {isBroadcast ? '📢 GM → All Teams' : isFromGM ? '🎮 GM' : msg.from_name || 'You'}
-                        </p>
-
-                        {/* Bubble */}
-                        <div style={{
-                          maxWidth: '80%',
-                          background: isBroadcast
-                            ? 'rgba(255,209,102,0.1)'
-                            : isFromGM
-                            ? 'rgba(255,255,255,0.05)'
-                            : `${myTeam.color}18`,
-                          border: `1px solid ${
-                            isBroadcast
-                              ? 'rgba(255,209,102,0.25)'
-                              : isFromGM
-                              ? '#222'
-                              : myTeam.color + '35'
-                          }`,
-                          borderRadius: isFromGM ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
-                          padding: '10px 14px',
-                        }}>
-                          <p style={{
-                            color: isBroadcast ? '#FFD166' : '#e0e0e0',
-                            fontSize: '0.88rem',
-                            lineHeight: 1.55,
-                            margin: 0,
-                          }}>
-                            {msg.text}
-                          </p>
-                        </div>
-
-                        {/* Timestamp */}
-                        <p style={{
-                          fontSize: '0.65rem',
-                          color: '#333',
-                          marginTop: 3,
-                          paddingLeft: isFromGM ? 4 : 0,
-                          paddingRight: isFromGM ? 0 : 4,
-                        }}>
-                          {msg.created_at?.toDate
-                            ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : ''}
+                          {msg.text}
                         </p>
                       </div>
-                    )
-                  })
-                )}
-                <div ref={chatBottomRef} />
-              </div>
-
-              {/* Input area */}
-              <div style={{
-                padding: '12px 16px 100px',
-                borderTop: '1px solid #1a1a1a',
-                background: '#0d0d0d',
-                display: 'flex',
-                gap: 10,
-                alignItems: 'flex-end',
-              }}>
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  placeholder="Message the GM..."
-                  rows={1}
-                  style={{
-                    flex: 1,
-                    background: '#141414',
-                    border: '1px solid #222',
-                    borderRadius: 10,
-                    padding: '10px 14px',
-                    color: '#fff',
-                    fontSize: '0.88rem',
-                    fontFamily: 'inherit',
-                    resize: 'none',
-                    outline: 'none',
-                    lineHeight: 1.5,
-                  }}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!chatInput.trim() || chatSending}
-                  style={{
-                    background: chatInput.trim() ? myTeam.color : '#1a1a1a',
-                    border: 'none',
-                    borderRadius: 10,
-                    width: 42,
-                    height: 42,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: chatInput.trim() ? 'pointer' : 'default',
-                    fontSize: '1rem',
-                    flexShrink: 0,
-                    transition: 'background 0.15s',
-                    opacity: chatSending ? 0.5 : 1,
-                  }}
-                >
-                  {chatSending ? '⏳' : '↑'}
-                </button>
-              </div>
+                      <p style={{
+                        fontSize: '0.65rem', color: '#333', marginTop: 3,
+                        paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4,
+                      }}>
+                        {msg.created_at?.toDate
+                          ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : ''}
+                      </p>
+                    </div>
+                  )
+                })
+              )}
+              <div ref={chatBottomRef} />
             </div>
-          )}
 
-{/* ==================== HISTORY TAB ==================== */}
+            <div style={{
+              padding: '12px 16px 100px', borderTop: '1px solid #1a1a1a',
+              background: '#0d0d0d', display: 'flex', gap: 10, alignItems: 'flex-end',
+            }}>
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }
+                }}
+                placeholder="Message the GM..."
+                rows={1}
+                style={{
+                  flex: 1, background: '#141414', border: '1px solid #222',
+                  borderRadius: 10, padding: '10px 14px', color: '#fff',
+                  fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none',
+                  outline: 'none', lineHeight: 1.5,
+                }}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!chatInput.trim() || chatSending}
+                style={{
+                  background: chatInput.trim() ? myTeam.color : '#1a1a1a',
+                  border: 'none', borderRadius: 10, width: 42, height: 42,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: chatInput.trim() ? 'pointer' : 'default',
+                  fontSize: '1rem', flexShrink: 0,
+                  transition: 'background 0.15s',
+                  opacity: chatSending ? 0.5 : 1,
+                }}
+              >
+                {chatSending ? '⏳' : '↑'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== HISTORY TAB ==================== */}
         {activeTab === 'history' && (
           <HistoryTab
             gameId={gameId!}
@@ -1102,16 +1003,10 @@ export default function GamePage() {
 
       {/* Bottom tab bar */}
       <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: '#0d0d0d',
-        borderTop: '1px solid #1a1a1a',
-        display: 'flex',
-        justifyContent: 'space-around',
-        padding: '10px 0 24px',
-        zIndex: 100,
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: '#0d0d0d', borderTop: '1px solid #1a1a1a',
+        display: 'flex', justifyContent: 'space-around',
+        padding: '10px 0 24px', zIndex: 100,
       }}>
         {([
           { id: 'hand' as const, icon: '🃏', label: 'Hand' },
@@ -1119,7 +1014,7 @@ export default function GamePage() {
           { id: 'chat' as const, icon: '💬', label: 'Chat' },
           { id: 'history' as const, icon: '📋', label: 'History' },
         ]).map((tab) => {
-         const unreadChatCount = chatMessages.filter(
+          const unreadChatCount = chatMessages.filter(
             (m: any) => (m.channel_type === 'gm_to_team' || m.channel_type === 'gm_broadcast') && !m.read_by?.includes(user?.uid)
           ).length
           const showDot =
@@ -1131,19 +1026,13 @@ export default function GamePage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                background: 'none',
-                border: 'none',
+                background: 'none', border: 'none',
                 color: activeTab === tab.id ? '#FFD166' : '#555',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 4,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                gap: 4, cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: '0.72rem',
                 fontWeight: activeTab === tab.id ? 700 : 400,
-                padding: '4px 16px',
-                position: 'relative',
+                padding: '4px 16px', position: 'relative',
               }}
             >
               <span style={{ fontSize: '1.2rem', position: 'relative' }}>
