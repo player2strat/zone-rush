@@ -1,17 +1,10 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (Day 11)
+// Zone Rush — GM Dashboard
 // Real-time submission review, scoring engine, zone claim logic,
-// mini zone map, and GPS proximity warnings
-//
-// CHANGES FROM DAY 10:
-// - NEW: Mini map in right sidebar showing claimed zones in team colors
-// - NEW: GPS proximity warning — flags submissions outside the claimed zone
-// - NEW: Import zones data + GameMap + geo utilities
-// - CHANGED: zoneOwnership now also feeds into the mini GameMap component
-// - UPDATED: Zones now loaded from Firestore instead of local file
+// mini zone map, GPS proximity warnings, GM chat, and zone closure override
 // =============================================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
@@ -21,7 +14,11 @@ import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
-import { sendGMBroadcast } from '../lib/chat'
+import {
+  sendGMBroadcast,
+  sendGMReply,
+  subscribeToGMMessages,
+} from '../lib/chat'
 
 // --------------- Types ---------------
 
@@ -118,10 +115,10 @@ export default function GMDashboard() {
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Zones loaded from Firestore (replaces local file import)
+  // Zones loaded from Firestore
   const [allZoneData, setAllZoneData] = useState<any[]>([])
 
-  // Review state — tracks GM's choices per submission
+  // Review state
   const [reviewState, setReviewState] = useState<
     Map<string, { tier2Approved: boolean; phoneFreeBonus: number; notes: string }>
   >(new Map())
@@ -129,13 +126,22 @@ export default function GMDashboard() {
   // Processing state
   const [processing, setProcessing] = useState<string | null>(null)
 
-  // Filter: show pending, approved, rejected, or all
+  // Filter
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
 
   const [showFullMap, setShowFullMap] = useState(false)
 
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [broadcastInput, setBroadcastInput] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
 
   // Load zones from Firestore
   useEffect(() => {
@@ -181,7 +187,7 @@ export default function GMDashboard() {
     return () => unsub()
   }, [gameId])
 
-  // Submissions — all for this game, ordered by submission time
+  // Submissions
   useEffect(() => {
     if (!gameId) return
     const q = query(
@@ -209,7 +215,7 @@ export default function GMDashboard() {
     return () => unsub()
   }, [gameId])
 
-  // Load all challenges once (they don't change during a game)
+  // Challenges
   useEffect(() => {
     const loadChallenges = async () => {
       const snap = await getDocs(collection(db, 'challenges'))
@@ -243,6 +249,64 @@ export default function GMDashboard() {
     return () => clearInterval(interval)
   }, [game?.ends_at])
 
+  // Subscribe to all GM messages for this game
+  useEffect(() => {
+    if (!gameId) return
+    const unsub = subscribeToGMMessages(gameId, (msgs) => {
+      setChatMessages(msgs)
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    })
+    return () => unsub()
+  }, [gameId])
+
+  // ---------- Chat handlers ----------
+
+  const handleGMReply = async () => {
+    if (!chatInput.trim() || !gameId || !user || !selectedTeamId || chatSending) return
+    setChatSending(true)
+    try {
+      await sendGMReply(gameId, user.uid, user.displayName || 'GM', selectedTeamId, chatInput.trim())
+      setChatInput('')
+    } catch (err) {
+      alert('Failed to send. Try again.')
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  const handleBroadcast = async () => {
+    if (!broadcastInput.trim() || !gameId || !user || broadcasting) return
+    setBroadcasting(true)
+    try {
+      await sendGMBroadcast(gameId, user.uid, user.displayName || 'GM', broadcastInput.trim())
+      setBroadcastInput('')
+    } catch (err) {
+      alert('Failed to broadcast. Try again.')
+    } finally {
+      setBroadcasting(false)
+    }
+  }
+
+  // ---------- Zone closure override ----------
+
+  const handleCloseZone = async (zoneId: string) => {
+    if (!gameId || !game) return
+    const current = game.closed_zones ?? []
+    const isAlreadyClosed = current.includes(zoneId)
+    const confirmed = window.confirm(
+      isAlreadyClosed
+        ? `Reopen ${zoneId.replace('zone_district_', 'District ')}?`
+        : `Close ${zoneId.replace('zone_district_', 'District ')} now? Teams can no longer earn points here.`
+    )
+    if (!confirmed) return
+    const updated = isAlreadyClosed
+      ? current.filter((z) => z !== zoneId)
+      : [...current, zoneId]
+    await updateDoc(doc(db, 'games', gameId), { closed_zones: updated })
+  }
+
   // ---------- Review state helpers ----------
 
   const getReviewState = (subId: string) => {
@@ -262,10 +326,6 @@ export default function GMDashboard() {
 
   // ---------- GPS Proximity Check ----------
 
-  /**
-   * Check if a submission's GPS falls inside its claimed zone.
-   * Returns: 'inside' | 'outside' | 'unknown' (no GPS or no zone data)
-   */
   const checkGpsProximity = (sub: SubmissionData): 'inside' | 'outside' | 'unknown' => {
     if (!sub.gps_lat || !sub.gps_lng || !sub.zone_id) return 'unknown'
     const zone = zoneDataMap.get(sub.zone_id)
@@ -279,7 +339,7 @@ export default function GMDashboard() {
 
   const handleApprove = async (sub: SubmissionData) => {
     if (!gameId || !game || processing) return
-    
+
     const closedZones = game.closed_zones ?? []
     if (closedZones.includes(sub.zone_id)) {
       const confirmed = window.confirm(
@@ -296,7 +356,6 @@ export default function GMDashboard() {
       const review = getReviewState(sub.id)
       const claimThreshold = game.settings.claim_threshold ?? 6
 
-      // --- Calculate points ---
       const basePoints = DIFFICULTY_PTS[challenge.difficulty] || 3
       const tier2Points =
         sub.attempted_tier2 && review.tier2Approved && challenge.tier2
@@ -305,7 +364,6 @@ export default function GMDashboard() {
       const phoneFreePoints = sub.phone_free_claimed ? review.phoneFreeBonus : 0
       const totalPointsEarned = basePoints + tier2Points + phoneFreePoints
 
-      // --- 1. Update submission status ---
       await updateDoc(doc(db, 'submissions', sub.id), {
         status: 'approved',
         tier2_approved: review.tier2Approved,
@@ -314,7 +372,6 @@ export default function GMDashboard() {
         gm_notes: '',
       })
 
-      // --- 2. Update zone_scores ---
       const zoneId = sub.zone_id || 'unknown'
       const scoreDocId = `${sub.team_id}__${zoneId}`
       const scoreRef = doc(db, 'games', gameId, 'zone_scores', scoreDocId)
@@ -329,7 +386,6 @@ export default function GMDashboard() {
         completedChallenges = data.challenges_completed || []
       }
 
-     // Award zone bonus if this is the first time this zone hits claim threshold
       const zoneBonusPts = game.settings.zone_bonus_points ?? 3
       const crossingThreshold = currentPoints < claimThreshold && (currentPoints + totalPointsEarned) >= claimThreshold
       const bonusPoints = crossingThreshold ? zoneBonusPts : 0
@@ -347,11 +403,8 @@ export default function GMDashboard() {
         challenges_completed: completedChallenges,
       })
 
-      // --- 3. Check zone ownership across all teams ---
       if (newStatus === 'claimed') {
-        const allScoresSnap = await getDocs(
-          collection(db, 'games', gameId, 'zone_scores')
-        )
+        const allScoresSnap = await getDocs(collection(db, 'games', gameId, 'zone_scores'))
 
         let highestPoints = 0
         let highestTeam = ''
@@ -367,26 +420,18 @@ export default function GMDashboard() {
         for (const d of allScoresSnap.docs) {
           const data = d.data() as ZoneScoreData
           if (data.zone_id === zoneId) {
-            const shouldBeClaimed =
-              data.team_id === highestTeam && data.points >= claimThreshold
+            const shouldBeClaimed = data.team_id === highestTeam && data.points >= claimThreshold
             if (
               (shouldBeClaimed && data.status !== 'claimed') ||
               (!shouldBeClaimed && data.status === 'claimed')
             ) {
-              await updateDoc(d.ref, {
-                status: shouldBeClaimed ? 'claimed' : 'none',
-              })
+              await updateDoc(d.ref, { status: shouldBeClaimed ? 'claimed' : 'none' })
             }
           }
         }
-      
-// Notify all teams if zone was stolen
+
         const previousOwner = zoneOwnership.get(zoneId)
-        if (
-          previousOwner &&
-          previousOwner.teamId !== sub.team_id &&
-          highestTeam === sub.team_id
-        ) {
+        if (previousOwner && previousOwner.teamId !== sub.team_id && highestTeam === sub.team_id) {
           const stolenByTeam = getTeam(highestTeam)
           await sendGMBroadcast(
             gameId,
@@ -395,13 +440,9 @@ export default function GMDashboard() {
             `🔁 Zone ${zoneId.replace('zone_district_', 'District ')} was just stolen by ${stolenByTeam?.name ?? 'a team'}!`
           )
         }
-      }  // ← closes if (newStatus === 'claimed')
+      }
 
-      // --- 4. Recalculate team totals from all zone_scores ---
-      const teamScoresSnap = await getDocs(
-        collection(db, 'games', gameId, 'zone_scores')
-      )
-
+      const teamScoresSnap = await getDocs(collection(db, 'games', gameId, 'zone_scores'))
       const teamTotals = new Map<string, { points: number; claimed: number }>()
       teamScoresSnap.forEach((d) => {
         const data = d.data() as ZoneScoreData
@@ -413,13 +454,9 @@ export default function GMDashboard() {
 
       for (const [teamId, totals] of teamTotals) {
         const teamRef = doc(db, 'games', gameId, 'teams', teamId)
-        await updateDoc(teamRef, {
-          total_points: totals.points,
-          zones_claimed: totals.claimed,
-        })
+        await updateDoc(teamRef, { total_points: totals.points, zones_claimed: totals.claimed })
       }
 
-    // --- 5. Deal a replacement card to the team ---
       try {
         const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
         const teamSnap = await getDoc(teamRef)
@@ -427,11 +464,8 @@ export default function GMDashboard() {
         if (teamSnap.exists()) {
           const teamData = teamSnap.data() as TeamData
           const currentHand = teamData.hand || []
-
-          // Remove the approved challenge from hand
           const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
 
-          // Get all challenge IDs this team has already submitted (approved or pending)
           const teamSubsSnap = await getDocs(
             query(
               collection(db, 'submissions'),
@@ -440,42 +474,30 @@ export default function GMDashboard() {
             )
           )
           const usedChallengeIds = new Set<string>()
-          teamSubsSnap.forEach((d) => {
-            usedChallengeIds.add(d.data().challenge_id)
-          })
-
-          // Also exclude everything currently in hand
+          teamSubsSnap.forEach((d) => { usedChallengeIds.add(d.data().challenge_id) })
           updatedHand.forEach((id: string) => usedChallengeIds.add(id))
 
-          // Find eligible challenges (same logic as initial dealing)
-          const gameCity = game?.zones?.[0]?.startsWith('zone_district_') ? 'nyc' : 'nyc'
+          const gameCity = 'nyc'
           const eligible: string[] = []
           challenges.forEach((ch, chId) => {
             if (usedChallengeIds.has(chId)) return
-            if (!ch.points) return // skip invalid
-            // city_tags filter: must include game city or "*"
+            if (!ch.points) return
             const cityTags = (ch as any).city_tags || ['*']
             if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
             eligible.push(chId)
           })
 
           if (eligible.length > 0) {
-            // Pick a random replacement
             const newCardId = eligible[Math.floor(Math.random() * eligible.length)]
             updatedHand.push(newCardId)
-            console.log('DEALT REPLACEMENT:', newCardId, 'to', sub.team_id)
-          } else {
-            console.log('No eligible challenges left to deal to', sub.team_id)
           }
 
           await updateDoc(teamRef, { hand: updatedHand })
         }
       } catch (dealErr) {
-        // Don't fail the whole approval if dealing fails
         console.error('Replacement card dealing failed:', dealErr)
       }
 
-      // Clear review state for this submission
       setReviewState((prev) => {
         const next = new Map(prev)
         next.delete(sub.id)
@@ -541,13 +563,10 @@ export default function GMDashboard() {
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId)
 
   const filteredSubmissions =
-    filter === 'all'
-      ? submissions
-      : submissions.filter((s) => s.status === filter)
+    filter === 'all' ? submissions : submissions.filter((s) => s.status === filter)
 
   const pendingCount = submissions.filter((s) => s.status === 'pending').length
 
-  // Zone ownership map (internal format with extra data)
   const zoneOwnership = new Map<
     string,
     { teamId: string; teamColor: string; teamName: string; points: number }
@@ -566,7 +585,6 @@ export default function GMDashboard() {
     }
   }
 
-  // Convert to GameMap's ZoneOwner format for the mini map
   const mapZoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
     for (const [zoneId, owner] of zoneOwnership) {
@@ -575,13 +593,11 @@ export default function GMDashboard() {
     return m
   }, [zoneScores, teams])
 
-  // Filter zones data to ones active in this game
   const activeZones = useMemo(
     () => allZoneData.filter((z: any) => game?.zones?.includes(z.id)),
     [game?.zones, allZoneData]
   )
 
-  // Team scoreboard data, sorted by points descending
   const scoreboard = teams
     .map((t) => {
       const teamZoneScores = zoneScores.filter((zs) => zs.team_id === t.id)
@@ -598,29 +614,17 @@ export default function GMDashboard() {
 
   if (loading || !game) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#0a0a0a',
-          color: '#555',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
+      <div style={{
+        minHeight: '100vh', background: '#0a0a0a', color: '#555',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
         <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              border: '3px solid #222',
-              borderTopColor: '#FFD166',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto 12px',
-            }}
-          />
+          <div style={{
+            width: 32, height: 32, border: '3px solid #222',
+            borderTopColor: '#FFD166', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+          }} />
           <p>Loading GM Dashboard...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -629,65 +633,32 @@ export default function GMDashboard() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#0a0a0a',
-        color: '#fff',
-        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
-      }}
-    >
-      <link
-        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet"
-      />
+    <div style={{
+      minHeight: '100vh', background: '#0a0a0a', color: '#fff',
+      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
       {/* ====== TOP BAR ====== */}
-      <div
-        style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid #1a1a1a',
-          background: '#0d0d0d',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
+      <div style={{
+        padding: '16px 24px', borderBottom: '1px solid #1a1a1a', background: '#0d0d0d',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: 12,
+      }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <span
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '0.7rem',
-                color: '#FFD166',
-                textTransform: 'uppercase',
-                letterSpacing: 2,
-              }}
-            >
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem',
+              color: '#FFD166', textTransform: 'uppercase', letterSpacing: 2,
+            }}>
               GM Dashboard
             </span>
-            <span
-              style={{
-                fontSize: '0.7rem',
-                padding: '2px 8px',
-                borderRadius: 4,
-                background:
-                  game.status === 'active'
-                    ? 'rgba(6,214,160,0.15)'
-                    : game.status === 'paused'
-                    ? 'rgba(255,209,102,0.15)'
-                    : 'rgba(239,71,111,0.15)',
-                color:
-                  game.status === 'active'
-                    ? '#06D6A0'
-                    : game.status === 'paused'
-                    ? '#FFD166'
-                    : '#EF476F',
-                fontWeight: 700,
-              }}
-            >
+            <span style={{
+              fontSize: '0.7rem', padding: '2px 8px', borderRadius: 4,
+              background: game.status === 'active' ? 'rgba(6,214,160,0.15)' : game.status === 'paused' ? 'rgba(255,209,102,0.15)' : 'rgba(239,71,111,0.15)',
+              color: game.status === 'active' ? '#06D6A0' : game.status === 'paused' ? '#FFD166' : '#EF476F',
+              fontWeight: 700,
+            }}>
               {game.status.toUpperCase()}
             </span>
           </div>
@@ -700,53 +671,28 @@ export default function GMDashboard() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Timer */}
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '1.3rem',
-              fontWeight: 700,
-              color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
-            }}
-          >
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: '1.3rem',
+            fontWeight: 700, color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
+          }}>
             {timeLeft || '—'}
           </div>
-
-          {/* Game controls */}
           <div style={{ display: 'flex', gap: 8 }}>
             {game.status !== 'ended' && (
-              <button
-                onClick={handlePauseResume}
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid #222',
-                  color: '#888',
-                  padding: '8px 14px',
-                  borderRadius: 8,
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
+              <button onClick={handlePauseResume} style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888',
+                padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>
                 {game.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
               </button>
             )}
             {game.status !== 'ended' && (
-              <button
-                onClick={handleEndGame}
-                style={{
-                  background: 'rgba(239,71,111,0.08)',
-                  border: '1px solid rgba(239,71,111,0.2)',
-                  color: '#EF476F',
-                  padding: '8px 14px',
-                  borderRadius: 8,
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
+              <button onClick={handleEndGame} style={{
+                background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
+                color: '#EF476F', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem',
+                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
                 End Game
               </button>
             )}
@@ -755,48 +701,31 @@ export default function GMDashboard() {
       </div>
 
       {/* ====== MAIN CONTENT — TWO COLUMNS ====== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 360px',
-          gap: 0,
-          minHeight: 'calc(100vh - 100px)',
-        }}
-      >
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 360px',
+        gap: 0, minHeight: 'calc(100vh - 100px)',
+      }}>
+
         {/* ====== LEFT: SUBMISSION FEED ====== */}
-        <div
-          style={{
-            padding: '20px 24px',
-            borderRight: '1px solid #1a1a1a',
-            overflow: 'auto',
-            maxHeight: 'calc(100vh - 100px)',
-          }}
-        >
+        <div style={{
+          padding: '20px 24px', borderRight: '1px solid #1a1a1a',
+          overflow: 'auto', maxHeight: 'calc(100vh - 100px)',
+        }}>
           {/* Filter tabs */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {(
-              [
-                { id: 'pending', label: `Pending (${pendingCount})`, color: '#FFD166' },
-                { id: 'approved', label: 'Approved', color: '#06D6A0' },
-                { id: 'rejected', label: 'Rejected', color: '#EF476F' },
-                { id: 'all', label: 'All', color: '#888' },
-              ] as const
-            ).map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                style={{
-                  background: filter === f.id ? `${f.color}15` : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${filter === f.id ? `${f.color}40` : '#1a1a1a'}`,
-                  color: filter === f.id ? f.color : '#555',
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
+            {([
+              { id: 'pending', label: `Pending (${pendingCount})`, color: '#FFD166' },
+              { id: 'approved', label: 'Approved', color: '#06D6A0' },
+              { id: 'rejected', label: 'Rejected', color: '#EF476F' },
+              { id: 'all', label: 'All', color: '#888' },
+            ] as const).map((f) => (
+              <button key={f.id} onClick={() => setFilter(f.id)} style={{
+                background: filter === f.id ? `${f.color}15` : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${filter === f.id ? `${f.color}40` : '#1a1a1a'}`,
+                color: filter === f.id ? f.color : '#555',
+                padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem',
+                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
                 {f.label}
               </button>
             ))}
@@ -805,18 +734,12 @@ export default function GMDashboard() {
           {/* Submission cards */}
           {filteredSubmissions.length === 0 ? (
             <div style={{ textAlign: 'center', marginTop: 80, color: '#333' }}>
-              <p style={{ fontSize: '2rem', marginBottom: 12 }}>
-                {filter === 'pending' ? '✅' : '📋'}
-              </p>
+              <p style={{ fontSize: '2rem', marginBottom: 12 }}>{filter === 'pending' ? '✅' : '📋'}</p>
               <p style={{ color: '#555', fontWeight: 600 }}>
-                {filter === 'pending'
-                  ? 'No pending submissions'
-                  : `No ${filter} submissions`}
+                {filter === 'pending' ? 'No pending submissions' : `No ${filter} submissions`}
               </p>
               <p style={{ color: '#333', fontSize: '0.82rem', marginTop: 6 }}>
-                {filter === 'pending'
-                  ? "You're all caught up! Waiting for teams to submit..."
-                  : 'Try switching the filter.'}
+                {filter === 'pending' ? "You're all caught up! Waiting for teams to submit..." : 'Try switching the filter.'}
               </p>
             </div>
           ) : (
@@ -828,263 +751,125 @@ export default function GMDashboard() {
                 const isProcessing = processing === sub.id
                 const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || '#FFD166'
                 const basePts = DIFFICULTY_PTS[challenge?.difficulty || 'medium'] || 3
-
-                // GPS proximity check
                 const gpsCheck = checkGpsProximity(sub)
 
                 return (
-                  <div
-                    key={sub.id}
-                    style={{
-                      background:
-                        sub.status === 'pending'
-                          ? 'rgba(255,209,102,0.02)'
-                          : 'rgba(255,255,255,0.02)',
-                      border: `1px solid ${
-                        sub.status === 'pending' ? 'rgba(255,209,102,0.15)' : '#1a1a1a'
-                      }`,
-                      borderRadius: 14,
-                      padding: 20,
-                      opacity: isProcessing ? 0.6 : 1,
-                      transition: 'opacity 0.2s',
-                    }}
-                  >
-                    {/* Team + difficulty + status header */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 12,
-                      }}
-                    >
+                  <div key={sub.id} style={{
+                    background: sub.status === 'pending' ? 'rgba(255,209,102,0.02)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${sub.status === 'pending' ? 'rgba(255,209,102,0.15)' : '#1a1a1a'}`,
+                    borderRadius: 14, padding: 20,
+                    opacity: isProcessing ? 0.6 : 1, transition: 'opacity 0.2s',
+                  }}>
+                    {/* Team + difficulty header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 3,
-                            background: team?.color || '#555',
-                          }}
-                        />
-                        <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                          {team?.name || sub.team_id}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            background: `${diffColor}15`,
-                            color: diffColor,
-                          }}
-                        >
+                        <div style={{ width: 10, height: 10, borderRadius: 3, background: team?.color || '#555' }} />
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{team?.name || sub.team_id}</span>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px',
+                          borderRadius: 4, background: `${diffColor}15`, color: diffColor,
+                        }}>
                           {challenge?.difficulty?.toUpperCase() || '?'} · {basePts}pt
                         </span>
                       </div>
                       {sub.status !== 'pending' && (
-                        <span
-                          style={{
-                            fontSize: '0.68rem',
-                            fontWeight: 700,
-                            padding: '3px 10px',
-                            borderRadius: 4,
-                            background:
-                              sub.status === 'approved'
-                                ? 'rgba(6,214,160,0.12)'
-                                : 'rgba(239,71,111,0.12)',
-                            color:
-                              sub.status === 'approved' ? '#06D6A0' : '#EF476F',
-                          }}
-                        >
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px', borderRadius: 4,
+                          background: sub.status === 'approved' ? 'rgba(6,214,160,0.12)' : 'rgba(239,71,111,0.12)',
+                          color: sub.status === 'approved' ? '#06D6A0' : '#EF476F',
+                        }}>
                           {sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
                         </span>
                       )}
                     </div>
 
                     {/* Challenge description */}
-                    <p
-                      style={{
-                        color: '#ccc',
-                        fontSize: '0.88rem',
-                        lineHeight: 1.6,
-                        marginBottom: 14,
-                        background: 'rgba(255,255,255,0.02)',
-                        padding: '10px 14px',
-                        borderRadius: 8,
-                        border: '1px solid #111',
-                      }}
-                    >
+                    <p style={{
+                      color: '#ccc', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14,
+                      background: 'rgba(255,255,255,0.02)', padding: '10px 14px',
+                      borderRadius: 8, border: '1px solid #111',
+                    }}>
                       {challenge?.description || `Challenge: ${sub.challenge_id}`}
                     </p>
 
                     {/* Media preview */}
                     <div style={{ marginBottom: 14 }}>
                       {sub.media_type === 'video' ? (
-                        <video
-                          src={sub.media_url}
-                          controls
-                          style={{
-                            width: '100%',
-                            maxHeight: 280,
-                            borderRadius: 10,
-                            background: '#111',
-                            objectFit: 'contain',
-                          }}
-                        />
+                        <video src={sub.media_url} controls style={{
+                          width: '100%', maxHeight: 280, borderRadius: 10,
+                          background: '#111', objectFit: 'contain',
+                        }} />
                       ) : sub.media_type === 'audio' ? (
-                        <div
-                          style={{
-                            background: '#111',
-                            borderRadius: 10,
-                            padding: 16,
-                            textAlign: 'center',
-                          }}
-                        >
+                        <div style={{ background: '#111', borderRadius: 10, padding: 16, textAlign: 'center' }}>
                           <span style={{ fontSize: '1.5rem' }}>🎙️</span>
-                          <audio
-                            src={sub.media_url}
-                            controls
-                            style={{ width: '100%', marginTop: 8 }}
-                          />
+                          <audio src={sub.media_url} controls style={{ width: '100%', marginTop: 8 }} />
                         </div>
                       ) : (
-                        <img
-                          src={sub.media_url}
-                          alt="Submission"
-                          style={{
-                            width: '100%',
-                            maxHeight: 280,
-                            borderRadius: 10,
-                            background: '#111',
-                            objectFit: 'contain',
-                          }}
-                        />
+                        <img src={sub.media_url} alt="Submission" style={{
+                          width: '100%', maxHeight: 280, borderRadius: 10,
+                          background: '#111', objectFit: 'contain',
+                        }} />
                       )}
                     </div>
 
-                    {/* Metadata row: GPS, zone, time + proximity indicator */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: 16,
-                        flexWrap: 'wrap',
-                        fontSize: '0.75rem',
-                        color: '#555',
-                        marginBottom: sub.status === 'pending' ? 16 : 0,
-                      }}
-                    >
+                    {/* Metadata row */}
+                    <div style={{
+                      display: 'flex', gap: 16, flexWrap: 'wrap',
+                      fontSize: '0.75rem', color: '#555',
+                      marginBottom: sub.status === 'pending' ? 16 : 0,
+                    }}>
                       {sub.zone_id && (
-                        <span>
-                          📍 Zone: <span style={{ color: '#888' }}>{sub.zone_id.replace('zone_district_', 'D')}</span>
-                        </span>
+                        <span>📍 Zone: <span style={{ color: '#888' }}>{sub.zone_id.replace('zone_district_', 'D')}</span></span>
                       )}
                       {!sub.zone_id && <span style={{ color: '#EF476F' }}>⚠ No zone detected</span>}
                       {sub.gps_lat && sub.gps_lng && (
-                        <span>
-                          GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}
-                        </span>
+                        <span>GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>
                       )}
                       {sub.submitted_at && (
-                        <span>
-                          {sub.submitted_at.toDate
-                            ? sub.submitted_at.toDate().toLocaleTimeString()
-                            : ''}
-                        </span>
+                        <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>
                       )}
-
-                      {/* GPS proximity badge */}
-                      {gpsCheck === 'inside' && (
-                        <span style={{ color: '#06D6A0', fontWeight: 600 }}>
-                          ✓ GPS in zone
-                        </span>
-                      )}
-                      {gpsCheck === 'outside' && (
-                        <span style={{ color: '#EF476F', fontWeight: 700 }}>
-                          ⚠ GPS OUTSIDE zone
-                        </span>
-                      )}
+                      {gpsCheck === 'inside' && <span style={{ color: '#06D6A0', fontWeight: 600 }}>✓ GPS in zone</span>}
+                      {gpsCheck === 'outside' && <span style={{ color: '#EF476F', fontWeight: 700 }}>⚠ GPS OUTSIDE zone</span>}
                     </div>
 
-                    {/* GPS proximity warning banner (pending submissions only) */}
+                    {/* GPS warning banner */}
                     {gpsCheck === 'outside' && sub.status === 'pending' && (
-                      <div
-                        style={{
-                          background: 'rgba(239,71,111,0.06)',
-                          border: '1px solid rgba(239,71,111,0.2)',
-                          borderRadius: 8,
-                          padding: '8px 14px',
-                          marginBottom: 14,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
+                      <div style={{
+                        background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.2)',
+                        borderRadius: 8, padding: '8px 14px', marginBottom: 14,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                      }}>
                         <span style={{ fontSize: '1rem' }}>🚩</span>
                         <div>
-                          <p style={{
-                            color: '#EF476F',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            marginBottom: 2,
-                          }}>
+                          <p style={{ color: '#EF476F', fontSize: '0.78rem', fontWeight: 700, marginBottom: 2 }}>
                             GPS Location Mismatch
                           </p>
-                          <p style={{
-                            color: '#999',
-                            fontSize: '0.72rem',
-                            lineHeight: 1.4,
-                          }}>
+                          <p style={{ color: '#999', fontSize: '0.72rem', lineHeight: 1.4 }}>
                             Player's GPS was outside {sub.zone_id?.replace('zone_district_', 'District ')} when they submitted.
-                            This could be a GPS glitch or they may not have been in the zone.
                           </p>
                         </div>
                       </div>
                     )}
 
-                    {/* ====== PENDING: Review controls ====== */}
+                    {/* Pending review controls */}
                     {sub.status === 'pending' && (
                       <div>
-                        {/* Bonus claims from player */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 12,
-                            flexWrap: 'wrap',
-                            marginBottom: 14,
-                          }}
-                        >
-                          {/* Tier 2 toggle */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                           {sub.attempted_tier2 && challenge?.tier2 && (
                             <button
-                              onClick={() =>
-                                updateReviewState(sub.id, {
-                                  tier2Approved: !review.tier2Approved,
-                                })
-                              }
+                              onClick={() => updateReviewState(sub.id, { tier2Approved: !review.tier2Approved })}
                               style={{
-                                background: review.tier2Approved
-                                  ? 'rgba(155,93,229,0.12)'
-                                  : 'rgba(255,255,255,0.03)',
-                                border: `1px solid ${
-                                  review.tier2Approved ? 'rgba(155,93,229,0.3)' : '#222'
-                                }`,
+                                background: review.tier2Approved ? 'rgba(155,93,229,0.12)' : 'rgba(255,255,255,0.03)',
+                                border: `1px solid ${review.tier2Approved ? 'rgba(155,93,229,0.3)' : '#222'}`,
                                 color: review.tier2Approved ? '#9B5DE5' : '#666',
-                                padding: '8px 14px',
-                                borderRadius: 8,
-                                fontSize: '0.78rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
+                                padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem',
+                                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                               }}
                             >
-                              {review.tier2Approved ? '✓' : '○'} Tier 2 (+
-                              {challenge.tier2.bonus_points}pt)
+                              {review.tier2Approved ? '✓' : '○'} Tier 2 (+{challenge.tier2.bonus_points}pt)
                             </button>
                           )}
 
-                          {/* Phone-free bonus selector */}
                           {sub.phone_free_claimed && (
                             <div style={{ display: 'flex', gap: 4 }}>
                               {[
@@ -1092,33 +877,14 @@ export default function GMDashboard() {
                                 { value: 1, label: '+1 📵' },
                                 { value: 2, label: '+2 🤫' },
                               ].map((opt) => (
-                                <button
-                                  key={opt.value}
-                                  onClick={() =>
-                                    updateReviewState(sub.id, {
-                                      phoneFreeBonus: opt.value,
-                                    })
-                                  }
+                                <button key={opt.value}
+                                  onClick={() => updateReviewState(sub.id, { phoneFreeBonus: opt.value })}
                                   style={{
-                                    background:
-                                      review.phoneFreeBonus === opt.value
-                                        ? 'rgba(6,214,160,0.12)'
-                                        : 'rgba(255,255,255,0.03)',
-                                    border: `1px solid ${
-                                      review.phoneFreeBonus === opt.value
-                                        ? 'rgba(6,214,160,0.3)'
-                                        : '#222'
-                                    }`,
-                                    color:
-                                      review.phoneFreeBonus === opt.value
-                                        ? '#06D6A0'
-                                        : '#666',
-                                    padding: '8px 12px',
-                                    borderRadius: 8,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    fontFamily: 'inherit',
+                                    background: review.phoneFreeBonus === opt.value ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.03)',
+                                    border: `1px solid ${review.phoneFreeBonus === opt.value ? 'rgba(6,214,160,0.3)' : '#222'}`,
+                                    color: review.phoneFreeBonus === opt.value ? '#06D6A0' : '#666',
+                                    padding: '8px 12px', borderRadius: 8, fontSize: '0.75rem',
+                                    fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                                   }}
                                 >
                                   {opt.label}
@@ -1130,118 +896,64 @@ export default function GMDashboard() {
 
                         {/* Points preview */}
                         {(() => {
-                          const tierPts =
-                            sub.attempted_tier2 && review.tier2Approved && challenge?.tier2
-                              ? challenge.tier2.bonus_points
-                              : 0
+                          const tierPts = sub.attempted_tier2 && review.tier2Approved && challenge?.tier2 ? challenge.tier2.bonus_points : 0
                           const pfPts = sub.phone_free_claimed ? review.phoneFreeBonus : 0
                           const total = basePts + tierPts + pfPts
-
                           return (
-                            <div
-                              style={{
-                                background: 'rgba(255,255,255,0.03)',
-                                borderRadius: 8,
-                                padding: '8px 14px',
-                                marginBottom: 14,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                              }}
-                            >
+                            <div style={{
+                              background: 'rgba(255,255,255,0.03)', borderRadius: 8,
+                              padding: '8px 14px', marginBottom: 14,
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
                               <span style={{ fontSize: '0.78rem', color: '#888' }}>
-                                {basePts}pt base
-                                {tierPts > 0 && ` + ${tierPts}pt tier2`}
-                                {pfPts > 0 && ` + ${pfPts}pt phone-free`}
+                                {basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}{pfPts > 0 && ` + ${pfPts}pt phone-free`}
                               </span>
-                              <span
-                                style={{
-                                  fontFamily: "'JetBrains Mono', monospace",
-                                  fontSize: '1rem',
-                                  fontWeight: 700,
-                                  color: '#FFD166',
-                                }}
-                              >
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: '1rem', fontWeight: 700, color: '#FFD166',
+                              }}>
                                 = {total}pt{total !== 1 ? 's' : ''}
                               </span>
                             </div>
                           )
                         })()}
 
-                        {/* GM notes (for rejection) */}
                         <input
                           type="text"
                           placeholder="Rejection reason (required to reject)"
                           value={review.notes}
-                          onChange={(e) =>
-                            updateReviewState(sub.id, { notes: e.target.value })
-                          }
+                          onChange={(e) => updateReviewState(sub.id, { notes: e.target.value })}
                           style={{
-                            width: '100%',
-                            background: '#111',
-                            border: '1px solid #222',
-                            borderRadius: 8,
-                            padding: '10px 14px',
-                            color: '#ccc',
-                            fontSize: '0.82rem',
-                            fontFamily: 'inherit',
-                            marginBottom: 12,
-                            boxSizing: 'border-box',
+                            width: '100%', background: '#111', border: '1px solid #222',
+                            borderRadius: 8, padding: '10px 14px', color: '#ccc',
+                            fontSize: '0.82rem', fontFamily: 'inherit',
+                            marginBottom: 12, boxSizing: 'border-box',
                           }}
                         />
 
-                        {/* Approve / Reject buttons */}
                         <div style={{ display: 'flex', gap: 10 }}>
-                          <button
-                            onClick={() => handleApprove(sub)}
-                            disabled={isProcessing}
-                            style={{
-                              flex: 2,
-                              background: 'rgba(6,214,160,0.15)',
-                              border: '1px solid rgba(6,214,160,0.3)',
-                              color: '#06D6A0',
-                              padding: '12px 20px',
-                              borderRadius: 10,
-                              fontSize: '0.9rem',
-                              fontWeight: 700,
-                              cursor: isProcessing ? 'wait' : 'pointer',
-                              fontFamily: 'inherit',
-                            }}
-                          >
+                          <button onClick={() => handleApprove(sub)} disabled={isProcessing} style={{
+                            flex: 2, background: 'rgba(6,214,160,0.15)',
+                            border: '1px solid rgba(6,214,160,0.3)', color: '#06D6A0',
+                            padding: '12px 20px', borderRadius: 10, fontSize: '0.9rem',
+                            fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit',
+                          }}>
                             {isProcessing ? 'Processing...' : '✓ Approve'}
                           </button>
-                          <button
-                            onClick={() => handleReject(sub)}
-                            disabled={isProcessing}
-                            style={{
-                              flex: 1,
-                              background: 'rgba(239,71,111,0.08)',
-                              border: '1px solid rgba(239,71,111,0.2)',
-                              color: '#EF476F',
-                              padding: '12px 20px',
-                              borderRadius: 10,
-                              fontSize: '0.9rem',
-                              fontWeight: 700,
-                              cursor: isProcessing ? 'wait' : 'pointer',
-                              fontFamily: 'inherit',
-                            }}
-                          >
+                          <button onClick={() => handleReject(sub)} disabled={isProcessing} style={{
+                            flex: 1, background: 'rgba(239,71,111,0.08)',
+                            border: '1px solid rgba(239,71,111,0.2)', color: '#EF476F',
+                            padding: '12px 20px', borderRadius: 10, fontSize: '0.9rem',
+                            fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit',
+                          }}>
                             ✗ Reject
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {/* Already-rejected notes */}
                     {sub.status === 'rejected' && sub.gm_notes && (
-                      <p
-                        style={{
-                          color: '#EF476F',
-                          fontSize: '0.82rem',
-                          marginTop: 10,
-                          fontStyle: 'italic',
-                        }}
-                      >
+                      <p style={{ color: '#EF476F', fontSize: '0.82rem', marginTop: 10, fontStyle: 'italic' }}>
                         GM: {sub.gm_notes}
                       </p>
                     )}
@@ -1252,310 +964,322 @@ export default function GMDashboard() {
           )}
         </div>
 
-        {/* ====== RIGHT: SCOREBOARD + MINI MAP ====== */}
-        <div
-          style={{
-            padding: '20px',
-            overflow: 'auto',
-            maxHeight: 'calc(100vh - 100px)',
-            background: '#0d0d0d',
-          }}
-        >
-          {/* Scoreboard header */}
-          <p
-            style={{
-              fontSize: '0.72rem',
-              color: '#FFD166',
-              textTransform: 'uppercase',
-              letterSpacing: 1.5,
-              fontWeight: 700,
-              marginBottom: 16,
-            }}
-          >
+        {/* ====== RIGHT: SCOREBOARD + MAP + CHAT ====== */}
+        <div style={{
+          padding: '20px', overflow: 'auto',
+          maxHeight: 'calc(100vh - 100px)', background: '#0d0d0d',
+        }}>
+
+          {/* Scoreboard */}
+          <p style={{
+            fontSize: '0.72rem', color: '#FFD166', textTransform: 'uppercase',
+            letterSpacing: 1.5, fontWeight: 700, marginBottom: 16,
+          }}>
             Scoreboard
           </p>
 
-          {/* Team scores */}
           <div style={{ display: 'grid', gap: 12, marginBottom: 28 }}>
             {scoreboard.map((team, rank) => (
-              <div
-                key={team.id}
-                style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : '#1a1a1a'}`,
-                  borderRadius: 12,
-                  padding: '14px 16px',
-                }}
-              >
-                {/* Team header */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
+              <div key={team.id} style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : '#1a1a1a'}`,
+                borderRadius: 12, padding: '14px 16px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: team.color,
-                      }}
-                    />
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                      {team.name}
-                    </span>
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{team.name}</span>
                   </div>
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '1.1rem',
-                      fontWeight: 700,
-                      color: team.total_points > 0 ? '#fff' : '#333',
-                    }}
-                  >
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: '1.1rem',
+                    fontWeight: 700, color: team.total_points > 0 ? '#fff' : '#333',
+                  }}>
                     {team.total_points}
                   </span>
                 </div>
-
-                {/* Zone breakdown */}
                 {team.zoneBreakdown.length > 0 ? (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {team.zoneBreakdown.map((zs) => (
-                      <span
-                        key={zs.zone_id}
-                        style={{
-                          fontSize: '0.68rem',
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          background:
-                            zs.status === 'claimed'
-                              ? `${team.color}20`
-                              : 'rgba(255,255,255,0.04)',
-                          border: `1px solid ${
-                            zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'
-                          }`,
-                          color: zs.status === 'claimed' ? team.color : '#555',
-                          fontWeight: 600,
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}
-                      >
+                      <span key={zs.zone_id} style={{
+                        fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4,
+                        background: zs.status === 'claimed' ? `${team.color}20` : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'}`,
+                        color: zs.status === 'claimed' ? team.color : '#555',
+                        fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+                      }}>
                         {zs.zone_id.replace('zone_district_', 'D')} · {zs.points}pt
                         {zs.status === 'claimed' ? ' ★' : ''}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>
-                    No points yet
-                  </p>
+                  <p style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>No points yet</p>
                 )}
               </div>
             ))}
           </div>
 
-          {/* Zone ownership summary */}
-          <p
-            style={{
-              fontSize: '0.72rem',
-              color: '#FFD166',
-              textTransform: 'uppercase',
-              letterSpacing: 1.5,
-              fontWeight: 700,
-              marginBottom: 12,
-            }}
-          >
+          {/* Zone Control */}
+          <p style={{
+            fontSize: '0.72rem', color: '#FFD166', textTransform: 'uppercase',
+            letterSpacing: 1.5, fontWeight: 700, marginBottom: 12,
+          }}>
             Zone Control
           </p>
 
           <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
-          {game.zones.map((zoneId) => {
-            const owner = zoneOwnership.get(zoneId)
-            const isClosed = (game.closed_zones ?? []).includes(zoneId)
-            return (
-              <div
-                key={zoneId}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+            {game.zones.map((zoneId) => {
+              const owner = zoneOwnership.get(zoneId)
+              const isClosed = (game.closed_zones ?? []).includes(zoneId)
+              return (
+                <div key={zoneId} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '10px 14px',
-                  background: isClosed
-                    ? 'rgba(255,255,255,0.01)'
-                    : owner
-                    ? `${owner.teamColor}08`
-                    : 'rgba(255,255,255,0.02)',
-                  border: `1px solid ${
-                    isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'
-                  }`,
-                  borderRadius: 8,
-                  opacity: isClosed ? 0.6 : 1,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 600 }}>
-                    {zoneId.replace('zone_district_', 'District ')}
-                  </span>
-                  {isClosed && (
-                    <span style={{
-                      fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px',
-                      borderRadius: 4, background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid #333', color: '#555',
-                      textTransform: 'uppercase', letterSpacing: 1,
-                    }}>
-                      Closed
+                  background: isClosed ? 'rgba(255,255,255,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'}`,
+                  borderRadius: 8, opacity: isClosed ? 0.6 : 1, gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 600 }}>
+                      {zoneId.replace('zone_district_', 'District ')}
                     </span>
-                  )}
-                </div>
-                {owner ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor }} />
-                    <span style={{ fontSize: '0.78rem', color: owner.teamColor, fontWeight: 600 }}>
-                      {owner.teamName}
-                    </span>
+                    {isClosed && (
+                      <span style={{
+                        fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                        background: 'rgba(255,255,255,0.05)', border: '1px solid #333', color: '#555',
+                        textTransform: 'uppercase', letterSpacing: 1,
+                      }}>
+                        Closed
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>
-                    {isClosed ? '—' : 'Unclaimed'}
-                  </span>
-                )}
-              </div>
-            )
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {owner ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor }} />
+                        <span style={{ fontSize: '0.78rem', color: owner.teamColor, fontWeight: 600 }}>
+                          {owner.teamName}
+                        </span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>
+                        {isClosed ? '—' : 'Unclaimed'}
+                      </span>
+                    )}
+                    {/* ← Zone closure override button */}
+                    {game.status === 'active' && (
+                      <button onClick={() => handleCloseZone(zoneId)} style={{
+                        background: isClosed ? 'rgba(6,214,160,0.08)' : 'rgba(239,71,111,0.08)',
+                        border: `1px solid ${isClosed ? 'rgba(6,214,160,0.2)' : 'rgba(239,71,111,0.2)'}`,
+                        color: isClosed ? '#06D6A0' : '#EF476F',
+                        padding: '4px 10px', borderRadius: 6, fontSize: '0.68rem',
+                        fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+                      }}>
+                        {isClosed ? '↺ Reopen' : '✕ Close'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
             })}
           </div>
 
-        {/* ====== LIVE MAP (interactive + expandable) ====== */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <p
-              style={{
-                fontSize: '0.72rem',
-                color: '#FFD166',
-                textTransform: 'uppercase',
-                letterSpacing: 1.5,
-                fontWeight: 700,
-                margin: 0,
-              }}
-            >
+          {/* Live Map */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <p style={{
+              fontSize: '0.72rem', color: '#FFD166', textTransform: 'uppercase',
+              letterSpacing: 1.5, fontWeight: 700, margin: 0,
+            }}>
               Live Map
             </p>
-            <button
-              onClick={() => setShowFullMap(true)}
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid #222',
-                color: '#888',
-                padding: '4px 10px',
-                borderRadius: 6,
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
+            <button onClick={() => setShowFullMap(true)} style={{
+              background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888',
+              padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem',
+              fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
               ⛶ Expand
             </button>
           </div>
 
-          <div
-            style={{
-              height: 260,
-              borderRadius: 10,
-              overflow: 'hidden',
-              border: '1px solid #1a1a1a',
-              background: '#111',
-            }}
-          >
+          <div style={{
+            height: 260, borderRadius: 10, overflow: 'hidden',
+            border: '1px solid #1a1a1a', background: '#111', marginBottom: 0,
+          }}>
             {activeZones.length > 0 ? (
-              <GameMap
-                zones={activeZones}
-                zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined}
-              />
+              <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} />
             ) : (
-              <div
-                style={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#333',
-                  fontSize: '0.78rem',
-                }}
-              >
+              <div style={{
+                height: '100%', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', color: '#333', fontSize: '0.78rem',
+              }}>
                 No zone data loaded
               </div>
             )}
           </div>
 
-          {/* ====== FULL-SCREEN MAP OVERLAY ====== */}
+          {/* Full-screen map overlay */}
           {showFullMap && (
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 9999,
-                background: '#0a0a0a',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderBottom: '1px solid #1a1a1a',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: '#0d0d0d',
-                  flexShrink: 0,
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: '0.82rem',
-                    color: '#FFD166',
-                    fontWeight: 700,
-                    margin: 0,
-                  }}
-                >
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: '#0a0a0a', display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{
+                padding: '12px 20px', borderBottom: '1px solid #1a1a1a',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: '#0d0d0d', flexShrink: 0,
+              }}>
+                <p style={{ fontSize: '0.82rem', color: '#FFD166', fontWeight: 700, margin: 0 }}>
                   🗺️ Zone Map — {game.name}
                 </p>
-                <button
-                  onClick={() => setShowFullMap(false)}
-                  style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid #222',
-                    color: '#ccc',
-                    padding: '6px 14px',
-                    borderRadius: 8,
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
+                <button onClick={() => setShowFullMap(false)} style={{
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#ccc',
+                  padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem',
+                  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}>
                   ✕ Close
                 </button>
               </div>
               <div style={{ flex: 1 }}>
-                <GameMap
-                  zones={activeZones}
-                  zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined}
-                />
+                <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} />
               </div>
             </div>
           )}
+
+          {/* ====== GM CHAT ====== */}
+          <p style={{
+            fontSize: '0.72rem', color: '#FFD166', textTransform: 'uppercase',
+            letterSpacing: 1.5, fontWeight: 700, marginTop: 24, marginBottom: 12,
+          }}>
+            Team Messages
+          </p>
+
+          {/* Broadcast bar */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <input
+              type="text"
+              value={broadcastInput}
+              onChange={(e) => setBroadcastInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }}
+              placeholder="📢 Broadcast to all teams..."
+              style={{
+                flex: 1, background: '#141414', border: '1px solid #222',
+                borderRadius: 8, padding: '8px 12px', color: '#fff',
+                fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+            <button onClick={handleBroadcast} disabled={!broadcastInput.trim() || broadcasting} style={{
+              background: broadcastInput.trim() ? 'rgba(255,209,102,0.15)' : '#1a1a1a',
+              border: '1px solid rgba(255,209,102,0.3)', color: '#FFD166',
+              padding: '8px 12px', borderRadius: 8, fontSize: '0.78rem',
+              fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              opacity: broadcasting ? 0.5 : 1,
+            }}>
+              {broadcasting ? '...' : 'Send'}
+            </button>
+          </div>
+
+          {/* Team selector */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {teams.map((t) => {
+              const unread = chatMessages.filter(
+                (m) => m.channel_type === 'team_to_gm' && m.team_id === t.id && !m.read_by?.includes(user?.uid)
+              ).length
+              return (
+                <button key={t.id}
+                  onClick={() => setSelectedTeamId(selectedTeamId === t.id ? null : t.id)}
+                  style={{
+                    background: selectedTeamId === t.id ? `${t.color}20` : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${selectedTeamId === t.id ? `${t.color}40` : '#222'}`,
+                    color: selectedTeamId === t.id ? t.color : '#666',
+                    padding: '6px 12px', borderRadius: 8, fontSize: '0.75rem',
+                    fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative',
+                  }}
+                >
+                  {t.name}
+                  {unread > 0 && (
+                    <span style={{
+                      position: 'absolute', top: -4, right: -4,
+                      width: 8, height: 8, borderRadius: '50%', background: '#EF476F',
+                    }} />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Message thread for selected team */}
+          {selectedTeamId && (
+            <div style={{
+              background: '#0a0a0a', border: '1px solid #1a1a1a',
+              borderRadius: 10, overflow: 'hidden', marginBottom: 8,
+            }}>
+              <div style={{
+                maxHeight: 220, overflowY: 'auto', padding: '12px 14px',
+                display: 'flex', flexDirection: 'column', gap: 8,
+              }}>
+                {chatMessages
+                  .filter((m) =>
+                    m.team_id === selectedTeamId &&
+                    (m.channel_type === 'team_to_gm' || m.channel_type === 'gm_to_team')
+                  )
+                  .map((msg) => {
+                    const isFromGM = msg.channel_type === 'gm_to_team'
+                    return (
+                      <div key={msg.id} style={{
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: isFromGM ? 'flex-end' : 'flex-start',
+                      }}>
+                        <p style={{ fontSize: '0.65rem', color: '#444', marginBottom: 3 }}>
+                          {isFromGM ? '🎮 You' : msg.from_name || 'Player'}
+                        </p>
+                        <div style={{
+                          maxWidth: '85%',
+                          background: isFromGM ? 'rgba(255,209,102,0.08)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${isFromGM ? 'rgba(255,209,102,0.2)' : '#222'}`,
+                          borderRadius: 8, padding: '8px 12px',
+                        }}>
+                          <p style={{ color: '#ddd', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>
+                            {msg.text}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                <div ref={chatBottomRef} />
+              </div>
+              <div style={{
+                display: 'flex', gap: 8, padding: '10px 12px',
+                borderTop: '1px solid #1a1a1a', background: '#0d0d0d',
+              }}>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleGMReply() }}
+                  placeholder={`Reply to ${teams.find(t => t.id === selectedTeamId)?.name}...`}
+                  style={{
+                    flex: 1, background: '#141414', border: '1px solid #222',
+                    borderRadius: 8, padding: '8px 12px', color: '#fff',
+                    fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none',
+                  }}
+                />
+                <button onClick={handleGMReply} disabled={!chatInput.trim() || chatSending} style={{
+                  background: chatInput.trim() ? 'rgba(255,209,102,0.15)' : '#1a1a1a',
+                  border: '1px solid rgba(255,209,102,0.3)', color: '#FFD166',
+                  padding: '8px 12px', borderRadius: 8, fontSize: '0.82rem',
+                  fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  opacity: chatSending ? 0.5 : 1,
+                }}>
+                  ↑
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
+        {/* end right sidebar */}
       </div>
+      {/* end two-column grid */}
     </div>
   )
 }
