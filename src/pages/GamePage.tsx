@@ -10,7 +10,7 @@
 // - UPDATED: Zones now loaded from Firestore instead of local file
 // =============================================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, collection,
@@ -20,6 +20,13 @@ import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
+import HistoryTab from './HistoryTab'
+import { checkZoneLockouts, checkZoneClosures } from '../lib/scoring'
+import {
+  sendTeamMessage,
+  subscribeToPlayerMessages,
+  markMessagesRead,
+} from '../lib/chat'
 
 // --------------- Types ---------------
 
@@ -31,6 +38,7 @@ interface GameData {
   zones: string[]
   started_at: any
   ends_at: any
+  closed_zones?: string[]
   settings: {
     team_size: number
     duration_minutes: number
@@ -150,6 +158,12 @@ export default function GamePage() {
   // Zones loaded from Firestore (replaces local file import)
   const [localZones, setLocalZones] = useState<any[]>([])
 
+  // Chat state
+    const [chatMessages, setChatMessages] = useState<any[]>([])
+    const [chatInput, setChatInput] = useState('')
+    const [chatSending, setChatSending] = useState(false)
+    const chatBottomRef = useRef<HTMLDivElement>(null)
+
   // Load zones from Firestore
   useEffect(() => {
     async function loadZones() {
@@ -166,6 +180,22 @@ export default function GamePage() {
     loadZones()
   }, [])
 
+  // Request GPS permission on mount
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      () => {}, // success — permission granted, nothing to do
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          alert(
+            '📍 Zone Rush needs your location to verify challenge submissions and show your position on the map. Please enable location access in your browser settings.'
+          )
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }, [])
+
   // Listen to game document
   useEffect(() => {
     if (!gameId) return
@@ -176,6 +206,16 @@ export default function GamePage() {
     })
     return () => unsub()
   }, [gameId])
+
+  // Zone lockout timer — checks every 60 seconds while game is active
+  useEffect(() => {
+    if (game?.status !== 'active') return
+    const interval = setInterval(() => {
+      checkZoneLockouts(gameId!)
+      checkZoneClosures(gameId!)
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [game?.status, gameId])
 
   // Find player's team and listen for updates
   // Also captures allTeams for zone ownership map
@@ -268,6 +308,47 @@ export default function GamePage() {
 
     return () => unsub()
   }, [gameId, myTeam?.id])
+
+  // Subscribe to chat messages for this team
+  useEffect(() => {
+    if (!gameId || !myTeam) return
+    const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
+      setChatMessages(msgs)
+      // Auto-scroll to bottom when new messages arrive
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    })
+    return () => unsub()
+  }, [gameId, myTeam?.id])
+
+  // Mark messages as read when chat tab is active
+  useEffect(() => {
+    if (activeTab === 'chat' && gameId && user && myTeam) {
+      markMessagesRead(gameId, user.uid, myTeam.id)
+    }
+  }, [activeTab, gameId, user?.uid, myTeam?.id])
+
+  // Chat send handler
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || !gameId || !user || !myTeam || chatSending) return
+    setChatSending(true)
+    try {
+      await sendTeamMessage(
+        gameId,
+        user.uid,
+        user.displayName || 'Player',
+        myTeam.id,
+        chatInput.trim()
+      )
+      setChatInput('')
+    } catch (err) {
+      console.error('Failed to send message:', err)
+      alert('Failed to send. Try again.')
+    } finally {
+      setChatSending(false)
+    }
+  }
 
   // ---- Discard handler ----
   const handleDiscard = async (cardIndex: number) => {
@@ -479,7 +560,7 @@ export default function GamePage() {
       {/* Main content */}
       <div style={{
         flex: 1, overflow: 'auto',
-        padding: activeTab === 'map' ? '0' : '16px 20px 100px',
+       padding: activeTab === 'map' || activeTab === 'history' ? '0' : '16px 20px 100px',
       }}>
 
         {/* ==================== HAND TAB ==================== */}
@@ -845,75 +926,165 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* ==================== CHAT TAB ==================== */}
-        {activeTab === 'chat' && (
-          <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
-            <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
-            <p style={{ fontWeight: 600, color: '#888' }}>Team ↔ GM Chat</p>
-            <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 8, lineHeight: 1.6, maxWidth: 280, margin: '8px auto 0' }}>
-              Chat with the Game Master for questions, disputes, or hints.
-              Coming in the next update.
-            </p>
-          </div>
-        )}
+  {/* ==================== CHAT TAB ==================== */}
+          {activeTab === 'chat' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: 'calc(100vh - 130px)',
+            }}>
+              {/* Messages area */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                {chatMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
+                    <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
+                    <p style={{ fontWeight: 600, color: '#666' }}>No messages yet</p>
+                    <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>
+                      Message the GM with questions or disputes.
+                    </p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg: any) => {
+                    const isFromGM = msg.channel_type === 'gm_to_team' || msg.channel_type === 'gm_broadcast'
+                    const isBroadcast = msg.channel_type === 'gm_broadcast'
 
-        {/* ==================== HISTORY TAB ==================== */}
-        {activeTab === 'history' && (
-          <div>
-            {submissions.size > 0 ? (
-              <>
-                <p style={{
-                  fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
-                  letterSpacing: 1, fontWeight: 600, marginBottom: 16,
-                }}>
-                  Submissions ({submissions.size})
-                </p>
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {Array.from(submissions.entries()).map(([challengeId, sub]) => {
-                    const ch = challenges.find(c => c.id === challengeId)
-                    const badge = STATUS_BADGE[sub.status]
                     return (
-                      <div key={challengeId} style={{
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid #1a1a1a',
-                        borderRadius: 10, padding: '12px 16px',
+                      <div key={msg.id} style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: isFromGM ? 'flex-start' : 'flex-end',
                       }}>
-                        <div style={{
-                          display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'center', marginBottom: 6,
+                        {/* Sender label */}
+                        <p style={{
+                          fontSize: '0.68rem',
+                          color: '#444',
+                          marginBottom: 3,
+                          paddingLeft: isFromGM ? 4 : 0,
+                          paddingRight: isFromGM ? 0 : 4,
                         }}>
-                          <span style={{
-                            fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px',
-                            borderRadius: 20, background: badge.bg,
-                            border: `1px solid ${badge.border}`,
-                            color: badge.color,
-                          }}>
-                            {badge.icon} {badge.label}
-                          </span>
-                        </div>
-                        <p style={{ color: '#bbb', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                          {ch?.description || `Challenge ${challengeId}`}
+                          {isBroadcast ? '📢 GM → All Teams' : isFromGM ? '🎮 GM' : msg.from_name || 'You'}
                         </p>
-                        {sub.gm_notes && sub.status === 'rejected' && (
-                          <p style={{ color: '#EF476F', fontSize: '0.78rem', marginTop: 6 }}>
-                            GM: {sub.gm_notes}
+
+                        {/* Bubble */}
+                        <div style={{
+                          maxWidth: '80%',
+                          background: isBroadcast
+                            ? 'rgba(255,209,102,0.1)'
+                            : isFromGM
+                            ? 'rgba(255,255,255,0.05)'
+                            : `${myTeam.color}18`,
+                          border: `1px solid ${
+                            isBroadcast
+                              ? 'rgba(255,209,102,0.25)'
+                              : isFromGM
+                              ? '#222'
+                              : myTeam.color + '35'
+                          }`,
+                          borderRadius: isFromGM ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+                          padding: '10px 14px',
+                        }}>
+                          <p style={{
+                            color: isBroadcast ? '#FFD166' : '#e0e0e0',
+                            fontSize: '0.88rem',
+                            lineHeight: 1.55,
+                            margin: 0,
+                          }}>
+                            {msg.text}
                           </p>
-                        )}
+                        </div>
+
+                        {/* Timestamp */}
+                        <p style={{
+                          fontSize: '0.65rem',
+                          color: '#333',
+                          marginTop: 3,
+                          paddingLeft: isFromGM ? 4 : 0,
+                          paddingRight: isFromGM ? 0 : 4,
+                        }}>
+                          {msg.created_at?.toDate
+                            ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : ''}
+                        </p>
                       </div>
                     )
-                  })}
-                </div>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
-                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>📋</p>
-                <p style={{ fontWeight: 600, color: '#888' }}>No submissions yet</p>
-                <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 8 }}>
-                  Complete challenges from your Hand tab to see them here.
-                </p>
+                  })
+                )}
+                <div ref={chatBottomRef} />
               </div>
-            )}
-          </div>
+
+              {/* Input area */}
+              <div style={{
+                padding: '12px 16px 100px',
+                borderTop: '1px solid #1a1a1a',
+                background: '#0d0d0d',
+                display: 'flex',
+                gap: 10,
+                alignItems: 'flex-end',
+              }}>
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                  placeholder="Message the GM..."
+                  rows={1}
+                  style={{
+                    flex: 1,
+                    background: '#141414',
+                    border: '1px solid #222',
+                    borderRadius: 10,
+                    padding: '10px 14px',
+                    color: '#fff',
+                    fontSize: '0.88rem',
+                    fontFamily: 'inherit',
+                    resize: 'none',
+                    outline: 'none',
+                    lineHeight: 1.5,
+                  }}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim() || chatSending}
+                  style={{
+                    background: chatInput.trim() ? myTeam.color : '#1a1a1a',
+                    border: 'none',
+                    borderRadius: 10,
+                    width: 42,
+                    height: 42,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: chatInput.trim() ? 'pointer' : 'default',
+                    fontSize: '1rem',
+                    flexShrink: 0,
+                    transition: 'background 0.15s',
+                    opacity: chatSending ? 0.5 : 1,
+                  }}
+                >
+                  {chatSending ? '⏳' : '↑'}
+                </button>
+              </div>
+            </div>
+          )}
+
+{/* ==================== HISTORY TAB ==================== */}
+        {activeTab === 'history' && (
+          <HistoryTab
+            gameId={gameId!}
+            teamId={myTeam.id}
+            totalPoints={myTeam.total_points}
+          />
         )}
       </div>
 
@@ -923,6 +1094,7 @@ export default function GamePage() {
           gameId={gameId}
           teamId={myTeam.id}
           challenge={challenges[submittingChallenge]}
+          closedZones={game?.closed_zones ?? []}
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {}}
         />
@@ -947,7 +1119,12 @@ export default function GamePage() {
           { id: 'chat' as const, icon: '💬', label: 'Chat' },
           { id: 'history' as const, icon: '📋', label: 'History' },
         ]).map((tab) => {
-          const showDot = tab.id === 'history' && pendingCount > 0 && activeTab !== 'history'
+         const unreadChatCount = chatMessages.filter(
+            (m: any) => (m.channel_type === 'gm_to_team' || m.channel_type === 'gm_broadcast') && !m.read_by?.includes(user?.uid)
+          ).length
+          const showDot =
+            (tab.id === 'history' && pendingCount > 0 && activeTab !== 'history') ||
+            (tab.id === 'chat' && unreadChatCount > 0 && activeTab !== 'chat')
 
           return (
             <button

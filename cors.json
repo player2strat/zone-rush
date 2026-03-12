@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["http://localhost:5173", "https://*.vercel.app"],
+    "origin": ["http://localhost:5173", "https://zone-rush.vercel.app", "https://*.vercel.app"],
     "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
     "maxAgeSeconds": 3600,
     "responseHeader": ["Content-Type", "Authorization", "Content-Length", "User-Agent", "x-goog-resumable"]

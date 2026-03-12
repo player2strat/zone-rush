@@ -21,6 +21,7 @@ import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
+import { sendGMBroadcast } from '../lib/chat'
 
 // --------------- Types ---------------
 
@@ -41,6 +42,7 @@ interface GameData {
     zone_bonus_points: number
     [key: string]: any
   }
+  closed_zones?: string[]
 }
 
 interface TeamData {
@@ -277,6 +279,14 @@ export default function GMDashboard() {
 
   const handleApprove = async (sub: SubmissionData) => {
     if (!gameId || !game || processing) return
+    
+    const closedZones = game.closed_zones ?? []
+    if (closedZones.includes(sub.zone_id)) {
+      const confirmed = window.confirm(
+        `⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — no new points should be awarded here. Approve anyway?`
+      )
+      if (!confirmed) return
+    }
     setProcessing(sub.id)
 
     try {
@@ -319,7 +329,12 @@ export default function GMDashboard() {
         completedChallenges = data.challenges_completed || []
       }
 
-      const newPoints = currentPoints + totalPointsEarned
+     // Award zone bonus if this is the first time this zone hits claim threshold
+      const zoneBonusPts = game.settings.zone_bonus_points ?? 3
+      const crossingThreshold = currentPoints < claimThreshold && (currentPoints + totalPointsEarned) >= claimThreshold
+      const bonusPoints = crossingThreshold ? zoneBonusPts : 0
+
+      const newPoints = currentPoints + totalPointsEarned + bonusPoints
       completedChallenges.push(sub.challenge_id)
 
       let newStatus: 'none' | 'claimed' = newPoints >= claimThreshold ? 'claimed' : 'none'
@@ -364,7 +379,23 @@ export default function GMDashboard() {
             }
           }
         }
-      }
+      
+// Notify all teams if zone was stolen
+        const previousOwner = zoneOwnership.get(zoneId)
+        if (
+          previousOwner &&
+          previousOwner.teamId !== sub.team_id &&
+          highestTeam === sub.team_id
+        ) {
+          const stolenByTeam = getTeam(highestTeam)
+          await sendGMBroadcast(
+            gameId,
+            user?.uid ?? '',
+            'Game Master',
+            `🔁 Zone ${zoneId.replace('zone_district_', 'District ')} was just stolen by ${stolenByTeam?.name ?? 'a team'}!`
+          )
+        }
+      }  // ← closes if (newStatus === 'claimed')
 
       // --- 4. Recalculate team totals from all zone_scores ---
       const teamScoresSnap = await getDocs(
@@ -1341,65 +1372,58 @@ export default function GMDashboard() {
           </p>
 
           <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
-            {game.zones.map((zoneId) => {
-              const owner = zoneOwnership.get(zoneId)
-              return (
-                <div
-                  key={zoneId}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 14px',
-                    background: owner
-                      ? `${owner.teamColor}08`
-                      : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${owner ? `${owner.teamColor}30` : '#1a1a1a'}`,
-                    borderRadius: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: '0.82rem',
-                      color: owner ? '#ccc' : '#444',
-                      fontWeight: 600,
-                    }}
-                  >
+          {game.zones.map((zoneId) => {
+            const owner = zoneOwnership.get(zoneId)
+            const isClosed = (game.closed_zones ?? []).includes(zoneId)
+            return (
+              <div
+                key={zoneId}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 14px',
+                  background: isClosed
+                    ? 'rgba(255,255,255,0.01)'
+                    : owner
+                    ? `${owner.teamColor}08`
+                    : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${
+                    isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'
+                  }`,
+                  borderRadius: 8,
+                  opacity: isClosed ? 0.6 : 1,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 600 }}>
                     {zoneId.replace('zone_district_', 'District ')}
                   </span>
-                  {owner ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 2,
-                          background: owner.teamColor,
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: '0.78rem',
-                          color: owner.teamColor,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {owner.teamName}
-                      </span>
-                    </div>
-                  ) : (
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        color: '#333',
-                        fontStyle: 'italic',
-                      }}
-                    >
-                      Unclaimed
+                  {isClosed && (
+                    <span style={{
+                      fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px',
+                      borderRadius: 4, background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid #333', color: '#555',
+                      textTransform: 'uppercase', letterSpacing: 1,
+                    }}>
+                      Closed
                     </span>
                   )}
                 </div>
-              )
+                {owner ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor }} />
+                    <span style={{ fontSize: '0.78rem', color: owner.teamColor, fontWeight: 600 }}>
+                      {owner.teamName}
+                    </span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>
+                    {isClosed ? '—' : 'Unclaimed'}
+                  </span>
+                )}
+              </div>
+            )
             })}
           </div>
 
