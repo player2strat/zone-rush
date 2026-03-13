@@ -62,7 +62,7 @@ export interface GameSettings {
   taxi_limit: number              // Taxi/rideshare uses allowed per team (default: 1)
   zone_schedule: ZoneLockSchedule[] // Time-based zone lockdown config
   score_reveal_times: number[]    // % of game time to auto-broadcast scores (e.g. [50, 75])
-  zone_close_schedule?: { zone_id: string; closes_at_minutes_remaining: number }[]
+  zone_close_schedule?: { zone_id: string; close_at_minutes: number }[]
   closed_zones?: string[]
 }
 

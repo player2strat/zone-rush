@@ -310,23 +310,24 @@ export async function checkZoneClosures(gameId: string): Promise<string[]> {
 
   const gameData = gameSnap.data()
   const settings = gameData.settings as GameSettings
-  const schedule: { zone_id: string; closes_at_minutes_remaining: number }[] =
+
+  // Reads close_at_minutes — minutes ELAPSED since game start
+  const schedule: { zone_id: string; close_at_minutes: number }[] =
     settings?.zone_close_schedule ?? []
 
   if (schedule.length === 0) return []
 
-  const endsAt: number | null = gameData.ends_at?.toMillis?.() ?? null
-  if (!endsAt) return []
+  const startedAt: number | null = gameData.started_at?.toMillis?.() ?? null
+  if (!startedAt) return []
 
-  const minutesRemaining = (endsAt - Date.now()) / 60000
+  const minutesElapsed = (Date.now() - startedAt) / 60000
   const alreadyClosed: string[] = gameData.closed_zones ?? []
   const newlyClosed: string[] = []
 
   for (const entry of schedule) {
     if (alreadyClosed.includes(entry.zone_id)) continue
-    if (minutesRemaining > entry.closes_at_minutes_remaining) continue
-
-    // Zone threshold crossed — add to closed list
+    // Close the zone once enough time has elapsed
+    if (minutesElapsed < entry.close_at_minutes) continue
     newlyClosed.push(entry.zone_id)
   }
 
