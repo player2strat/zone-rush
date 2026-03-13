@@ -250,6 +250,7 @@ const [bonusesApplied, setBonusesApplied] = useState(false)
   // Timer
   useEffect(() => {
     if (!game?.ends_at) return
+    if (game.status === 'ended') { setTimeLeft('GAME OVER'); return }
     const interval = setInterval(() => {
       const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
       const diff = end.getTime() - Date.now()
