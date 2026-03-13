@@ -658,7 +658,7 @@ export default function CreateGame() {
 // =============================================================================
 
 function SettingInput({
-  label, value, onChange, min, max, step = 1,
+  label, value, onChange, min, max, step = 1, compact = false,
 }: {
   label: string
   value: number
@@ -666,27 +666,38 @@ function SettingInput({
   min: number
   max: number
   step?: number
+  compact?: boolean
 }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.03)',
       border: '1px solid #1a1a1a',
       borderRadius: 8,
-      padding: '10px 14px',
+      padding: compact ? '8px 10px' : '10px 14px',
     }}>
       <p style={{
-        fontSize: '0.7rem', color: '#666',
+        fontSize: compact ? '0.65rem' : '0.7rem', color: '#666',
         textTransform: 'uppercase', letterSpacing: 0.5,
         marginBottom: 8, fontWeight: 700,
       }}>
         {label}
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => onChange(Math.max(min, value - step))} style={stepBtnStyle}>−</button>
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem', minWidth: 36, textAlign: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10 }}>
+        <button onClick={() => onChange(Math.max(min, value - step))} style={{
+          ...stepBtnStyle,
+          width: compact ? 26 : 32,
+          height: compact ? 26 : 32,
+          fontSize: compact ? '0.9rem' : '1rem',
+        }}>−</button>
+        <span style={{ color: '#fff', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem', minWidth: compact ? 24 : 36, textAlign: 'center' }}>
           {value}
         </span>
-        <button onClick={() => onChange(Math.min(max, value + step))} style={stepBtnStyle}>+</button>
+        <button onClick={() => onChange(Math.min(max, value + step))} style={{
+          ...stepBtnStyle,
+          width: compact ? 26 : 32,
+          height: compact ? 26 : 32,
+          fontSize: compact ? '0.9rem' : '1rem',
+        }}>+</button>
       </div>
     </div>
   )
