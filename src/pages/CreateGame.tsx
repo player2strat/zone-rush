@@ -68,6 +68,13 @@ export default function CreateGame() {
   const [discardLimit, setDiscardLimit] = useState(1)
   const [handSize, setHandSize] = useState(6)
 
+  // Hand composition rules — configurable per game, stored in game.settings
+  // These control how challenge cards are distributed when the game starts.
+  // dealChallenges.ts uses these values; falls back to these defaults if missing.
+  const [handMinEasy, setHandMinEasy] = useState(1) // minimum Easy cards per hand
+  const [handMinHard, setHandMinHard] = useState(1) // minimum Hard cards per hand
+  const [handMaxHard, setHandMaxHard] = useState(2) // maximum Hard cards per hand
+
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
@@ -156,6 +163,10 @@ export default function CreateGame() {
           zone_bonus_points: zoneBonusPoints,
           discard_limit: discardLimit,
           hand_size: handSize,
+          // Hand composition rules — read by dealChallenges.ts when game starts
+          hand_min_easy: handMinEasy,
+          hand_min_hard: handMinHard,
+          hand_max_hard: handMaxHard,
           strategy_period_minutes: 5,
           points_easy: 1,
           points_medium: 3,
@@ -533,7 +544,7 @@ export default function CreateGame() {
                   padding: 16,
                   background: 'rgba(255,255,255,0.01)',
                 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                     <SettingInput
                       label="Zone Claim (pts)"
                       value={claimThreshold}
@@ -557,6 +568,39 @@ export default function CreateGame() {
                       value={handSize}
                       onChange={setHandSize}
                       min={3} max={8}
+                    />
+                  </div>
+
+                  {/* Hand composition divider */}
+                  <p style={{
+                    fontSize: '0.7rem', color: '#444',
+                    textTransform: 'uppercase', letterSpacing: 1,
+                    fontWeight: 700, marginBottom: 10,
+                    borderTop: '1px solid #1a1a1a', paddingTop: 14,
+                  }}>
+                    Hand Composition
+                  </p>
+                  <p style={{ color: '#555', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 12 }}>
+                    Controls the mix of Easy / Hard cards dealt to each team at game start.
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <SettingInput
+                      label="Min Easy"
+                      value={handMinEasy}
+                      onChange={setHandMinEasy}
+                      min={0} max={handSize}
+                    />
+                    <SettingInput
+                      label="Min Hard"
+                      value={handMinHard}
+                      onChange={setHandMinHard}
+                      min={0} max={handSize}
+                    />
+                    <SettingInput
+                      label="Max Hard"
+                      value={handMaxHard}
+                      onChange={setHandMaxHard}
+                      min={0} max={handSize}
                     />
                   </div>
                 </div>

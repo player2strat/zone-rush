@@ -25,6 +25,10 @@ interface GameData {
     team_size: number
     duration_minutes: number
     hand_size: number
+    // Hand composition rules — all optional, fall back to defaults in dealChallenges
+    hand_min_easy?: number
+    hand_min_hard?: number
+    hand_max_hard?: number
     [key: string]: any
   }
 }
@@ -186,7 +190,7 @@ export default function LobbyPage() {
     setJoining(false)
   }
 
-  // GM starts the game — deal cards, then set status to active
+  // GM starts the game — deal cards using composition rules from game.settings, then set active
   const handleStartGame = async () => {
     if (!gameId || !game) return
 
@@ -201,8 +205,16 @@ export default function LobbyPage() {
       const handSize = game.settings.hand_size || 6
       const city = 'nyc'
 
-      console.log('DEALING:', { gameId, city, zones: game.zones, handSize, teamIds })
-      await dealChallenges(gameId, city, game.zones, handSize, teamIds)
+      // Build composition rules from game.settings — all fall back to defaults
+      // if not set (e.g. games created before this feature was added)
+      const compositionRules = {
+        minEasy: game.settings.hand_min_easy ?? 1,
+        minHard: game.settings.hand_min_hard ?? 1,
+        maxHard: game.settings.hand_max_hard ?? 2,
+      }
+
+      console.log('DEALING:', { gameId, city, zones: game.zones, handSize, teamIds, compositionRules })
+      await dealChallenges(gameId, city, game.zones, handSize, teamIds, compositionRules)
       console.log('DEALING COMPLETE — cards should be in Firestore')
 
       const now = new Date()

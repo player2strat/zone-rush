@@ -1,9 +1,12 @@
 // =============================================================================
-// Zone Rush — Challenge Dealing Logic (updated Sprint 1)
+// Zone Rush — Challenge Dealing Logic
 //
-// CHANGES FROM PREVIOUS VERSION:
-// - NEW: hasAtLeastOneEasy() — hand must always contain ≥1 Easy challenge
-// - CHANGED: hasDifficultyMix() now checks both mix AND ≥1 Easy together
+// CHANGES:
+// - NEW: HandCompositionRules type — minEasy, minHard, maxHard
+// - CHANGED: dealChallenges accepts optional compositionRules param
+// - CHANGED: isValidHand uses rules instead of hardcoded checks
+// - CHANGED: last-resort hand builder respects rules
+// - CHANGED: pool validation checks minEasy + minHard against available pool
 // - NEW: canDiscard() — checks discard_used < discard_limit AND
 //         only counts approved submissions (prevents rejected-submission exploit)
 // =============================================================================
@@ -25,6 +28,22 @@ interface Challenge {
   [key: string]: any
 }
 
+// --------------- Composition Rules ---------------
+
+export interface HandCompositionRules {
+  minEasy: number  // minimum Easy cards required in hand
+  minHard: number  // minimum Hard cards required in hand
+  maxHard: number  // maximum Hard cards allowed in hand
+}
+
+const DEFAULT_RULES: HandCompositionRules = {
+  minEasy: 1,
+  minHard: 1,
+  maxHard: 2,
+}
+
+// --------------- Helpers ---------------
+
 // Fisher-Yates shuffle — fair random ordering
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -35,44 +54,50 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-// Hand must have at least 2 different difficulty levels
-function hasDifficultyMix(hand: Challenge[]): boolean {
-  const difficulties = new Set(hand.map((c) => c.difficulty.toLowerCase()))
-  return difficulties.size >= 2
+// A hand is valid if it satisfies all composition rules
+function isValidHand(hand: Challenge[], rules: HandCompositionRules): boolean {
+  const easyCount = hand.filter((c) => c.difficulty.toLowerCase() === 'easy').length
+  const hardCount = hand.filter((c) => c.difficulty.toLowerCase() === 'hard').length
+  return (
+    easyCount >= rules.minEasy &&
+    hardCount >= rules.minHard &&
+    hardCount <= rules.maxHard
+  )
 }
 
-// Hand must always contain at least one Easy challenge
-function hasAtLeastOneEasy(hand: Challenge[]): boolean {
-  return hand.some((c) => c.difficulty.toLowerCase() === 'easy')
-}
-
-// A hand is valid if it has difficulty mix AND at least one Easy
-function isValidHand(hand: Challenge[]): boolean {
-  return hasDifficultyMix(hand) && hasAtLeastOneEasy(hand)
-}
+// --------------- Main Deal Function ---------------
 
 /**
  * Deal challenge cards to all teams in a game.
- * Each team gets hand_size cards from game.settings.
- * Teams CAN receive the same challenge as another team (no global dedup).
+ * Each team gets handSize cards. Teams CAN receive the same challenge
+ * as another team (no global dedup by design).
  *
- * Hand rules enforced:
- *  - At least 1 Easy card
- *  - Not all the same difficulty (≥2 difficulty levels)
+ * Hand rules enforced via compositionRules (defaults if not passed):
+ *  - minEasy: minimum Easy cards per hand
+ *  - minHard: minimum Hard cards per hand
+ *  - maxHard: maximum Hard cards per hand
  *
- * @param gameId   - Firestore game document ID
- * @param city     - City string (e.g. "nyc") for filtering
- * @param zoneIds  - Active zone IDs for this game
- * @param handSize - Cards per team (from game.settings.hand_size)
- * @param teamIds  - Team document IDs to deal to
+ * All rules are stored in game.settings and passed in from LobbyPage —
+ * never hardcoded here.
+ *
+ * @param gameId           - Firestore game document ID
+ * @param city             - City string (e.g. "nyc") for filtering
+ * @param zoneIds          - Active zone IDs for this game
+ * @param handSize         - Cards per team (from game.settings.hand_size)
+ * @param teamIds          - Team document IDs to deal to
+ * @param compositionRules - Optional hand composition rules (falls back to defaults)
  */
 export async function dealChallenges(
   gameId: string,
   city: string,
   zoneIds: string[],
   handSize: number,
-  teamIds: string[]
+  teamIds: string[],
+  compositionRules?: HandCompositionRules
 ): Promise<void> {
+  // Use provided rules or fall back to defaults
+  const rules: HandCompositionRules = compositionRules ?? DEFAULT_RULES
+
   // 1. Fetch all active challenges
   const challengesRef = collection(db, 'challenges')
   const q = query(challengesRef, where('is_active', '==', true))
@@ -105,35 +130,68 @@ export async function dealChallenges(
     )
   }
 
-  // Verify there are Easy challenges in the pool — if not, dealing will always fail
-  const easyCount = eligible.filter((c) => c.difficulty.toLowerCase() === 'easy').length
-  if (easyCount === 0) {
-    throw new Error('No Easy challenges in the eligible pool. Add Easy challenges before dealing.')
+  // 4. Validate pool has enough cards to satisfy composition rules
+  const easyInPool = eligible.filter((c) => c.difficulty.toLowerCase() === 'easy').length
+  const hardInPool = eligible.filter((c) => c.difficulty.toLowerCase() === 'hard').length
+
+  if (rules.minEasy > 0 && easyInPool < rules.minEasy) {
+    throw new Error(
+      `Hand requires ≥${rules.minEasy} Easy card(s) but only ${easyInPool} Easy challenge(s) exist in the pool. Add more Easy challenges or lower minEasy.`
+    )
+  }
+  if (rules.minHard > 0 && hardInPool < rules.minHard) {
+    throw new Error(
+      `Hand requires ≥${rules.minHard} Hard card(s) but only ${hardInPool} Hard challenge(s) exist in the pool. Add more Hard challenges or lower minHard.`
+    )
   }
 
-  // 4. Deal to each team independently
+  // 5. Deal to each team independently
   const dealPromises = teamIds.map(async (teamId) => {
     let hand: Challenge[] = []
     let attempts = 0
-    const maxAttempts = 50  // increased from 20 since we have stricter rules now
+    const maxAttempts = 50
 
+    // Try random shuffles first — usually succeeds quickly
     while (attempts < maxAttempts) {
       const shuffled = shuffle(eligible)
       const candidate = shuffled.slice(0, handSize)
 
-      if (isValidHand(candidate)) {
+      if (isValidHand(candidate, rules)) {
         hand = candidate
         break
       }
       attempts++
     }
 
-    // Last resort: if random shuffling couldn't produce a valid hand,
-    // build one manually by guaranteeing ≥1 Easy then filling with mixed difficulties
-    if (!isValidHand(hand)) {
+    // Last resort: build a valid hand manually by placing required cards first,
+    // then filling remaining slots while respecting maxHard
+    if (!isValidHand(hand, rules)) {
       const easyCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'easy'))
-      const nonEasyCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() !== 'easy'))
-      hand = [easyCards[0], ...nonEasyCards.slice(0, handSize - 1)]
+      const hardCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'hard'))
+      const mediumCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'medium'))
+
+      const built: Challenge[] = []
+
+      // Place required minimums first
+      for (let i = 0; i < rules.minEasy && easyCards[i]; i++) {
+        built.push(easyCards[i])
+      }
+      for (let i = 0; i < rules.minHard && hardCards[i]; i++) {
+        built.push(hardCards[i])
+      }
+
+      // Fill remaining slots — don't exceed maxHard
+      const currentHardCount = built.filter((c) => c.difficulty.toLowerCase() === 'hard').length
+      const fillers = shuffle([
+        ...easyCards.slice(rules.minEasy),
+        ...mediumCards,
+        // Only include more Hard cards if we haven't hit maxHard yet
+        ...hardCards.slice(rules.minHard, rules.maxHard - currentHardCount + rules.minHard),
+      ])
+
+      const remaining = handSize - built.length
+      built.push(...fillers.slice(0, remaining))
+      hand = built.slice(0, handSize)
     }
 
     const handIds = hand.map((c) => c.id)
@@ -143,6 +201,8 @@ export async function dealChallenges(
 
   await Promise.all(dealPromises)
 }
+
+// --------------- Discard Logic ---------------
 
 /**
  * Check whether a team is allowed to discard a challenge card.
@@ -212,7 +272,8 @@ export async function canDiscard(
 
 /**
  * Execute a discard — replace one challenge in hand with a new random one.
- * Increments discard_used. Enforces hand validity rules on the new card.
+ * Increments discard_used. Does not enforce hand composition on the replacement
+ * (mid-game discard is a single card swap, not a full redeal).
  *
  * @param gameId      - Game document ID
  * @param teamId      - Team document ID
@@ -227,8 +288,6 @@ export async function discardAndDraw(
   city: string,
   zoneIds: string[]
 ): Promise<void> {
-  // Verify discard is allowed first
-  // (caller should also check this, but double-check here for safety)
   const teamRef = doc(db, 'games', gameId, 'teams', teamId)
   const teamSnap = await getDoc(teamRef)
   if (!teamSnap.exists()) throw new Error('Team not found')
@@ -240,7 +299,7 @@ export async function discardAndDraw(
     throw new Error('Challenge not in hand')
   }
 
-  // Fetch eligible challenges for a replacement
+  // Fetch eligible replacement challenges
   const challengesRef = collection(db, 'challenges')
   const q = query(challengesRef, where('is_active', '==', true))
   const snapshot = await getDocs(q)
@@ -251,7 +310,7 @@ export async function discardAndDraw(
   })
 
   const eligible = allChallenges.filter((c) => {
-    if (c.id === challengeId) return false // don't redraw the same card
+    if (c.id === challengeId) return false       // don't redraw the same card
     if (currentHand.includes(c.id)) return false // don't draw a duplicate
     if (!c.city_tags || c.city_tags.length === 0) return true
     if (!c.city_tags.includes(city) && !c.city_tags.includes('*')) return false
