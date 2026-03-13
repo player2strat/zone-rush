@@ -5,7 +5,7 @@
 // =============================================================================
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
   updateDoc, setDoc, getDoc, getDocs, serverTimestamp,
@@ -18,7 +18,15 @@ import {
   sendGMBroadcast,
   sendGMReply,
   subscribeToGMMessages,
+   markMessagesRead,
 } from '../lib/chat'
+import {
+  getTeamBonusSummaries,
+  autoSelectMostZones,
+  applyEndGameBonuses,
+  type BonusAwards,
+  type TeamBonusSummary,
+} from '../lib/endGame'
 
 // --------------- Types ---------------
 
@@ -40,6 +48,7 @@ interface GameData {
     [key: string]: any
   }
   closed_zones?: string[]
+  bonuses_applied?: boolean
 }
 
 interface TeamData {
@@ -105,6 +114,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 export default function GMDashboard() {
   const { gameId } = useParams<{ gameId: string }>()
+  const navigate = useNavigate()
   const user = auth.currentUser
 
   // Core state
@@ -142,6 +152,17 @@ export default function GMDashboard() {
   const [broadcastInput, setBroadcastInput] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
+
+  // End-game bonus state
+const [bonusSummaries, setBonusSummaries] = useState<TeamBonusSummary[]>([])
+const [bonusAwards, setBonusAwards] = useState<BonusAwards>({
+  mostZones: null,
+  fastestReturn: null,
+  hydration: [],
+  mostTransitModes: null,
+})
+const [applyingBonuses, setApplyingBonuses] = useState(false)
+const [bonusesApplied, setBonusesApplied] = useState(false)
 
   // Load zones from Firestore
   useEffect(() => {
@@ -261,6 +282,12 @@ export default function GMDashboard() {
     return () => unsub()
   }, [gameId])
 
+// Mark messages read when GM selects a team thread
+useEffect(() => {
+  if (!gameId || !user || !selectedTeamId) return
+  markMessagesRead(gameId, user.uid, selectedTeamId)
+}, [selectedTeamId, gameId, user?.uid])
+
   // ---------- Chat handlers ----------
 
   const handleGMReply = async () => {
@@ -306,6 +333,21 @@ export default function GMDashboard() {
       : [...current, zoneId]
     await updateDoc(doc(db, 'games', gameId), { closed_zones: updated })
   }
+
+// Load bonus summaries when game ends
+useEffect(() => {
+  if (game?.status !== 'ended' || !gameId) return
+  if (game.bonuses_applied) {
+    setBonusesApplied(true)
+    return
+  }
+  getTeamBonusSummaries(gameId).then((summaries) => {
+    setBonusSummaries(summaries)
+    // Auto-select most zones if no tie
+    const autoWinner = autoSelectMostZones(summaries)
+    setBonusAwards((prev) => ({ ...prev, mostZones: autoWinner }))
+  })
+}, [game?.status, game?.bonuses_applied, gameId])
 
   // ---------- Review state helpers ----------
 
@@ -547,6 +589,19 @@ export default function GMDashboard() {
 
   // ---------- Game Controls ----------
 
+const handleApplyBonuses = async () => {
+  if (!gameId || applyingBonuses) return
+  setApplyingBonuses(true)
+  try {
+    await applyEndGameBonuses(gameId, bonusAwards)
+    setBonusesApplied(true)
+  } catch (err: any) {
+    alert('Failed to apply bonuses: ' + err.message)
+  } finally {
+    setApplyingBonuses(false)
+  }
+}
+
   const handleEndGame = async () => {
     if (!gameId || !window.confirm('End this game? This cannot be undone.')) return
     await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
@@ -705,6 +760,22 @@ export default function GMDashboard() {
           </div>
         </div>
       </div>
+
+{game.status === 'ended' && (
+  <button
+    onClick={() => navigate('/results/' + gameId)}
+    style={{
+      background: 'rgba(255,209,102,0.12)',
+      border: '1px solid rgba(255,209,102,0.3)',
+      color: '#FFD166',
+      padding: '8px 14px', borderRadius: 8,
+      fontSize: '0.78rem', fontWeight: 600,
+      cursor: 'pointer', fontFamily: 'inherit',
+    }}
+  >
+    🏆 View Results
+  </button>
+)}
 
       {/* ====== MAIN CONTENT — TWO COLUMNS ====== */}
       <div style={{
@@ -975,6 +1046,211 @@ export default function GMDashboard() {
           padding: '20px', overflow: 'auto',
           maxHeight: 'calc(100vh - 100px)', background: '#0d0d0d',
         }}>
+
+{/* ====== END-GAME BONUS PANEL ====== */}
+          {game.status === 'ended' && (
+            <div style={{
+              marginBottom: 28,
+              background: bonusesApplied
+                ? 'rgba(6,214,160,0.04)'
+                : 'rgba(255,209,102,0.04)',
+              border: `1px solid ${bonusesApplied
+                ? 'rgba(6,214,160,0.2)'
+                : 'rgba(255,209,102,0.2)'}`,
+              borderRadius: 14,
+              padding: 20,
+            }}>
+              <p style={{
+                fontSize: '0.72rem',
+                color: bonusesApplied ? '#06D6A0' : '#FFD166',
+                textTransform: 'uppercase',
+                letterSpacing: 1.5,
+                fontWeight: 700,
+                marginBottom: 16,
+              }}>
+                {bonusesApplied ? '✅ End-Game Bonuses Applied' : '🏁 Award End-Game Bonuses'}
+              </p>
+
+              {bonusesApplied ? (
+                <p style={{ color: '#888', fontSize: '0.82rem' }}>
+                  Bonus points have been added to team totals. See the scoreboard below.
+                </p>
+              ) : (
+                <div>
+                  {/* Bonus row helper */}
+                  {([
+                    {
+                      key: 'mostZones' as const,
+                      label: 'Most Zones Claimed',
+                      icon: '🗺️',
+                      multi: false,
+                      auto: true,
+                      note: bonusAwards.mostZones
+                        ? `Auto-selected: ${bonusSummaries.find(s => s.teamId === bonusAwards.mostZones)?.teamName}`
+                        : 'Tie — select manually',
+                    },
+                    {
+                      key: 'fastestReturn' as const,
+                      label: 'Fastest Return to Start',
+                      icon: '🏃',
+                      multi: false,
+                      auto: false,
+                      note: '',
+                    },
+                    {
+                      key: 'mostTransitModes' as const,
+                      label: 'Most Transit Modes',
+                      icon: '🚇',
+                      multi: false,
+                      auto: false,
+                      note: '',
+                    },
+                  ]).map(({ key, label, icon, auto, note }) => (
+                    <div key={key} style={{ marginBottom: 16 }}>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'center', marginBottom: 8,
+                      }}>
+                        <p style={{ fontSize: '0.8rem', color: '#ccc', fontWeight: 600 }}>
+                          {icon} {label} <span style={{ color: '#FFD166', fontWeight: 700 }}>+1</span>
+                        </p>
+                        {note && (
+                          <span style={{ fontSize: '0.7rem', color: auto ? '#06D6A0' : '#888', fontStyle: 'italic' }}>
+                            {note}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => setBonusAwards((prev: BonusAwards) => ({ ...prev, [key]: null }))}
+                          style={{
+                            background: bonusAwards[key] === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${bonusAwards[key] === null ? 'rgba(239,71,111,0.3)' : '#222'}`,
+                            color: bonusAwards[key] === null ? '#EF476F' : '#555',
+                            padding: '5px 12px', borderRadius: 6,
+                            fontSize: '0.72rem', fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                        >
+                          None
+                        </button>
+                        {bonusSummaries.map((s) => (
+                          <button
+                            key={s.teamId}
+                            onClick={() => setBonusAwards((prev: BonusAwards) => ({ ...prev, [key]: s.teamId }))}
+                            style={{
+                              background: bonusAwards[key] === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${bonusAwards[key] === s.teamId ? s.teamColor + '50' : '#222'}`,
+                              color: bonusAwards[key] === s.teamId ? s.teamColor : '#666',
+                              padding: '5px 12px', borderRadius: 6,
+                              fontSize: '0.72rem', fontWeight: 600,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            {s.teamName}
+                            {key === 'mostZones' && ` (${s.zonesClaimedCount})`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Hydration — multi-select */}
+                  <div style={{ marginBottom: 20 }}>
+                    <p style={{ fontSize: '0.8rem', color: '#ccc', fontWeight: 600, marginBottom: 8 }}>
+                      💧 Hydration Bonus <span style={{ color: '#FFD166', fontWeight: 700 }}>+1</span>
+                      <span style={{ color: '#555', fontSize: '0.7rem', fontWeight: 400, marginLeft: 8 }}>
+                        (select all teams that brought water)
+                      </span>
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {bonusSummaries.map((s) => {
+                        const selected = bonusAwards.hydration.includes(s.teamId)
+                        return (
+                          <button
+                            key={s.teamId}
+                            onClick={() => setBonusAwards((prev: BonusAwards) => ({
+                              ...prev,
+                              hydration: selected
+                                ? prev.hydration.filter(id => id !== s.teamId)
+                                : [...prev.hydration, s.teamId],
+                            }))}
+                            style={{
+                              background: selected ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${selected ? s.teamColor + '50' : '#222'}`,
+                              color: selected ? s.teamColor : '#666',
+                              padding: '5px 12px', borderRadius: 6,
+                              fontSize: '0.72rem', fontWeight: 600,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            {selected ? '✓ ' : ''}{s.teamName}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Points preview */}
+                  {bonusSummaries.length > 0 && (
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)', borderRadius: 8,
+                      padding: '10px 14px', marginBottom: 16,
+                    }}>
+                      <p style={{ fontSize: '0.72rem', color: '#555', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>
+                        Bonus Preview
+                      </p>
+                      {bonusSummaries.map((s) => {
+                        const pts =
+                          (bonusAwards.mostZones === s.teamId ? 1 : 0) +
+                          (bonusAwards.fastestReturn === s.teamId ? 1 : 0) +
+                          (bonusAwards.hydration.includes(s.teamId) ? 1 : 0) +
+                          (bonusAwards.mostTransitModes === s.teamId ? 1 : 0)
+                        if (pts === 0) return null
+                        return (
+                          <div key={s.teamId} style={{
+                            display: 'flex', justifyContent: 'space-between',
+                            alignItems: 'center', marginBottom: 4,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: 2, background: s.teamColor }} />
+                              <span style={{ fontSize: '0.78rem', color: '#aaa' }}>{s.teamName}</span>
+                            </div>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: '0.82rem', fontWeight: 700, color: '#FFD166',
+                            }}>
+                              +{pts}pt
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleApplyBonuses}
+                    disabled={applyingBonuses}
+                    style={{
+                      width: '100%',
+                      background: applyingBonuses ? '#1a1a1a' : 'rgba(255,209,102,0.15)',
+                      border: '1px solid rgba(255,209,102,0.3)',
+                      color: applyingBonuses ? '#444' : '#FFD166',
+                      padding: '12px 20px', borderRadius: 10,
+                      fontSize: '0.9rem', fontWeight: 700,
+                      cursor: applyingBonuses ? 'wait' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {applyingBonuses ? 'Applying...' : 'Apply Bonus Points'}
+                  </button>
+                  <p style={{ fontSize: '0.72rem', color: '#555', textAlign: 'center', marginTop: 8 }}>
+                    This can only be done once. Bonuses are permanent.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Scoreboard */}
           <p style={{

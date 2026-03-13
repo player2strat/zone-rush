@@ -369,10 +369,11 @@ export default function SubmitProof({
           </div>
         )}
 
-        {/* GPS status */}
+{/* GPS status */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: 20, fontSize: '0.8rem',
+          marginBottom: gpsStatus === 'success' && !detectedZoneId ? 10 : 20,
+          fontSize: '0.8rem',
         }}>
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
@@ -386,6 +387,27 @@ export default function SubmitProof({
               : 'Getting your location...'}
           </span>
         </div>
+
+        {/* Out-of-zone warning */}
+        {gpsStatus === 'success' && !detectedZoneId && (
+          <div style={{
+            background: 'rgba(255,209,102,0.08)',
+            border: '1px solid rgba(255,209,102,0.25)',
+            borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <p style={{ color: '#FFD166', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
+                You appear to be outside an active zone
+              </p>
+              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                Make sure you're in one of the game zones before submitting.
+                The GM will see your location — submissions from outside zones may be rejected.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Tier 2 toggle */}
         {challenge.tier2 && (

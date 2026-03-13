@@ -13,6 +13,7 @@ import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
 import ZoneManager from './pages/ZoneManager'
+import ResultsPage from './pages/ResultsPage'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/admin/seed" element={<AdminSeed />} />
           <Route path="/admin/zones" element={<ZoneManager />} />
           <Route path="*" element={<Navigate to="/" />} />
+          <Route path="/results/:gameId" element={<ResultsPage />} />
       </Routes>
     </BrowserRouter>
   )

@@ -151,6 +151,9 @@ export default function GamePage() {
   const [chatSending, setChatSending] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
+  const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
+  const [broadcastDismissed, setBroadcastDismissed] = useState<string | null>(null)
+
   // Load zones from Firestore
   useEffect(() => {
     async function loadZones() {
@@ -291,16 +294,33 @@ export default function GamePage() {
   }, [gameId, myTeam?.id])
 
   // Subscribe to chat messages for this team
-  useEffect(() => {
-    if (!gameId || !myTeam) return
-    const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
-      setChatMessages(msgs)
-      setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 50)
-    })
-    return () => unsub()
-  }, [gameId, myTeam?.id])
+useEffect(() => {
+  if (!gameId || !myTeam) return
+  const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
+    setChatMessages(msgs)
+
+    // Track latest unread broadcast for cross-tab banner
+    const latestUnreadBroadcast = msgs
+      .filter(
+        (m: any) =>
+          m.channel_type === 'gm_broadcast' &&
+          !m.read_by?.includes(user?.uid)
+      )
+      .sort((a: any, b: any) =>
+        (b.created_at?.toMillis?.() ?? 0) - (a.created_at?.toMillis?.() ?? 0)
+      )[0]
+
+    if (latestUnreadBroadcast) {
+      setLatestBroadcast(latestUnreadBroadcast.text)
+      setBroadcastDismissed(null) // new broadcast resets dismiss
+    }
+
+    setTimeout(() => {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 50)
+  })
+  return () => unsub()
+}, [gameId, myTeam?.id])
 
   // Mark messages as read when chat tab is active
   useEffect(() => {
@@ -394,6 +414,10 @@ export default function GamePage() {
       if (diff <= 0) {
         setTimeLeft('GAME OVER')
         clearInterval(interval)
+        // Auto-end the game when timer expires (idempotent — safe if multiple clients fire)
+        if (game?.status === 'active' && gameId) {
+          updateDoc(doc(db, 'games', gameId), { status: 'ended' }).catch(() => {})
+        }
         return
       }
       const hrs = Math.floor(diff / 3600000)
@@ -516,6 +540,7 @@ export default function GamePage() {
           </div>
         </div>
 
+
         {submissions.size > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: '#555' }}>
             {approvedCount > 0 && <span style={{ color: '#06D6A0' }}>✅ {approvedCount} approved</span>}
@@ -528,6 +553,53 @@ export default function GamePage() {
           </div>
         )}
       </div>
+
+{/* GM broadcast banner — shows on all tabs except chat */}
+        {latestBroadcast && broadcastDismissed !== latestBroadcast && activeTab !== 'chat' && (
+          <div style={{
+            marginTop: 10,
+            background: 'rgba(255,209,102,0.10)',
+            border: '1px solid rgba(255,209,102,0.3)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📢</span>
+              <p style={{
+                color: '#FFD166', fontSize: '0.78rem', fontWeight: 600,
+                lineHeight: 1.4, margin: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {latestBroadcast}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => setActiveTab('chat')}
+                style={{
+                  background: 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)',
+                  color: '#FFD166', padding: '4px 10px', borderRadius: 6,
+                  fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                View
+              </button>
+              <button
+                onClick={() => setBroadcastDismissed(latestBroadcast)}
+                style={{
+                  background: 'none', border: 'none', color: '#555',
+                  fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Main content */}
       <div style={{
@@ -777,6 +849,16 @@ export default function GamePage() {
                             animation: 'pendingPulse 2s ease-in-out infinite',
                           }}>
                             ⏳ Waiting for GM review...
+                          </div>
+                        ) : game?.status === 'ended' ? (
+                          <div style={{
+                            width: '100%', background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid #222',
+                            padding: '12px 20px', borderRadius: 8,
+                            textAlign: 'center', color: '#555',
+                            fontSize: '0.88rem',
+                          }}>
+                            🏁 Game Over — submissions closed
                           </div>
                         ) : (
                           <button
