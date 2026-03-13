@@ -9,7 +9,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   onSnapshot,
   getDoc,
   doc,
@@ -63,17 +62,27 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
       where('game_id', '==', gameId),
       where('team_id', '==', teamId),
       where('status', '==', 'approved'),
-      orderBy('submitted_at', 'desc')
     )
 
-    const unsub = onSnapshot(q, (snap) => {
-      const docs = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<Submission, 'id'>),
-      }))
-      setSubmissions(docs)
-      setLoading(false)
+      const unsub = onSnapshot(q, (snap) => {
+    const docs = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Omit<Submission, 'id'>),
+    }))
+    // Sort client-side so we don't need a composite Firestore index
+    docs.sort((a, b) => {
+      const aTime = a.submitted_at?.toDate().getTime() ?? 0
+      const bTime = b.submitted_at?.toDate().getTime() ?? 0
+      return bTime - aTime
     })
+    setSubmissions(docs)
+    setLoading(false)
+  }, (error) => {
+    // Query failed (e.g. missing Firestore index) — exit loading state
+    // so the empty state renders instead of spinning forever
+    console.error('HistoryTab query error:', error)
+    setLoading(false)
+  })
 
     return () => unsub()
   }, [gameId, teamId])

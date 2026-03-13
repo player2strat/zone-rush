@@ -130,7 +130,7 @@ export default function GamePage() {
   const navigate = useNavigate()
   const user = auth.currentUser
 
-  const [activeTab, setActiveTab] = useState<'hand' | 'map' | 'chat' | 'history'>('hand')
+  const [activeTab, setActiveTab] = useState<'home' | 'hand' | 'map' | 'chat' | 'history'>('home')
   const [game, setGame] = useState<GameData | null>(null)
   const [myTeam, setMyTeam] = useState<TeamData | null>(null)
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -615,6 +615,136 @@ useEffect(() => {
         flex: 1, overflow: 'auto',
         padding: activeTab === 'map' || activeTab === 'history' ? '0' : '16px 20px 100px',
       }}>
+
+    {/* ==================== HOME TAB ==================== */}
+    {activeTab === 'home' && (
+      <div style={{ paddingBottom: 100 }}>
+
+        {/* Team score card */}
+        <div style={{
+          background: `${myTeam.color}10`,
+          border: `1px solid ${myTeam.color}35`,
+          borderRadius: 14,
+          padding: '24px 20px',
+          marginBottom: 20,
+          textAlign: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>{myTeam.name}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+            <div>
+              <p style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '2.2rem', fontWeight: 800,
+                color: myTeam.color, lineHeight: 1, marginBottom: 6,
+              }}>
+                {myTeam.total_points}
+              </p>
+              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                Total Points
+              </p>
+            </div>
+            <div style={{ width: 1, background: '#1a1a1a' }} />
+            <div>
+              <p style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '2.2rem', fontWeight: 800,
+                color: '#FFD166', lineHeight: 1, marginBottom: 6,
+              }}>
+                {Array.from(zoneOwnership.values()).filter(z => z.claimed && allTeams.find(t => t.color === z.teamColor)?.id === myTeam.id).length}
+              </p>
+              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                Zones Claimed
+              </p>
+            </div>
+            <div style={{ width: 1, background: '#1a1a1a' }} />
+            <div>
+              <p style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '2.2rem', fontWeight: 800,
+                color: '#9B5DE5', lineHeight: 1, marginBottom: 6,
+              }}>
+                {approvedCount}
+              </p>
+              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                Challenges
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick rules */}
+        <p style={{
+          fontSize: '0.72rem', color: '#FFD166',
+          textTransform: 'uppercase', letterSpacing: 1.5,
+          fontWeight: 700, marginBottom: 12,
+        }}>
+          Quick Rules
+        </p>
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          {[
+            {
+              icon: '📍',
+              title: 'Claiming Zones',
+              desc: `Earn ${game?.settings.claim_threshold ?? 6} points in a zone to claim it. To steal a zone, outscore the team holding it.`,
+            },
+            {
+              icon: '🃏',
+              title: 'Your Hand',
+              desc: 'You have 6 challenge cards. You get 1 discard — use it wisely to swap a card you don\'t want.',
+            },
+            {
+              icon: '📸',
+              title: 'Submitting Proof',
+              desc: 'Tap a card, expand it, and hit Submit Proof. The GM reviews every submission live.',
+            },
+            {
+              icon: '⭐',
+              title: 'Tier 2 Bonus',
+              desc: 'Some challenges have a harder bonus tier worth +1pt. If you attempt it and abandon it, you get 0 for the whole challenge.',
+            },
+            {
+              icon: '📵',
+              title: 'Phone-Free Bonus',
+              desc: '+1pt for completing a challenge without using your phone. +2pts for no phone AND no talking to teammates.',
+            },
+            {
+              icon: '🚕',
+              title: 'One Taxi Rule',
+              desc: 'Your team can only use a car (taxi, Uber, etc.) ONE time during the entire game — including the ride back.',
+            },
+            {
+              icon: '🏁',
+              title: 'End Bonuses',
+              desc: '+1pt for most zones claimed. +1pt for fastest return to start. +1pt for the hydration bonus.',
+            },
+          ].map((rule) => (
+            <div key={rule.title} style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid #1a1a1a',
+              borderRadius: 10,
+              padding: '14px 16px',
+              display: 'flex',
+              gap: 14,
+              alignItems: 'flex-start',
+            }}>
+              <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
+              <div>
+                <p style={{ color: '#fff', fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
+                  {rule.title}
+                </p>
+                <p style={{ color: '#888', fontSize: '0.82rem', lineHeight: 1.6 }}>
+                  {rule.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
 
         {/* ==================== HAND TAB ==================== */}
         {activeTab === 'hand' && (
@@ -1137,11 +1267,12 @@ useEffect(() => {
         padding: '10px 0 24px', zIndex: 100,
       }}>
         {([
-          { id: 'hand' as const, icon: '🃏', label: 'Hand' },
-          { id: 'map' as const, icon: '🗺️', label: 'Map' },
-          { id: 'chat' as const, icon: '💬', label: 'Chat' },
-          { id: 'history' as const, icon: '📋', label: 'History' },
-        ]).map((tab) => {
+            { id: 'home' as const, icon: '🏠', label: 'Home' },
+            { id: 'hand' as const, icon: '🃏', label: 'Hand' },
+            { id: 'map' as const, icon: '🗺️', label: 'Map' },
+            { id: 'chat' as const, icon: '💬', label: 'Chat' },
+            { id: 'history' as const, icon: '📋', label: 'History' },
+          ]).map((tab) => {
           const unreadChatCount = chatMessages.filter(
             (m: any) => (m.channel_type === 'gm_to_team' || m.channel_type === 'gm_broadcast') && !m.read_by?.includes(user?.uid)
           ).length

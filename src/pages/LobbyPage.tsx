@@ -128,7 +128,7 @@ export default function LobbyPage() {
     useEffect(() => {
       if (game?.status === 'active') {
         if (isGM) {
-          navigate('/gm-dashboard/' + gameId)
+          navigate('/gm/' + gameId)
         } else {
           navigate('/game/' + gameId)
         }

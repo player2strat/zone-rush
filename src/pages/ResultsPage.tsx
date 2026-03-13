@@ -580,15 +580,17 @@ export default function ResultsPage() {
               border: '1px solid rgba(255,209,102,0.15)',
               borderRadius: 12, padding: '16px 18px',
             }}>
-              {Object.entries(bonusMap).map(([teamId, pts]) => {
-                const team = teams.find(t => t.id === teamId)
-                if (!team) return null
-                return (
-                  <div key={teamId} style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', paddingBottom: 10, marginBottom: 10,
-                    borderBottom: '1px solid #111',
-                  }}>
+                {Object.entries(bonusMap).map(([teamId, pts], idx, arr) => {
+                  const team = teams.find(t => t.id === teamId)
+                  if (!team) return null
+                  return (
+                    <div key={teamId} style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingBottom: idx < arr.length - 1 ? 10 : 0,
+                      marginBottom: idx < arr.length - 1 ? 10 : 0,
+                      borderBottom: idx < arr.length - 1 ? '1px solid #111' : 'none',
+                    }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: team.color }} />
                       <span style={{ fontSize: '0.85rem', color: '#ccc', fontWeight: 600 }}>
