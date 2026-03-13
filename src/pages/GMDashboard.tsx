@@ -268,7 +268,7 @@ const [bonusesApplied, setBonusesApplied] = useState(false)
       )
     }, 1000)
     return () => clearInterval(interval)
-  }, [game?.ends_at])
+  }, [game?.ends_at, game?.status])  //
 
   // Subscribe to all GM messages for this game
   useEffect(() => {
@@ -739,43 +739,38 @@ const handleApplyBonuses = async () => {
             {timeLeft || '—'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {game.status !== 'ended' && (
-              <button onClick={handlePauseResume} style={{
-                background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888',
-                padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                {game.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
-              </button>
-            )}
-            {game.status !== 'ended' && (
-              <button onClick={handleEndGame} style={{
-                background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
-                color: '#EF476F', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem',
-                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                End Game
-              </button>
-            )}
-          </div>
+  {game.status !== 'ended' && (
+    <button onClick={handlePauseResume} style={{
+      background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888',
+      padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
+      cursor: 'pointer', fontFamily: 'inherit',
+    }}>
+      {game.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
+    </button>
+  )}
+  {game.status !== 'ended' && (
+    <button onClick={handleEndGame} style={{
+      background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
+      color: '#EF476F', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem',
+      fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+    }}>
+      End Game
+    </button>
+  )}
+  {game.status === 'ended' && (
+    <button onClick={() => navigate('/results/' + gameId)} style={{
+      background: 'rgba(255,209,102,0.12)', border: '1px solid rgba(255,209,102,0.3)',
+      color: '#FFD166', padding: '8px 14px', borderRadius: 8,
+      fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+    }}>
+      🏆 View Results
+    </button>
+  )}
+</div>
         </div>
       </div>
 
-{game.status === 'ended' && (
-  <button
-    onClick={() => navigate('/results/' + gameId)}
-    style={{
-      background: 'rgba(255,209,102,0.12)',
-      border: '1px solid rgba(255,209,102,0.3)',
-      color: '#FFD166',
-      padding: '8px 14px', borderRadius: 8,
-      fontSize: '0.78rem', fontWeight: 600,
-      cursor: 'pointer', fontFamily: 'inherit',
-    }}
-  >
-    🏆 View Results
-  </button>
-)}
+
 
       {/* ====== MAIN CONTENT — TWO COLUMNS ====== */}
       <div style={{
