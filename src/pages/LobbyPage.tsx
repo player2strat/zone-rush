@@ -1,6 +1,6 @@
 // =============================================================================
 // Zone Rush — Game Lobby
-// Shows game info, join code, team assignments. GM can start the game.
+// GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
 // =============================================================================
 
@@ -124,12 +124,16 @@ export default function LobbyPage() {
     return () => unsubTeams()
   }, [gameId, user])
 
-  // If game starts, navigate to the game screen
-  useEffect(() => {
-    if (game?.status === 'active') {
-      navigate('/game/' + gameId)
-    }
-  }, [game?.status, gameId, navigate])
+  // Route on game start — GM goes to dashboard, players go to game view
+    useEffect(() => {
+      if (game?.status === 'active') {
+        if (isGM) {
+          navigate('/gm-dashboard/' + gameId)
+        } else {
+          navigate('/game/' + gameId)
+        }
+      }
+    }, [game?.status, gameId, navigate, isGM])
 
   // Join a team (auto-assign to smallest team, or create new one)
   const handleJoinTeam = async (targetTeamId?: string) => {

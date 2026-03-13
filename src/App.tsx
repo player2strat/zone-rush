@@ -13,7 +13,7 @@ import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
 import ZoneManager from './pages/ZoneManager'
-import ResultsPage from './pages/ResultsPage'
+import ResultsPage from './pages/ResultsPage.tsx'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
