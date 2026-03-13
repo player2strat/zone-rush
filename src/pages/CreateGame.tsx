@@ -582,24 +582,27 @@ export default function CreateGame() {
                   <p style={{ color: '#555', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 12 }}>
                     Controls the mix of Easy / Hard cards dealt to each team at game start.
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                     <SettingInput
                       label="Min Easy"
                       value={handMinEasy}
                       onChange={setHandMinEasy}
                       min={0} max={handSize}
+                      compact
                     />
                     <SettingInput
                       label="Min Hard"
                       value={handMinHard}
                       onChange={setHandMinHard}
                       min={0} max={handSize}
+                      compact
                     />
                     <SettingInput
                       label="Max Hard"
                       value={handMaxHard}
                       onChange={setHandMaxHard}
                       min={0} max={handSize}
+                      compact
                     />
                   </div>
                 </div>
@@ -685,18 +688,18 @@ function SettingInput({
       <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10 }}>
         <button onClick={() => onChange(Math.max(min, value - step))} style={{
           ...stepBtnStyle,
-          width: compact ? 26 : 32,
-          height: compact ? 26 : 32,
-          fontSize: compact ? '0.9rem' : '1rem',
+          width: compact ? 22 : 32,
+          height: compact ? 22 : 32,
+          fontSize: compact ? '0.8rem' : '1rem',
         }}>−</button>
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem', minWidth: compact ? 24 : 36, textAlign: 'center' }}>
+        <span style={{ color: '#fff', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem', minWidth: compact ? 20 : 36, textAlign: 'center' }}>
           {value}
         </span>
         <button onClick={() => onChange(Math.min(max, value + step))} style={{
           ...stepBtnStyle,
-          width: compact ? 26 : 32,
-          height: compact ? 26 : 32,
-          fontSize: compact ? '0.9rem' : '1rem',
+          width: compact ? 22 : 32,
+          height: compact ? 22 : 32,
+          fontSize: compact ? '0.8rem' : '1rem',
         }}>+</button>
       </div>
     </div>
