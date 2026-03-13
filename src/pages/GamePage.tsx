@@ -322,6 +322,13 @@ useEffect(() => {
   return () => unsub()
 }, [gameId, myTeam?.id])
 
+// Navigate to results when game ends
+useEffect(() => {
+  if (game?.status === 'ended' && gameId) {
+    navigate('/results/' + gameId)
+  }
+}, [game?.status, gameId, navigate])
+
   // Mark messages as read when chat tab is active
   useEffect(() => {
     if (activeTab === 'chat' && gameId && user && myTeam) {
@@ -429,6 +436,8 @@ useEffect(() => {
     }, 1000)
     return () => clearInterval(interval)
   }, [game?.ends_at])
+      
+    const gameEnded = game?.status === 'ended'
 
   // Computed values
   const discardLimit = game?.settings.discard_limit ?? 1
@@ -1081,6 +1090,43 @@ useEffect(() => {
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {}}
         />
+      )}
+
+      {/* Game ended overlay */}
+      {gameEnded && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(10,10,10,0.92)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 16, padding: '0 32px',
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          <span style={{ fontSize: '2.5rem' }}>🏁</span>
+          <h2 style={{ color: '#FFD166', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>
+            Game Over
+          </h2>
+          <p style={{ color: '#888', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+            The GM has ended the game. Time to see how you did!
+          </p>
+          <button
+            onClick={() => navigate('/results/' + gameId)}
+            style={{
+              marginTop: 8,
+              background: '#FFD166',
+              border: 'none',
+              borderRadius: 12,
+              color: '#0a0a0a',
+              fontFamily: 'inherit',
+              fontSize: '1rem',
+              fontWeight: 800,
+              padding: '14px 32px',
+              cursor: 'pointer',
+            }}
+          >
+            View Results →
+          </button>
+        </div>
       )}
 
       {/* Bottom tab bar */}
