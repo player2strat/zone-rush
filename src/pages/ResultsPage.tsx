@@ -5,10 +5,10 @@
 // bonus point attribution, and final zone map state.
 // =============================================================================
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore'
-import { db, auth } from '../lib/firebase'
+import { db } from '../lib/firebase'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
 
@@ -146,19 +146,11 @@ const RANK_STYLES = [
   { label: '3rd', bg: 'rgba(205,127,50,0.08)',  border: 'rgba(205,127,50,0.25)',  color: '#cd7f32', medal: '🥉' },
 ]
 
-const BONUS_LABELS: Record<string, string> = {
-  mostZones:       '🗺️ Most Zones',
-  fastestReturn:   '🏃 Fastest Return',
-  hydration:       '💧 Hydration',
-  mostTransitModes:'🚇 Transit Modes',
-}
-
 // --------------- Component ---------------
 
 export default function ResultsPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const navigate = useNavigate()
-  const user = auth.currentUser
 
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
