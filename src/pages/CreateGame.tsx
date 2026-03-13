@@ -302,7 +302,6 @@ export default function CreateGame() {
                     }}
                   >
                     {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
-                    {mins % 60 !== 0 ? `${mins % 60}m` : ''}
                   </button>
                 ))}
               </div>
