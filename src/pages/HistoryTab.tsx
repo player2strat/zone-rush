@@ -11,6 +11,8 @@ import {
   where,
   orderBy,
   onSnapshot,
+  getDoc,
+  doc,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 
@@ -19,15 +21,6 @@ const DIFF_COLORS: Record<string, { bg: string; text: string }> = {
   easy:   { bg: 'rgba(6,214,160,0.12)',   text: '#06D6A0' },
   medium: { bg: 'rgba(255,209,102,0.12)', text: '#FFD166' },
   hard:   { bg: 'rgba(239,71,111,0.12)',  text: '#EF476F' },
-}
-
-// Zone display names — kept local so this component has zero extra dependencies.
-// When you add more zones just add them here.
-const ZONE_NAMES: Record<string, string> = {
-  zone_d33: 'District 33',
-  zone_d34: 'District 34',
-  zone_d35: 'District 35',
-  zone_d36: 'District 36',
 }
 
 interface Submission {
@@ -59,6 +52,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [challengeMap, setChallengeMap] = useState<Map<string, { description: string; difficulty: string }>>(new Map())
 
   // ------------------------------------------------------------------
   // Real-time listener on approved submissions for this team + game
@@ -84,6 +78,33 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
     return () => unsub()
   }, [gameId, teamId])
 
+    // Fetch challenge details for all submissions so we can show
+    // description and difficulty (these aren't stored on submission docs)
+    useEffect(() => {
+      if (submissions.length === 0) return
+
+      const uniqueIds = [...new Set(submissions.map((s) => s.challenge_id))]
+
+      async function fetchChallenges() {
+        const map = new Map<string, { description: string; difficulty: string }>()
+        await Promise.all(
+          uniqueIds.map(async (id) => {
+            const snap = await getDoc(doc(db, 'challenges', id))
+            if (snap.exists()) {
+              const data = snap.data()
+              map.set(id, {
+                description: data.description ?? '',
+                difficulty: data.difficulty ?? 'medium',
+              })
+            }
+          })
+        )
+        setChallengeMap(map)
+      }
+
+      fetchChallenges()
+    }, [submissions])
+
   // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
@@ -94,7 +115,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
   }
 
   const zoneName = (zoneId: string) =>
-    ZONE_NAMES[zoneId] ?? zoneId.replace('zone_', '').replace(/_/g, ' ')
+    zoneId.replace('zone_district_', 'District ').replace(/_/g, ' ')
 
   const mediaIcon = (type: string) =>
     type === 'video' ? '🎥' : type === 'audio' ? '🎙️' : '📷'
@@ -161,7 +182,8 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
       <div style={{ padding: '12px 16px 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {submissions.map((sub, idx) => {
           const isExpanded = expandedId === sub.id
-          const ds = diffStyle(sub.challenge_difficulty)
+          const ch = challengeMap.get(sub.challenge_id)
+          const ds = diffStyle(ch?.difficulty)
           const isNewest = idx === 0
 
           return (
@@ -201,7 +223,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                     WebkitBoxOrient: 'vertical' as any,
                     overflow: isExpanded ? 'visible' : 'hidden',
                   }}>
-                    {sub.challenge_description ?? sub.challenge_id}
+                    {ch?.description ?? sub.challenge_id}
                   </p>
 
                   {/* Badges row */}
@@ -212,9 +234,9 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                     </span>
 
                     {/* Difficulty */}
-                    {sub.challenge_difficulty && (
+                    {ch?.difficulty && (
                       <span style={badge(ds.text, ds.bg)}>
-                        {sub.challenge_difficulty}
+                        {ch.difficulty}
                       </span>
                     )}
 

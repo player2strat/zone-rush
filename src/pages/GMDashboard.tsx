@@ -370,6 +370,7 @@ export default function GMDashboard() {
       await updateDoc(doc(db, 'submissions', sub.id), {
         status: 'approved', tier2_approved: review.tier2Approved,
         reviewed_by: user?.uid || null, reviewed_at: serverTimestamp(), gm_notes: '',
+        points_awarded: totalPointsEarned,
       })
 
       const zoneId = sub.zone_id || 'unknown'
@@ -438,28 +439,73 @@ export default function GMDashboard() {
       }
 
       try {
-        const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
-        const teamSnap = await getDoc(teamRef)
-        if (teamSnap.exists()) {
-          const teamData = teamSnap.data() as TeamData
-          const currentHand = teamData.hand || []
-          const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
-          const teamSubsSnap = await getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId), where('team_id', '==', sub.team_id)))
-          const usedChallengeIds = new Set<string>()
-          teamSubsSnap.forEach((d) => usedChallengeIds.add(d.data().challenge_id))
-          updatedHand.forEach((id: string) => usedChallengeIds.add(id))
-          const gameCity = 'nyc'
-          const eligible: string[] = []
-          challenges.forEach((ch, chId) => {
-            if (usedChallengeIds.has(chId) || !ch.points) return
-            const cityTags = (ch as any).city_tags || ['*']
-            if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
-            eligible.push(chId)
-          })
-          if (eligible.length > 0) updatedHand.push(eligible[Math.floor(Math.random() * eligible.length)])
-          await updateDoc(teamRef, { hand: updatedHand })
-        }
-      } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
+  const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
+  const teamSnap = await getDoc(teamRef)
+  if (teamSnap.exists()) {
+    const teamData = teamSnap.data() as TeamData
+    const currentHand = teamData.hand || []
+
+    // Remove the used challenge from the hand
+    const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
+
+    // Build set of challenge IDs already used or in hand (no duplicates)
+    const teamSubsSnap = await getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId), where('team_id', '==', sub.team_id)))
+    const usedChallengeIds = new Set<string>()
+    teamSubsSnap.forEach((d) => usedChallengeIds.add(d.data().challenge_id))
+    updatedHand.forEach((id: string) => usedChallengeIds.add(id))
+
+    // Filter eligible replacement cards (city-filtered, not already used/in hand)
+    const gameCity = 'nyc'
+    const eligible: string[] = []
+    challenges.forEach((ch, chId) => {
+      if (usedChallengeIds.has(chId) || !ch.points) return
+      const cityTags = (ch as any).city_tags || ['*']
+      if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
+      eligible.push(chId)
+    })
+
+    if (eligible.length > 0) {
+      // --- Composition-aware replacement (best effort) ---
+      // Read rules from game.settings (same values used at deal time)
+      const handMinEasy = game.settings.hand_min_easy ?? 1
+      const handMinHard = game.settings.hand_min_hard ?? 1
+      const handMaxHard = game.settings.hand_max_hard ?? 2
+
+      // Count what's left in the hand after removing the used card
+      const remainingEasy = updatedHand.filter(
+        (id) => challenges.get(id)?.difficulty === 'easy'
+      ).length
+      const remainingHard = updatedHand.filter(
+        (id) => challenges.get(id)?.difficulty === 'hard'
+      ).length
+
+      // Pick a preferred difficulty based on what the hand is missing
+      // Priority: fix easy shortage first, then hard shortage, then avoid hard overflow
+      let preferredDiff: 'easy' | 'hard' | 'not_hard' | null = null
+      if (remainingEasy < handMinEasy) {
+        preferredDiff = 'easy'
+      } else if (remainingHard < handMinHard) {
+        preferredDiff = 'hard'
+      } else if (remainingHard >= handMaxHard) {
+        preferredDiff = 'not_hard' // hand is at hard cap, avoid adding another
+      }
+
+      // Filter to preferred difficulty — fall back to full pool if none available
+      const preferred = eligible.filter((id) => {
+        const diff = challenges.get(id)?.difficulty
+        if (preferredDiff === 'easy') return diff === 'easy'
+        if (preferredDiff === 'hard') return diff === 'hard'
+        if (preferredDiff === 'not_hard') return diff !== 'hard'
+        return true
+      })
+
+      const drawPool = preferred.length > 0 ? preferred : eligible
+      updatedHand.push(drawPool[Math.floor(Math.random() * drawPool.length)])
+    }
+
+    await updateDoc(teamRef, { hand: updatedHand })
+  }
+} catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
 
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
     } catch (err: any) {
