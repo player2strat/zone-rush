@@ -10,6 +10,7 @@ import {
   doc, getDoc, onSnapshot, updateDoc, collection,
   getDocs, setDoc, arrayUnion,
 } from 'firebase/firestore'
+import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { dealChallenges } from '../lib/dealChallenges'
 
@@ -73,7 +74,12 @@ const TEAM_NAMES = [
 export default function LobbyPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const navigate = useNavigate()
-  const user = auth.currentUser
+  const [user, setUser] = useState<typeof auth.currentUser>(auth.currentUser)
+
+useEffect(() => {
+  return onAuthStateChanged(auth, setUser)
+}, [])
+
 
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
@@ -133,7 +139,7 @@ export default function LobbyPage() {
           navigate('/game/' + gameId)
         }
       }
-    }, [game?.status, gameId, navigate, isGM])
+    }, [game?.status, gameId, navigate, isGM, user])
 
   // Join a team (auto-assign to smallest team, or create new one)
   const handleJoinTeam = async (targetTeamId?: string) => {

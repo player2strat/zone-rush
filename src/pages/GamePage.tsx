@@ -13,6 +13,7 @@ import {
   doc, getDoc, onSnapshot, collection,
   updateDoc, getDocs, query, where,
 } from 'firebase/firestore'
+import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
 import GameMap from '../components/GameMap'
@@ -128,7 +129,11 @@ const STATUS_BADGE: Record<string, { bg: string; border: string; color: string; 
 export default function GamePage() {
   const { gameId } = useParams<{ gameId: string }>()
   const navigate = useNavigate()
-  const user = auth.currentUser
+  const [user, setUser] = useState<typeof auth.currentUser>(auth.currentUser)
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser)
+  }, [])
 
   const [activeTab, setActiveTab] = useState<'home' | 'hand' | 'map' | 'chat' | 'history'>('home')
   const [game, setGame] = useState<GameData | null>(null)
