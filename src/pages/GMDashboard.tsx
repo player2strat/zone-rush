@@ -821,7 +821,14 @@ export default function GMDashboard() {
                       {/* Metadata */}
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: '#555', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
                         {sub.zone_id && <span>📍 {sub.zone_id.replace('zone_district_', 'D')}</span>}
-                        {!sub.zone_id && <span style={{ color: '#EF476F' }}>⚠ No zone</span>}
+                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && (
+                          <span style={{ color: '#FFD166' }}>
+                            ⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}
+                          </span>
+                        )}
+                        {!sub.zone_id && !sub.gps_lat && (
+                          <span style={{ color: '#EF476F' }}>⚠ No zone · No GPS</span>
+                        )}
                         {sub.submitted_at && <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>}
                         {gpsCheck === 'inside' && <span style={{ color: '#06D6A0', fontWeight: 600 }}>✓ GPS in zone</span>}
                         {gpsCheck === 'outside' && <span style={{ color: '#EF476F', fontWeight: 700 }}>⚠ GPS OUTSIDE zone</span>}
