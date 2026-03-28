@@ -2,6 +2,10 @@
 // Zone Rush — Game Lobby
 // GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
+//
+// NEW in this version:
+//   Feature 1 — Player team self-selection: prominent "Pick Your Team" section
+//   Feature 2 — GM Roster Manager: move players between teams, rename teams, remove players
 // =============================================================================
 
 import { useState, useEffect } from 'react'
@@ -26,7 +30,6 @@ interface GameData {
     team_size: number
     duration_minutes: number
     hand_size: number
-    // Hand composition rules — all optional, fall back to defaults in dealChallenges
     hand_min_easy?: number
     hand_min_hard?: number
     hand_max_hard?: number
@@ -76,10 +79,9 @@ export default function LobbyPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState<typeof auth.currentUser>(auth.currentUser)
 
-useEffect(() => {
-  return onAuthStateChanged(auth, setUser)
-}, [])
-
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser)
+  }, [])
 
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
@@ -88,12 +90,16 @@ useEffect(() => {
   const [joining, setJoining] = useState(false)
   const [playerTeamId, setPlayerTeamId] = useState<string | null>(null)
 
+  // GM roster manager state
+  const [rosterOpen, setRosterOpen] = useState(false)
+  const [editingTeamName, setEditingTeamName] = useState<Record<string, string>>({})
+  const [savingRoster, setSavingRoster] = useState(false)
+
   const isGM = game?.created_by === user?.uid
 
   // Listen to game document in real time
   useEffect(() => {
     if (!gameId) return
-
     const unsubGame = onSnapshot(doc(db, 'games', gameId), (snapshot) => {
       if (snapshot.exists()) {
         setGame(snapshot.data() as GameData)
@@ -102,14 +108,12 @@ useEffect(() => {
       }
       setLoading(false)
     })
-
     return () => unsubGame()
   }, [gameId])
 
   // Listen to teams sub-collection in real time
   useEffect(() => {
     if (!gameId) return
-
     const unsubTeams = onSnapshot(
       collection(db, 'games', gameId, 'teams'),
       (snapshot) => {
@@ -126,25 +130,28 @@ useEffect(() => {
         }
       }
     )
-
     return () => unsubTeams()
   }, [gameId, user])
 
   // Route on game start — GM goes to dashboard, players go to game view
-    useEffect(() => {
-      if (game?.status === 'active') {
-        if (isGM) {
-          navigate('/gm/' + gameId)
-        } else {
-          navigate('/game/' + gameId)
-        }
+  useEffect(() => {
+    if (game?.status === 'active') {
+      if (isGM) {
+        navigate('/gm/' + gameId)
+      } else {
+        navigate('/game/' + gameId)
       }
-    }, [game?.status, gameId, navigate, isGM, user])
+    }
+  }, [game?.status, gameId, navigate, isGM, user])
 
-  // Join a team (auto-assign to smallest team, or create new one)
+  // -----------------------------------------------------------------------
+  // Player: join or switch teams
+  // -----------------------------------------------------------------------
+
   const handleJoinTeam = async (targetTeamId?: string) => {
     if (!user || !game || !gameId) return
     setJoining(true)
+    setError('')
 
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid))
@@ -159,6 +166,7 @@ useEffect(() => {
           member_names: arrayUnion(displayName),
         })
       } else {
+        // Auto-assign: find smallest team with space, or create new team
         const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
         const currentTeams: TeamData[] = []
         teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
@@ -200,7 +208,145 @@ useEffect(() => {
     setJoining(false)
   }
 
-  // GM starts the game — deal cards using composition rules from game.settings, then set active
+  // Switch from current team to a different one
+  const handleSwitchTeam = async (toTeamId: string) => {
+    if (!user || !gameId || !playerTeamId) return
+    setJoining(true)
+    setError('')
+
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      const displayName = userDoc.exists()
+        ? userDoc.data().display_name || user.displayName || 'Player'
+        : user.displayName || 'Player'
+
+      // Remove from current team
+      const currentTeam = teams.find((t) => t.id === playerTeamId)
+      if (currentTeam) {
+        const memberIndex = currentTeam.members.indexOf(user.uid)
+        const updatedMembers = currentTeam.members.filter((m) => m !== user.uid)
+        // Remove the corresponding name at the same index to keep arrays in sync
+        const updatedNames = currentTeam.member_names.filter((_, i) => i !== memberIndex)
+        await updateDoc(doc(db, 'games', gameId, 'teams', playerTeamId), {
+          members: updatedMembers,
+          member_names: updatedNames,
+        })
+      }
+
+      // Add to new team
+      await updateDoc(doc(db, 'games', gameId, 'teams', toTeamId), {
+        members: arrayUnion(user.uid),
+        member_names: arrayUnion(displayName),
+      })
+    } catch (err: any) {
+      setError('Failed to switch: ' + err.message)
+    }
+
+    setJoining(false)
+  }
+
+  // -----------------------------------------------------------------------
+  // GM: rename a team
+  // -----------------------------------------------------------------------
+
+  const handleRenameTeam = async (teamId: string) => {
+    const newName = editingTeamName[teamId]?.trim()
+    if (!newName || !gameId) return
+    setSavingRoster(true)
+    try {
+      await updateDoc(doc(db, 'games', gameId, 'teams', teamId), { name: newName })
+      setEditingTeamName((prev) => {
+        const next = { ...prev }
+        delete next[teamId]
+        return next
+      })
+    } catch (err: any) {
+      setError('Failed to rename: ' + err.message)
+    }
+    setSavingRoster(false)
+  }
+
+  // -----------------------------------------------------------------------
+  // GM: move a player from one team to another
+  // members[] and member_names[] are parallel arrays — we remove by index
+  // to keep them in sync, then arrayUnion onto the destination team.
+  // -----------------------------------------------------------------------
+
+  const handleMovePlayer = async (
+    userId: string,
+    fromTeamId: string,
+    toTeamId: string
+  ) => {
+    if (!gameId) return
+    setSavingRoster(true)
+    setError('')
+
+    try {
+      const fromTeam = teams.find((t) => t.id === fromTeamId)
+      if (!fromTeam) throw new Error('Source team not found')
+
+      const memberIndex = fromTeam.members.indexOf(userId)
+      if (memberIndex === -1) throw new Error('Player not found in source team')
+
+      const playerName = fromTeam.member_names[memberIndex] || 'Player'
+
+      // Remove from source team (filter by index to keep names array in sync)
+      const updatedMembers = fromTeam.members.filter((_, i) => i !== memberIndex)
+      const updatedNames = fromTeam.member_names.filter((_, i) => i !== memberIndex)
+      await updateDoc(doc(db, 'games', gameId, 'teams', fromTeamId), {
+        members: updatedMembers,
+        member_names: updatedNames,
+      })
+
+      // Add to destination team
+      await updateDoc(doc(db, 'games', gameId, 'teams', toTeamId), {
+        members: arrayUnion(userId),
+        member_names: arrayUnion(playerName),
+      })
+    } catch (err: any) {
+      setError('Failed to move player: ' + err.message)
+    }
+
+    setSavingRoster(false)
+  }
+
+  // -----------------------------------------------------------------------
+  // GM: remove a player from a team entirely (back to "unassigned")
+  // -----------------------------------------------------------------------
+
+  const handleRemovePlayer = async (userId: string, fromTeamId: string) => {
+    if (!gameId) return
+    const confirmed = window.confirm('Remove this player from their team? They can rejoin.')
+    if (!confirmed) return
+
+    setSavingRoster(true)
+    setError('')
+
+    try {
+      const fromTeam = teams.find((t) => t.id === fromTeamId)
+      if (!fromTeam) throw new Error('Team not found')
+
+      const memberIndex = fromTeam.members.indexOf(userId)
+      if (memberIndex === -1) throw new Error('Player not found in team')
+
+      const updatedMembers = fromTeam.members.filter((_, i) => i !== memberIndex)
+      const updatedNames = fromTeam.member_names.filter((_, i) => i !== memberIndex)
+
+      await updateDoc(doc(db, 'games', gameId, 'teams', fromTeamId), {
+        members: updatedMembers,
+        member_names: updatedNames,
+      })
+    } catch (err: any) {
+      setError('Failed to remove player: ' + err.message)
+    }
+
+    setSavingRoster(false)
+  }
+
+  // -----------------------------------------------------------------------
+  // GM: start game
+  // -----------------------------------------------------------------------
+
   const handleStartGame = async () => {
     if (!gameId || !game) return
 
@@ -215,17 +361,13 @@ useEffect(() => {
       const handSize = game.settings.hand_size || 6
       const city = 'nyc'
 
-      // Build composition rules from game.settings — all fall back to defaults
-      // if not set (e.g. games created before this feature was added)
       const compositionRules = {
         minEasy: game.settings.hand_min_easy ?? 1,
         minHard: game.settings.hand_min_hard ?? 1,
         maxHard: game.settings.hand_max_hard ?? 2,
       }
 
-      console.log('DEALING:', { gameId, city, zones: game.zones, handSize, teamIds, compositionRules })
       await dealChallenges(gameId, city, game.zones, handSize, teamIds, compositionRules)
-      console.log('DEALING COMPLETE — cards should be in Firestore')
 
       const now = new Date()
       const endTime = new Date(now.getTime() + game.settings.duration_minutes * 60 * 1000)
@@ -241,10 +383,12 @@ useEffect(() => {
   }
 
   const copyCode = () => {
-    if (game?.join_code) {
-      navigator.clipboard.writeText(game.join_code)
-    }
+    if (game?.join_code) navigator.clipboard.writeText(game.join_code)
   }
+
+  // -----------------------------------------------------------------------
+  // Loading / error states
+  // -----------------------------------------------------------------------
 
   if (loading) {
     return (
@@ -278,6 +422,11 @@ useEffect(() => {
   }
 
   const totalPlayers = teams.reduce((sum, t) => sum + t.members.length, 0)
+  const myTeam = teams.find((t) => t.id === playerTeamId)
+
+  // -----------------------------------------------------------------------
+  // RENDER
+  // -----------------------------------------------------------------------
 
   return (
     <div style={{
@@ -288,7 +437,8 @@ useEffect(() => {
       padding: 24,
     }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div style={{ marginBottom: 24 }}>
           <button
             onClick={() => navigate('/')}
@@ -323,7 +473,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Join Code */}
+        {/* ── Join Code ── */}
         <div
           onClick={copyCode}
           style={{
@@ -353,15 +503,65 @@ useEffect(() => {
           </p>
         </div>
 
-        {/* Player count */}
+        {/* ── "You're on a team" confirmation banner (player only) ── */}
+        {!isGM && myTeam && (
+          <div style={{
+            background: `${myTeam.color}12`,
+            border: `1px solid ${myTeam.color}40`,
+            borderRadius: 10,
+            padding: '12px 16px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <div style={{
+              width: 14, height: 14, borderRadius: 3,
+              background: myTeam.color, flexShrink: 0,
+            }} />
+            <div>
+              <p style={{ color: myTeam.color, fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>
+                You're on {myTeam.name}
+              </p>
+              <p style={{ color: '#666', fontSize: '0.75rem', marginTop: 2 }}>
+                Switch anytime before the game starts
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── "Pick a team" prompt banner (player only, not yet on a team) ── */}
+        {!isGM && !playerTeamId && teams.length > 0 && (
+          <div style={{
+            background: 'rgba(6,214,160,0.06)',
+            border: '1px solid rgba(6,214,160,0.2)',
+            borderRadius: 10,
+            padding: '12px 16px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <span style={{ fontSize: '1.1rem' }}>👇</span>
+            <p style={{ color: '#06D6A0', fontWeight: 600, fontSize: '0.88rem', margin: 0 }}>
+              Pick a team below, or tap Auto-Join
+            </p>
+          </div>
+        )}
+
+        {/* ── Player count ── */}
         <p style={{ color: '#888', fontSize: '0.88rem', marginBottom: 16 }}>
           {totalPlayers} player{totalPlayers !== 1 ? 's' : ''} joined · {teams.length}/{game.max_teams} teams
         </p>
 
-        {/* Teams */}
-        <div style={{ display: 'grid', gap: 12, marginBottom: 24 }}>
+        {/* ── Team cards ── */}
+        <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
           {teams.map((team) => {
             const isMyTeam = team.id === playerTeamId
+            const isFull = team.members.length >= game.settings.team_size
+            const canJoin = !isGM && !playerTeamId && !isFull
+            const canSwitch = !isGM && playerTeamId && playerTeamId !== team.id && !isFull
+
             return (
               <div
                 key={team.id}
@@ -370,14 +570,12 @@ useEffect(() => {
                   border: `1px solid ${isMyTeam ? team.color + '40' : '#1a1a1a'}`,
                   borderRadius: 10,
                   padding: '14px 16px',
+                  transition: 'border-color 0.15s',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      width: 12, height: 12, borderRadius: 3,
-                      background: team.color,
-                    }} />
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
                     <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem' }}>
                       {team.name}
                     </span>
@@ -387,13 +585,18 @@ useEffect(() => {
                       </span>
                     )}
                   </div>
-                  <span style={{ fontSize: '0.78rem', color: '#555' }}>
+                  <span style={{
+                    fontSize: '0.78rem',
+                    color: isFull ? '#EF476F' : '#555',
+                    fontWeight: isFull ? 700 : 400,
+                  }}>
                     {team.members.length}/{game.settings.team_size}
+                    {isFull ? ' · Full' : ''}
                   </span>
                 </div>
 
-                {/* Player names */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {/* Player name pills */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (canJoin || canSwitch) ? 10 : 0 }}>
                   {team.member_names.map((name, i) => (
                     <span key={i} style={{
                       background: 'rgba(255,255,255,0.05)',
@@ -403,7 +606,7 @@ useEffect(() => {
                       {name}
                     </span>
                   ))}
-                  {team.members.length < game.settings.team_size && (
+                  {!isFull && (
                     <span style={{
                       padding: '3px 10px', borderRadius: 12,
                       fontSize: '0.78rem', color: '#333',
@@ -414,69 +617,43 @@ useEffect(() => {
                   )}
                 </div>
 
-                {/* Join this team button (if not on a team yet) */}
-                {!playerTeamId && team.members.length < game.settings.team_size && (
+                {/* Join this team */}
+                {canJoin && (
                   <button
                     onClick={() => handleJoinTeam(team.id)}
                     disabled={joining}
                     style={{
-                      marginTop: 10,
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid #333', color: '#aaa',
-                      padding: '6px 14px', borderRadius: 6,
-                      fontSize: '0.78rem', cursor: 'pointer',
+                      width: '100%',
+                      background: `${team.color}18`,
+                      border: `1px solid ${team.color}50`,
+                      color: team.color,
+                      padding: '8px 14px', borderRadius: 7,
+                      fontSize: '0.82rem', fontWeight: 700,
+                      cursor: joining ? 'wait' : 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
-                    Join this team
+                    {joining ? 'Joining...' : `Join ${team.name}`}
                   </button>
                 )}
 
-                {/* Switch to this team (if on a different team) */}
-                {playerTeamId && playerTeamId !== team.id && team.members.length < game.settings.team_size && (
+                {/* Switch to this team */}
+                {canSwitch && (
                   <button
-                    onClick={async () => {
-                      if (!user || !gameId) return
-                      setJoining(true)
-                      try {
-                        const userDoc = await getDoc(doc(db, 'users', user.uid))
-                        const displayName = userDoc.exists()
-                          ? userDoc.data().display_name || user.displayName || 'Player'
-                          : user.displayName || 'Player'
-
-                        // Remove from current team
-                        const currentTeam = teams.find((t) => t.id === playerTeamId)
-                        if (currentTeam) {
-                          const oldRef = doc(db, 'games', gameId, 'teams', playerTeamId)
-                          await updateDoc(oldRef, {
-                            members: currentTeam.members.filter((m) => m !== user.uid),
-                            member_names: currentTeam.member_names.filter((n) => n !== displayName),
-                          })
-                        }
-
-                        // Add to new team
-                        const newRef = doc(db, 'games', gameId, 'teams', team.id)
-                        await updateDoc(newRef, {
-                          members: arrayUnion(user.uid),
-                          member_names: arrayUnion(displayName),
-                        })
-                      } catch (err: any) {
-                        setError('Failed to switch: ' + err.message)
-                      }
-                      setJoining(false)
-                    }}
+                    onClick={() => handleSwitchTeam(team.id)}
                     disabled={joining}
                     style={{
-                      marginTop: 10,
+                      width: '100%',
                       background: 'rgba(255,209,102,0.08)',
-                      border: '1px solid rgba(255,209,102,0.2)',
+                      border: '1px solid rgba(255,209,102,0.25)',
                       color: '#FFD166',
-                      padding: '6px 14px', borderRadius: 6,
-                      fontSize: '0.78rem', cursor: 'pointer',
+                      padding: '8px 14px', borderRadius: 7,
+                      fontSize: '0.82rem', fontWeight: 700,
+                      cursor: joining ? 'wait' : 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
-                    Switch to this team
+                    {joining ? 'Switching...' : `Switch to ${team.name}`}
                   </button>
                 )}
               </div>
@@ -484,8 +661,8 @@ useEffect(() => {
           })}
         </div>
 
-        {/* Join button (if not on a team yet) */}
-        {!playerTeamId && (
+        {/* ── Auto-join button (player not yet on a team) ── */}
+        {!isGM && !playerTeamId && (
           <button
             onClick={() => handleJoinTeam()}
             disabled={joining}
@@ -496,15 +673,16 @@ useEffect(() => {
               color: '#06D6A0',
               padding: '14px 24px', borderRadius: 10,
               fontSize: '0.95rem', fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
+              cursor: joining ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
               marginBottom: 16,
             }}
           >
-            {joining ? 'Joining...' : 'Auto-Join a Team'}
+            {joining ? 'Joining...' : '⚡ Auto-Join a Team'}
           </button>
         )}
 
-        {/* Error */}
+        {/* ── Error ── */}
         {error && (
           <p style={{
             color: '#EF476F', fontSize: '0.85rem', marginBottom: 16,
@@ -515,41 +693,275 @@ useEffect(() => {
           </p>
         )}
 
-        {/* GM Controls */}
+        {/* ──────────────────────────────────────────────────────── */}
+        {/* GM CONTROLS                                              */}
+        {/* ──────────────────────────────────────────────────────── */}
         {isGM && (
           <div style={{
-            marginTop: 16, padding: 20,
+            marginTop: 16,
             background: 'rgba(255,209,102,0.05)',
             border: '1px solid rgba(255,209,102,0.15)',
             borderRadius: 12,
+            overflow: 'hidden',
           }}>
-            <p style={{
-              fontSize: '0.72rem', color: '#FFD166',
-              textTransform: 'uppercase', letterSpacing: 1,
-              fontWeight: 700, marginBottom: 12,
-            }}>
-              Game Master Controls
-            </p>
+            <div style={{ padding: '16px 20px 0' }}>
+              <p style={{
+                fontSize: '0.72rem', color: '#FFD166',
+                textTransform: 'uppercase', letterSpacing: 1,
+                fontWeight: 700, marginBottom: 12,
+              }}>
+                Game Master Controls
+              </p>
+
+              {/* Start Game */}
+              <button
+                onClick={handleStartGame}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,209,102,0.15)',
+                  border: '1px solid rgba(255,209,102,0.3)',
+                  color: '#FFD166',
+                  padding: '14px 24px', borderRadius: 10,
+                  fontSize: '1rem', fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  marginBottom: 8,
+                }}
+              >
+                Start Game
+              </button>
+              <p style={{
+                fontSize: '0.78rem', color: '#666',
+                marginBottom: 16, textAlign: 'center',
+              }}>
+                Need at least 1 team with players
+              </p>
+            </div>
+
+            {/* ── Roster Manager toggle ── */}
             <button
-              onClick={handleStartGame}
+              onClick={() => setRosterOpen((v) => !v)}
               style={{
                 width: '100%',
-                background: 'rgba(255,209,102,0.15)',
-                border: '1px solid rgba(255,209,102,0.3)',
-                color: '#FFD166',
-                padding: '14px 24px', borderRadius: 10,
-                fontSize: '1rem', fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
+                background: rosterOpen ? 'rgba(255,255,255,0.04)' : 'transparent',
+                border: 'none',
+                borderTop: '1px solid rgba(255,209,102,0.1)',
+                color: rosterOpen ? '#ccc' : '#666',
+                padding: '12px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                transition: 'background 0.15s',
               }}
             >
-              Start Game
+              <span>✏️ Adjust Teams / Roster</span>
+              <span style={{
+                color: '#444', fontSize: '0.75rem',
+                transform: rosterOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+              }}>▼</span>
             </button>
-            <p style={{
-              fontSize: '0.78rem', color: '#666',
-              marginTop: 8, textAlign: 'center',
-            }}>
-              Need at least 1 team with players
-            </p>
+
+            {/* ── Roster Manager panel ── */}
+            {rosterOpen && (
+              <div style={{ padding: '16px 20px 20px' }}>
+                <p style={{ fontSize: '0.75rem', color: '#555', marginBottom: 16, lineHeight: 1.6 }}>
+                  Move players between teams, rename teams, or remove players.
+                  Changes apply instantly — all players see updates in real time.
+                </p>
+
+                {teams.length === 0 && (
+                  <p style={{ color: '#444', fontSize: '0.82rem', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                    No teams yet. Players will appear here once they join.
+                  </p>
+                )}
+
+                <div style={{ display: 'grid', gap: 14 }}>
+                  {teams.map((team) => (
+                    <div
+                      key={team.id}
+                      style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid #1a1a1a',
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Team header with rename */}
+                      <div style={{
+                        padding: '10px 14px',
+                        borderBottom: '1px solid #111',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        background: `${team.color}08`,
+                      }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 2, background: team.color, flexShrink: 0 }} />
+
+                        {editingTeamName[team.id] !== undefined ? (
+                          // Inline rename input
+                          <div style={{ display: 'flex', gap: 6, flex: 1 }}>
+                            <input
+                              autoFocus
+                              value={editingTeamName[team.id]}
+                              onChange={(e) => setEditingTeamName((prev) => ({ ...prev, [team.id]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameTeam(team.id)
+                                if (e.key === 'Escape') setEditingTeamName((prev) => {
+                                  const next = { ...prev }; delete next[team.id]; return next
+                                })
+                              }}
+                              style={{
+                                flex: 1, background: '#111', border: `1px solid ${team.color}40`,
+                                borderRadius: 6, padding: '4px 10px', color: '#fff',
+                                fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none',
+                              }}
+                            />
+                            <button
+                              onClick={() => handleRenameTeam(team.id)}
+                              disabled={savingRoster}
+                              style={{
+                                background: `${team.color}20`, border: `1px solid ${team.color}40`,
+                                color: team.color, padding: '4px 10px', borderRadius: 6,
+                                fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingTeamName((prev) => {
+                                const next = { ...prev }; delete next[team.id]; return next
+                              })}
+                              style={{
+                                background: 'transparent', border: '1px solid #333',
+                                color: '#555', padding: '4px 10px', borderRadius: 6,
+                                fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span style={{ color: '#ccc', fontWeight: 700, fontSize: '0.88rem', flex: 1 }}>
+                              {team.name}
+                            </span>
+                            <button
+                              onClick={() => setEditingTeamName((prev) => ({ ...prev, [team.id]: team.name }))}
+                              style={{
+                                background: 'transparent', border: '1px solid #222',
+                                color: '#555', padding: '3px 9px', borderRadius: 5,
+                                fontSize: '0.7rem', cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              Rename
+                            </button>
+                            <span style={{ fontSize: '0.72rem', color: '#444' }}>
+                              {team.members.length}/{game.settings.team_size}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Player rows */}
+                      {team.members.length === 0 ? (
+                        <p style={{ padding: '10px 14px', color: '#333', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                          No players yet
+                        </p>
+                      ) : (
+                        <div>
+                          {team.members.map((uid, idx) => {
+                            const playerName = team.member_names[idx] || 'Player'
+                            const otherTeams = teams.filter((t) => t.id !== team.id)
+
+                            return (
+                              <div
+                                key={uid}
+                                style={{
+                                  padding: '10px 14px',
+                                  borderBottom: idx < team.members.length - 1 ? '1px solid #0f0f0f' : 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                {/* Player name */}
+                                <span style={{
+                                  fontSize: '0.82rem', color: '#bbb',
+                                  fontWeight: 600, flex: 1, minWidth: 80,
+                                }}>
+                                  {playerName}
+                                </span>
+
+                                {/* Move to other team buttons */}
+                                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                  {otherTeams.map((other) => (
+                                    <button
+                                      key={other.id}
+                                      onClick={() => handleMovePlayer(uid, team.id, other.id)}
+                                      disabled={savingRoster || other.members.length >= game.settings.team_size}
+                                      title={other.members.length >= game.settings.team_size ? `${other.name} is full` : `Move to ${other.name}`}
+                                      style={{
+                                        background: other.members.length >= game.settings.team_size
+                                          ? 'rgba(255,255,255,0.02)'
+                                          : `${other.color}15`,
+                                        border: `1px solid ${other.members.length >= game.settings.team_size ? '#222' : other.color + '40'}`,
+                                        color: other.members.length >= game.settings.team_size ? '#333' : other.color,
+                                        padding: '4px 9px', borderRadius: 5,
+                                        fontSize: '0.7rem', fontWeight: 600,
+                                        cursor: other.members.length >= game.settings.team_size || savingRoster
+                                          ? 'not-allowed' : 'pointer',
+                                        fontFamily: 'inherit',
+                                        opacity: other.members.length >= game.settings.team_size ? 0.5 : 1,
+                                      }}
+                                    >
+                                      → {other.name.split(' ')[0]}
+                                    </button>
+                                  ))}
+
+                                  {/* Remove player */}
+                                  <button
+                                    onClick={() => handleRemovePlayer(uid, team.id)}
+                                    disabled={savingRoster}
+                                    title="Remove from team"
+                                    style={{
+                                      background: 'rgba(239,71,111,0.06)',
+                                      border: '1px solid rgba(239,71,111,0.2)',
+                                      color: '#EF476F',
+                                      padding: '4px 9px', borderRadius: 5,
+                                      fontSize: '0.7rem', fontWeight: 600,
+                                      cursor: savingRoster ? 'wait' : 'pointer',
+                                      fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Saving indicator */}
+                {savingRoster && (
+                  <p style={{
+                    color: '#FFD166', fontSize: '0.75rem',
+                    textAlign: 'center', marginTop: 12,
+                  }}>
+                    Saving...
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
