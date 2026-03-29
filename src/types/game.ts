@@ -54,6 +54,7 @@ export interface ZoneLockSchedule {
 
 export interface GameSettings {
   claim_threshold: number         // Points needed to claim a zone (default: 6)
+  lock_threshold: number          // Points needed to lock a zone (default: 10)
   zone_bonus_points: number       // Bonus awarded on first claim (default: 3)
   discard_limit: number           // Times a team can discard+draw per game (default: 1)
   team_size: number               // Target players per team (default: 3)
@@ -105,9 +106,10 @@ export interface ZoneScore {
   team_id: string
   zone_id: string
   points: number                  // Total points this team has earned in this zone
-  status: 'none' | 'claimed' | 'locked_out'
+  status: 'none' | 'claimed' | 'locked' | 'locked_out'
   // 'none'        = team has points here but hasn't claimed
   // 'claimed'     = team holds this zone (reached claim_threshold)
+  // 'locked'      = team has locked this zone (reached lock_threshold)
   // 'locked_out'  = zone was time-locked; this team's record is frozen
   challenges_completed: string[]  // Challenge IDs approved in this zone
 }
