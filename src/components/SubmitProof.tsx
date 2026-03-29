@@ -58,7 +58,7 @@ export default function SubmitProof({
       const snapshot = await getDocs(collection(db, 'zones'))
       const loaded = snapshot.docs.map((d) => {
         const data = d.data()
-        return { ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
+        return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
       })
       setZones(loaded)
     }

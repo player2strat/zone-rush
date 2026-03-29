@@ -84,6 +84,7 @@ export async function approveSubmission(
   if (!gameSnap.exists()) throw new Error('Game not found')
   const settings = gameSnap.data().settings as GameSettings
   const claimThreshold = settings.claim_threshold ?? 6
+  const lockThreshold = settings.lock_threshold ?? 10 
   const zoneBonusPoints = settings.zone_bonus_points ?? 3
 
   // 3. Load the challenge to get difficulty + tier2 info
@@ -151,7 +152,8 @@ export async function approveSubmission(
   let zoneStolen = false
   let bonusPoints = 0
 
-  if (newPoints >= claimThreshold && !alreadyClaimed) {
+  const alreadyLocked = prevScore.status === 'locked'
+  if (newPoints >= claimThreshold && !alreadyClaimed && !alreadyLocked) {
     zoneClaimed = true
 
     // Use a local non-null variable so TypeScript is happy
@@ -188,7 +190,7 @@ export async function approveSubmission(
   batch.set(zoneScoreRef, {
     ...prevScore,
     points: newPoints + bonusPoints,
-    status: zoneClaimed ? 'claimed' : prevScore.status,
+    status: newPoints >= lockThreshold ? 'locked' : zoneClaimed ? 'claimed' : prevScore.status,
     challenges_completed: [
       ...prevScore.challenges_completed,
       challenge_id,

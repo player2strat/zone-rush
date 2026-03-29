@@ -67,6 +67,7 @@ export default function CreateGame() {
   const [zoneBonusPoints, setZoneBonusPoints] = useState(3)
   const [discardLimit, setDiscardLimit] = useState(1)
   const [handSize, setHandSize] = useState(6)
+  const [lockThreshold, setLockThreshold] = useState(10)
 
   // Hand composition rules — configurable per game, stored in game.settings
   // These control how challenge cards are distributed when the game starts.
@@ -160,6 +161,7 @@ export default function CreateGame() {
           team_size: teamSize,
           duration_minutes: durationMinutes,
           claim_threshold: claimThreshold,
+          lock_threshold: lockThreshold,
           zone_bonus_points: zoneBonusPoints,
           discard_limit: discardLimit,
           hand_size: handSize,
@@ -557,6 +559,12 @@ export default function CreateGame() {
                       min={0} max={5}
                     />
                     <SettingInput
+                      label="Zone Lock (pts)"
+                      value={lockThreshold}
+                      onChange={setLockThreshold}
+                      min={claimThreshold} max={20}
+                    />
+                    <SettingInput
                       label="Discards"
                       value={discardLimit}
                       onChange={setDiscardLimit}
@@ -626,6 +634,7 @@ export default function CreateGame() {
                   { label: 'Zones', value: `${selectedZones.length} selected` },
                   { label: 'Teams', value: `${maxTeams} teams × ${teamSize} players` },
                   { label: 'Duration', value: `${durationMinutes} min` },
+                  { label: 'Claim / Lock', value: `${claimThreshold}pts / ${lockThreshold}pts` },
                   buildCloseSchedule().length > 0
                     ? { label: 'Zone closures', value: `${buildCloseSchedule().length} scheduled` }
                     : null,
