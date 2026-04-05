@@ -1,10 +1,13 @@
 // =============================================================================
 // Zone Rush — Game Page
-// Player's 4-tab view: Hand, Map, Chat, History
+// Player's 5-tab view: Home, Hand, Map, Chat, History
 //
 // CHANGES:
-// - UPDATED: zoneOwnership now passes points + claimed to GameMap for gradient
-// - UPDATED: GameMap receives closedZones and claimThreshold props
+// - Discard logic now tracks discarded_challenges on team doc
+//   so completed/discarded cards never recycle back into hand
+// - Player profile badge removed from hand cards
+// - Home tab rules updated with new copy + Side Quests info
+// - Phone-free bonus removed from quick rules
 // =============================================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -58,6 +61,7 @@ interface TeamData {
   hand: string[]
   taxi_used: boolean
   discards_used: number
+  discarded_challenges?: string[]
 }
 
 interface Challenge {
@@ -96,13 +100,6 @@ const DIFFICULTY_STYLES: Record<string, { bg: string; color: string; label: stri
   easy:   { bg: 'rgba(6,214,160,0.15)',  color: '#06D6A0', label: 'Easy',   pts: 1 },
   medium: { bg: 'rgba(255,209,102,0.15)', color: '#FFD166', label: 'Medium', pts: 3 },
   hard:   { bg: 'rgba(239,71,111,0.15)',  color: '#EF476F', label: 'Hard',   pts: 5 },
-}
-
-const PROFILE_STYLES: Record<string, { color: string; label: string }> = {
-  adventurer: { color: '#F77F00', label: 'Adventurer' },
-  academic:   { color: '#118AB2', label: 'Academic' },
-  gamer:      { color: '#9B5DE5', label: 'Gamer' },
-  ride_along: { color: '#EF476F', label: 'Ride Along' },
 }
 
 const VERIFICATION_ICONS: Record<string, string> = {
@@ -182,9 +179,7 @@ export default function GamePage() {
       () => {},
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
-          alert(
-            '📍 Zone Rush needs your location to verify challenge submissions and show your position on the map. Please enable location access in your browser settings.'
-          )
+          alert('📍 Zone Rush needs your location to verify challenge submissions and show your position on the map. Please enable location access in your browser settings.')
         }
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -200,7 +195,7 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId])
 
-  // Zone lockout timer — checks every 60 seconds while game is active
+  // Zone lockout timer
   useEffect(() => {
     if (game?.status !== 'active') return
     const interval = setInterval(() => {
@@ -210,7 +205,7 @@ export default function GamePage() {
     return () => clearInterval(interval)
   }, [game?.status, gameId])
 
-  // Find player's team and listen for updates; also captures allTeams
+  // Find player's team and listen for updates
   useEffect(() => {
     if (!gameId || !user) return
 
@@ -250,7 +245,7 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, user])
 
-  // Listen to zone_scores for real-time zone ownership
+  // Listen to zone_scores
   useEffect(() => {
     if (!gameId) return
     const unsub = onSnapshot(
@@ -264,7 +259,7 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId])
 
-  // Listen to submissions for this team to show status badges
+  // Listen to submissions for this team
   useEffect(() => {
     if (!gameId || !myTeam) return
 
@@ -298,41 +293,40 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, myTeam?.id])
 
-  // Subscribe to chat messages for this team
-useEffect(() => {
-  if (!gameId || !myTeam) return
-  const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
-    setChatMessages(msgs)
+  // Subscribe to chat messages
+  useEffect(() => {
+    if (!gameId || !myTeam) return
+    const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
+      setChatMessages(msgs)
 
-    // Track latest unread broadcast for cross-tab banner
-    const latestUnreadBroadcast = msgs
-      .filter(
-        (m: any) =>
-          m.channel_type === 'gm_broadcast' &&
-          !m.read_by?.includes(user?.uid)
-      )
-      .sort((a: any, b: any) =>
-        (b.created_at?.toMillis?.() ?? 0) - (a.created_at?.toMillis?.() ?? 0)
-      )[0]
+      const latestUnreadBroadcast = msgs
+        .filter(
+          (m: any) =>
+            m.channel_type === 'gm_broadcast' &&
+            !m.read_by?.includes(user?.uid)
+        )
+        .sort((a: any, b: any) =>
+          (b.created_at?.toMillis?.() ?? 0) - (a.created_at?.toMillis?.() ?? 0)
+        )[0]
 
-    if (latestUnreadBroadcast) {
-      setLatestBroadcast(latestUnreadBroadcast.text)
-      setBroadcastDismissed(null) // new broadcast resets dismiss
+      if (latestUnreadBroadcast) {
+        setLatestBroadcast(latestUnreadBroadcast.text)
+        setBroadcastDismissed(null)
+      }
+
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    })
+    return () => unsub()
+  }, [gameId, myTeam?.id])
+
+  // Navigate to results when game ends
+  useEffect(() => {
+    if (game?.status === 'ended' && gameId) {
+      navigate('/results/' + gameId)
     }
-
-    setTimeout(() => {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 50)
-  })
-  return () => unsub()
-}, [gameId, myTeam?.id])
-
-// Navigate to results when game ends
-useEffect(() => {
-  if (game?.status === 'ended' && gameId) {
-    navigate('/results/' + gameId)
-  }
-}, [game?.status, gameId, navigate])
+  }, [game?.status, gameId, navigate])
 
   // Mark messages as read when chat tab is active
   useEffect(() => {
@@ -346,13 +340,7 @@ useEffect(() => {
     if (!chatInput.trim() || !gameId || !user || !myTeam || chatSending) return
     setChatSending(true)
     try {
-      await sendTeamMessage(
-        gameId,
-        user.uid,
-        user.displayName || 'Player',
-        myTeam.id,
-        chatInput.trim()
-      )
+      await sendTeamMessage(gameId, user.uid, user.displayName || 'Player', myTeam.id, chatInput.trim())
       setChatInput('')
     } catch (err) {
       console.error('Failed to send message:', err)
@@ -362,7 +350,7 @@ useEffect(() => {
     }
   }
 
-  // Discard handler
+  // Discard handler — tracks discarded challenges so they never recycle back
   const handleDiscard = async (cardIndex: number) => {
     if (!gameId || !myTeam || !game || discarding) return
 
@@ -380,22 +368,37 @@ useEffect(() => {
     setDiscarding(true)
 
     try {
+      // Build a full exclusion list:
+      // 1. Current hand
+      // 2. Previously discarded cards
+      // 3. Approved challenges (don't re-deal completed ones)
+      const previouslyDiscarded: string[] = myTeam.discarded_challenges ?? []
+      const approvedIds = Array.from(submissions.entries())
+        .filter(([, s]) => s.status === 'approved')
+        .map(([id]) => id)
+
+      const excluded = new Set([
+        ...myTeam.hand,
+        ...previouslyDiscarded,
+        ...approvedIds,
+      ])
+
       const challengeSnap = await getDocs(collection(db, 'challenges'))
-      const allChallenges: string[] = []
+      const available: string[] = []
       challengeSnap.forEach((d) => {
         const data = d.data()
-        if (data.is_active !== false && !myTeam.hand.includes(d.id)) {
-          allChallenges.push(d.id)
+        if (data.is_active !== false && !excluded.has(d.id)) {
+          available.push(d.id)
         }
       })
 
-      if (allChallenges.length === 0) {
+      if (available.length === 0) {
         alert('No replacement challenges available.')
         setDiscarding(false)
         return
       }
 
-      const replacement = allChallenges[Math.floor(Math.random() * allChallenges.length)]
+      const replacement = available[Math.floor(Math.random() * available.length)]
       const newHand = [...myTeam.hand]
       const handIndex = newHand.indexOf(challengeToRemove.id)
       if (handIndex !== -1) newHand[handIndex] = replacement
@@ -404,6 +407,7 @@ useEffect(() => {
       await updateDoc(teamRef, {
         hand: newHand,
         discards_used: discardsUsed + 1,
+        discarded_challenges: [...previouslyDiscarded, challengeToRemove.id],
       })
 
       setDiscardMode(false)
@@ -426,7 +430,6 @@ useEffect(() => {
       if (diff <= 0) {
         setTimeLeft('GAME OVER')
         clearInterval(interval)
-        // Auto-end the game when timer expires (idempotent — safe if multiple clients fire)
         if (game?.status === 'active' && gameId) {
           updateDoc(doc(db, 'games', gameId), { status: 'ended' }).catch(() => {})
         }
@@ -441,10 +444,8 @@ useEffect(() => {
     }, 1000)
     return () => clearInterval(interval)
   }, [game?.ends_at])
-      
-    const gameEnded = game?.status === 'ended'
 
-  // Computed values
+  const gameEnded = game?.status === 'ended'
   const discardLimit = game?.settings.discard_limit ?? 1
   const discardsUsed = myTeam?.discards_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
@@ -454,9 +455,7 @@ useEffect(() => {
 
   const activeZones = localZones.filter((z: any) => game?.zones?.includes(z.id))
 
-  // ---- Compute zone ownership for GameMap ----
-  // For each zone, find the team with the most points.
-  // Pass their color, name, total points, and whether they've claimed it.
+  // Compute zone ownership for GameMap
   const claimThreshold = game?.settings.claim_threshold ?? 6
   const zoneOwnership = new Map<string, ZoneOwner>()
 
@@ -464,11 +463,9 @@ useEffect(() => {
     const scoresForZone = zoneScores.filter(zs => zs.zone_id === zone)
     if (scoresForZone.length === 0) continue
 
-    // Leading team = highest points in this zone
     const leading = scoresForZone.reduce((best, curr) =>
       curr.points > best.points ? curr : best
     )
-
     if (leading.points === 0) continue
 
     const team = allTeams.find(t => t.id === leading.team_id)
@@ -495,8 +492,7 @@ useEffect(() => {
           <div style={{
             width: 32, height: 32, border: '3px solid #222',
             borderTopColor: '#FFD166', borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto 12px',
+            animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading game...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -525,19 +521,14 @@ useEffect(() => {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#0a0a0a',
-      color: '#fff',
+      minHeight: '100vh', background: '#0a0a0a', color: '#fff',
       fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
-      display: 'flex',
-      flexDirection: 'column',
+      display: 'flex', flexDirection: 'column',
     }}>
       {/* Top bar */}
       <div style={{
-        padding: '12px 20px',
-        borderBottom: '1px solid #1a1a1a',
-        background: '#0d0d0d',
-        flexShrink: 0,
+        padding: '12px 20px', borderBottom: '1px solid #1a1a1a',
+        background: '#0d0d0d', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -554,7 +545,6 @@ useEffect(() => {
           </div>
         </div>
 
-
         {submissions.size > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: '#555' }}>
             {approvedCount > 0 && <span style={{ color: '#06D6A0' }}>✅ {approvedCount} approved</span>}
@@ -568,52 +558,44 @@ useEffect(() => {
         )}
       </div>
 
-{/* GM broadcast banner — shows on all tabs except chat */}
-        {latestBroadcast && broadcastDismissed !== latestBroadcast && activeTab !== 'chat' && (
-          <div style={{
-            marginTop: 10,
-            background: 'rgba(255,209,102,0.10)',
-            border: '1px solid rgba(255,209,102,0.3)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📢</span>
-              <p style={{
-                color: '#FFD166', fontSize: '0.78rem', fontWeight: 600,
-                lineHeight: 1.4, margin: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {latestBroadcast}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button
-                onClick={() => setActiveTab('chat')}
-                style={{
-                  background: 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)',
-                  color: '#FFD166', padding: '4px 10px', borderRadius: 6,
-                  fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                View
-              </button>
-              <button
-                onClick={() => setBroadcastDismissed(latestBroadcast)}
-                style={{
-                  background: 'none', border: 'none', color: '#555',
-                  fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1,
-                }}
-              >
-                ✕
-              </button>
-            </div>
+      {/* GM broadcast banner */}
+      {latestBroadcast && broadcastDismissed !== latestBroadcast && activeTab !== 'chat' && (
+        <div style={{
+          marginTop: 10,
+          background: 'rgba(255,209,102,0.10)', border: '1px solid rgba(255,209,102,0.3)',
+          borderRadius: 8, padding: '8px 12px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📢</span>
+            <p style={{
+              color: '#FFD166', fontSize: '0.78rem', fontWeight: 600,
+              lineHeight: 1.4, margin: 0,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {latestBroadcast}
+            </p>
           </div>
-        )}
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={() => setActiveTab('chat')}
+              style={{
+                background: 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)',
+                color: '#FFD166', padding: '4px 10px', borderRadius: 6,
+                fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              View
+            </button>
+            <button
+              onClick={() => setBroadcastDismissed(latestBroadcast)}
+              style={{ background: 'none', border: 'none', color: '#555', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div style={{
@@ -621,135 +603,96 @@ useEffect(() => {
         padding: activeTab === 'map' || activeTab === 'history' ? '0' : '16px 20px 100px',
       }}>
 
-    {/* ==================== HOME TAB ==================== */}
-    {activeTab === 'home' && (
-      <div style={{ paddingBottom: 100 }}>
-
-        {/* Team score card */}
-        <div style={{
-          background: `${myTeam.color}10`,
-          border: `1px solid ${myTeam.color}35`,
-          borderRadius: 14,
-          padding: '24px 20px',
-          marginBottom: 20,
-          textAlign: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
-            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>{myTeam.name}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-            <div>
-              <p style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '2.2rem', fontWeight: 800,
-                color: myTeam.color, lineHeight: 1, marginBottom: 6,
-              }}>
-                {myTeam.total_points}
-              </p>
-              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-                Total Points
-              </p>
-            </div>
-            <div style={{ width: 1, background: '#1a1a1a' }} />
-            <div>
-              <p style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '2.2rem', fontWeight: 800,
-                color: '#FFD166', lineHeight: 1, marginBottom: 6,
-              }}>
-                {Array.from(zoneOwnership.values()).filter(z => z.claimed && allTeams.find(t => t.color === z.teamColor)?.id === myTeam.id).length}
-              </p>
-              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-                Zones Claimed
-              </p>
-            </div>
-            <div style={{ width: 1, background: '#1a1a1a' }} />
-            <div>
-              <p style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '2.2rem', fontWeight: 800,
-                color: '#9B5DE5', lineHeight: 1, marginBottom: 6,
-              }}>
-                {approvedCount}
-              </p>
-              <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-                Challenges
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick rules */}
-        <p style={{
-          fontSize: '0.72rem', color: '#FFD166',
-          textTransform: 'uppercase', letterSpacing: 1.5,
-          fontWeight: 700, marginBottom: 12,
-        }}>
-          Quick Rules
-        </p>
-
-        <div style={{ display: 'grid', gap: 10 }}>
-          {[
-            {
-              icon: '📍',
-              title: 'Claiming Zones',
-              desc: `Earn ${game?.settings.claim_threshold ?? 6} points in a zone to claim it. To steal a zone, outscore the team holding it.`,
-            },
-            {
-              icon: '🃏',
-              title: 'Your Hand',
-              desc: 'You have 6 challenge cards. You get 1 discard — use it wisely to swap a card you don\'t want.',
-            },
-            {
-              icon: '📸',
-              title: 'Submitting Proof',
-              desc: 'Tap a card, expand it, and hit Submit Proof. The GM reviews every submission live.',
-            },
-            {
-              icon: '⭐',
-              title: 'Tier 2 Bonus',
-              desc: 'Some challenges have a harder bonus tier worth +1pt. If you attempt it and abandon it, you get 0 for the whole challenge.',
-            },
-            {
-              icon: '📵',
-              title: 'Phone-Free Bonus',
-              desc: '+1pt for completing a challenge without using your phone. +2pts for no phone AND no talking to teammates.',
-            },
-            {
-              icon: '🚕',
-              title: 'One Taxi Rule',
-              desc: 'Your team can only use a car (taxi, Uber, etc.) ONE time during the entire game — including the ride back.',
-            },
-            {
-              icon: '🏁',
-              title: 'End Bonuses',
-              desc: '+1pt for most zones claimed. +1pt for fastest return to start. +1pt for the hydration bonus.',
-            },
-          ].map((rule) => (
-            <div key={rule.title} style={{
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid #1a1a1a',
-              borderRadius: 10,
-              padding: '14px 16px',
-              display: 'flex',
-              gap: 14,
-              alignItems: 'flex-start',
+        {/* ==================== HOME TAB ==================== */}
+        {activeTab === 'home' && (
+          <div style={{ paddingBottom: 100 }}>
+            {/* Team score card */}
+            <div style={{
+              background: `${myTeam.color}10`, border: `1px solid ${myTeam.color}35`,
+              borderRadius: 14, padding: '24px 20px', marginBottom: 20, textAlign: 'center',
             }}>
-              <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
-              <div>
-                <p style={{ color: '#fff', fontWeight: 700, fontSize: '0.88rem', marginBottom: 4 }}>
-                  {rule.title}
-                </p>
-                <p style={{ color: '#888', fontSize: '0.82rem', lineHeight: 1.6 }}>
-                  {rule.desc}
-                </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
+                <span style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>{myTeam.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                <div>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: myTeam.color, lineHeight: 1, marginBottom: 6 }}>
+                    {myTeam.total_points}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Total Points</p>
+                </div>
+                <div style={{ width: 1, background: '#1a1a1a' }} />
+                <div>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: '#FFD166', lineHeight: 1, marginBottom: 6 }}>
+                    {Array.from(zoneOwnership.values()).filter(z => z.claimed && allTeams.find(t => t.color === z.teamColor)?.id === myTeam.id).length}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Zones Claimed</p>
+                </div>
+                <div style={{ width: 1, background: '#1a1a1a' }} />
+                <div>
+                  <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: '#9B5DE5', lineHeight: 1, marginBottom: 6 }}>
+                    {approvedCount}
+                  </p>
+                  <p style={{ fontSize: '0.72rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Challenges</p>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-    )}
+
+            {/* Game Rules */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a',
+              borderRadius: 14, padding: '20px 18px', marginBottom: 16,
+            }}>
+              <p style={{
+                fontSize: '0.72rem', color: '#FFD166',
+                textTransform: 'uppercase', letterSpacing: 1.5,
+                fontWeight: 700, marginBottom: 14,
+              }}>
+                Game Rules
+              </p>
+              <div style={{ display: 'grid', gap: 14 }}>
+                {[
+                  {
+                    icon: '👋',
+                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hours you'll compete against another team in a series of challenges across Brooklyn that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
+                  },
+                  {
+                    icon: '🃏',
+                    text: 'Each team will have 5 challenges in their hand at a given time.',
+                  },
+                  {
+                    icon: '⭐',
+                    text: 'Challenges are worth 1 (easy), 3 (medium) or 5 (hard) points. Brooklyn is broken up into zones, which you can access on your map. Complete a challenge and those points count in the zone you\'re currently located.',
+                  },
+                  {
+                    icon: '📍',
+                    text: `Once you've reached ${game?.settings.claim_threshold ?? 6} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.`,
+                  },
+                  {
+                    icon: '📸',
+                    text: 'The challenges will require taking pictures or videos, then submitting them to the GM. The GM will then approve or deny the challenge and award the points.',
+                  },
+                  {
+                    icon: '🚇',
+                    text: 'You may only use public modes of transportation: subway, buses, and your feet.',
+                  },
+                  {
+                    icon: '🏆',
+                    text: 'Side Quests: At the end of the game, bonus points are awarded — most zones claimed (+5 pts), most transport modes used (+4 pts), most challenges completed (+3 pts).',
+                  },
+                ].map((rule, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
+                    <p style={{ color: '#bbb', fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>
+                      {rule.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ==================== HAND TAB ==================== */}
         {activeTab === 'hand' && (
@@ -758,10 +701,7 @@ useEffect(() => {
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', marginBottom: 16,
             }}>
-              <p style={{
-                fontSize: '0.75rem', color: '#555', textTransform: 'uppercase',
-                letterSpacing: 1, fontWeight: 600, margin: 0,
-              }}>
+              <p style={{ fontSize: '0.75rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, margin: 0 }}>
                 Your Challenges ({challenges.length})
               </p>
 
@@ -772,28 +712,20 @@ useEffect(() => {
                     background: discardMode ? 'rgba(239,71,111,0.15)' : 'rgba(255,255,255,0.05)',
                     border: `1px solid ${discardMode ? '#EF476F40' : '#222'}`,
                     color: discardMode ? '#EF476F' : '#888',
-                    padding: '6px 14px',
-                    borderRadius: 8,
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'all 0.15s',
+                    padding: '6px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                   }}
                 >
                   {discardMode ? '✕ Cancel' : `🔄 Discard (${discardLimit - discardsUsed} left)`}
                 </button>
               ) : (
-                <span style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic' }}>
-                  No discards left
-                </span>
+                <span style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic' }}>No discards left</span>
               )}
             </div>
 
             {discardMode && (
               <div style={{
-                background: 'rgba(239,71,111,0.06)',
-                border: '1px solid rgba(239,71,111,0.15)',
+                background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.15)',
                 borderRadius: 8, padding: '10px 14px', marginBottom: 12,
                 fontSize: '0.82rem', color: '#EF476F',
               }}>
@@ -811,7 +743,6 @@ useEffect(() => {
             <div style={{ display: 'grid', gap: 12 }}>
               {challenges.map((ch, index) => {
                 const diff = DIFFICULTY_STYLES[ch.difficulty] || DIFFICULTY_STYLES.medium
-                const profile = PROFILE_STYLES[ch.player_profile] || { color: '#888', label: ch.player_profile }
                 const isExpanded = selectedCard === index && !discardMode
                 const sub = submissions.get(ch.id)
                 const badge = sub ? STATUS_BADGE[sub.status] : null
@@ -836,30 +767,19 @@ useEffect(() => {
                         : isExpanded ? diff.color + '40'
                         : '#1a1a1a'
                       }`,
-                      borderRadius: 12,
-                      padding: '16px 18px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
+                      borderRadius: 12, padding: '16px 18px',
+                      cursor: 'pointer', transition: 'all 0.15s',
                       opacity: isCompleted && !isExpanded ? 0.65 : 1,
                     }}
                   >
-                    {/* Card header */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'center', marginBottom: 10,
-                    }}>
+                    {/* Card header — difficulty badge + status badge only (no profile badge) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{
                           fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
                           borderRadius: 20, background: diff.bg, color: diff.color,
                         }}>
                           {diff.label}
-                        </span>
-                        <span style={{
-                          fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
-                          borderRadius: 20, background: `${profile.color}15`, color: profile.color,
-                        }}>
-                          {profile.label}
                         </span>
                         {badge && (
                           <span style={{
@@ -877,10 +797,7 @@ useEffect(() => {
                         <span style={{ fontSize: '0.9rem' }}>
                           {VERIFICATION_ICONS[ch.verification_type] || '📷'}
                         </span>
-                        <span style={{
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: '0.85rem', fontWeight: 700, color: diff.color,
-                        }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.85rem', fontWeight: 700, color: diff.color }}>
                           {diff.pts}pt{diff.pts !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -899,19 +816,13 @@ useEffect(() => {
                     {/* GM rejection notes */}
                     {sub?.status === 'rejected' && sub.gm_notes && (
                       <div style={{
-                        background: 'rgba(239,71,111,0.06)',
-                        border: '1px solid rgba(239,71,111,0.15)',
+                        background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.15)',
                         borderRadius: 8, padding: '8px 12px', marginBottom: 10,
                       }}>
-                        <p style={{
-                          fontSize: '0.7rem', color: '#EF476F', fontWeight: 700,
-                          textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
-                        }}>
+                        <p style={{ fontSize: '0.7rem', color: '#EF476F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
                           GM Feedback
                         </p>
-                        <p style={{ color: '#ccc', fontSize: '0.82rem', lineHeight: 1.5 }}>
-                          {sub.gm_notes}
-                        </p>
+                        <p style={{ color: '#ccc', fontSize: '0.82rem', lineHeight: 1.5 }}>{sub.gm_notes}</p>
                       </div>
                     )}
 
@@ -926,16 +837,10 @@ useEffect(() => {
                         }}
                         disabled={discarding}
                         style={{
-                          width: '100%',
-                          background: 'rgba(239,71,111,0.12)',
-                          border: '1px solid rgba(239,71,111,0.3)',
-                          color: '#EF476F',
-                          padding: '10px 16px',
-                          borderRadius: 8,
-                          fontSize: '0.82rem',
-                          fontWeight: 700,
-                          cursor: discarding ? 'wait' : 'pointer',
-                          fontFamily: 'inherit',
+                          width: '100%', background: 'rgba(239,71,111,0.12)',
+                          border: '1px solid rgba(239,71,111,0.3)', color: '#EF476F',
+                          padding: '10px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700,
+                          cursor: discarding ? 'wait' : 'pointer', fontFamily: 'inherit',
                           opacity: discarding ? 0.5 : 1,
                         }}
                       >
@@ -946,25 +851,17 @@ useEffect(() => {
                     {/* Expanded details */}
                     {isExpanded && (
                       <div style={{ marginTop: 4 }}>
-                        <div style={{
-                          display: 'flex', gap: 16, marginBottom: 10,
-                          fontSize: '0.78rem', color: '#666', flexWrap: 'wrap',
-                        }}>
+                        <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '0.78rem', color: '#666', flexWrap: 'wrap' }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
                           {ch.is_time_based && <span style={{ color: '#FFD166' }}>⏱ Timed challenge</span>}
-                          {ch.phone_free_eligible && <span style={{ color: '#06D6A0' }}>📵 Phone-free eligible</span>}
                         </div>
 
                         {ch.tier2 && (
                           <div style={{
-                            background: 'rgba(155,93,229,0.08)',
-                            border: '1px solid rgba(155,93,229,0.2)',
+                            background: 'rgba(155,93,229,0.08)', border: '1px solid rgba(155,93,229,0.2)',
                             borderRadius: 8, padding: '10px 14px', marginBottom: 10,
                           }}>
-                            <p style={{
-                              fontSize: '0.7rem', color: '#9B5DE5', fontWeight: 700,
-                              textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4,
-                            }}>
+                            <p style={{ fontSize: '0.7rem', color: '#9B5DE5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                               Tier 2 Bonus (+{ch.tier2.bonus_points}pt)
                             </p>
                             <p style={{ color: '#aaa', fontSize: '0.85rem', lineHeight: 1.5 }}>
@@ -978,8 +875,7 @@ useEffect(() => {
                             width: '100%', background: 'rgba(6,214,160,0.08)',
                             border: '1px solid rgba(6,214,160,0.2)',
                             padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#06D6A0',
-                            fontSize: '0.88rem', fontWeight: 600,
+                            textAlign: 'center', color: '#06D6A0', fontSize: '0.88rem', fontWeight: 600,
                           }}>
                             ✅ Challenge Complete — {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
                           </div>
@@ -988,8 +884,7 @@ useEffect(() => {
                             width: '100%', background: 'rgba(255,209,102,0.08)',
                             border: '1px solid rgba(255,209,102,0.2)',
                             padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#FFD166',
-                            fontSize: '0.88rem', fontWeight: 600,
+                            textAlign: 'center', color: '#FFD166', fontSize: '0.88rem', fontWeight: 600,
                             animation: 'pendingPulse 2s ease-in-out infinite',
                           }}>
                             ⏳ Waiting for GM review...
@@ -997,10 +892,8 @@ useEffect(() => {
                         ) : game?.status === 'ended' ? (
                           <div style={{
                             width: '100%', background: 'rgba(255,255,255,0.03)',
-                            border: '1px solid #222',
-                            padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#555',
-                            fontSize: '0.88rem',
+                            border: '1px solid #222', padding: '12px 20px', borderRadius: 8,
+                            textAlign: 'center', color: '#555', fontSize: '0.88rem',
                           }}>
                             🏁 Game Over — submissions closed
                           </div>
@@ -1011,16 +904,11 @@ useEffect(() => {
                               setSubmittingChallenge(index)
                             }}
                             style={{
-                              width: '100%',
-                              background: `${diff.color}20`,
-                              border: `1px solid ${diff.color}40`,
-                              color: diff.color,
-                              padding: '12px 20px',
-                              borderRadius: 8,
-                              fontSize: '0.9rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              fontFamily: 'inherit',
+                              width: '100%', background: `${diff.color}20`,
+                              border: `1px solid ${diff.color}40`, color: diff.color,
+                              padding: '12px 20px', borderRadius: 8,
+                              fontSize: '0.9rem', fontWeight: 700,
+                              cursor: 'pointer', fontFamily: 'inherit',
                             }}
                           >
                             {sub?.status === 'rejected' ? '🔄 Resubmit Proof' : '📸 Submit Proof'}
@@ -1037,9 +925,7 @@ useEffect(() => {
               <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🃏</p>
                 <p>No challenges dealt yet.</p>
-                <p style={{ fontSize: '0.82rem', color: '#333', marginTop: 4 }}>
-                  Waiting for GM to start the game.
-                </p>
+                <p style={{ fontSize: '0.82rem', color: '#333', marginTop: 4 }}>Waiting for GM to start the game.</p>
               </div>
             )}
           </div>
@@ -1066,26 +952,15 @@ useEffect(() => {
             {zoneOwnership.size > 0 && (
               <div style={{
                 position: 'absolute', bottom: 20, left: 12,
-                background: 'rgba(10,10,10,0.85)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid #222',
-                borderRadius: 10,
-                padding: '10px 14px',
-                zIndex: 10,
+                background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(8px)',
+                border: '1px solid #222', borderRadius: 10, padding: '10px 14px', zIndex: 10,
               }}>
-                <p style={{
-                  fontSize: '0.65rem', color: '#666', textTransform: 'uppercase',
-                  letterSpacing: 1, fontWeight: 700, marginBottom: 6,
-                }}>
+                <p style={{ fontSize: '0.65rem', color: '#666', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
                   Zone Control
                 </p>
                 {Array.from(zoneOwnership.entries()).map(([zoneId, owner]) => (
                   <div key={zoneId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: 2,
-                      background: owner.teamColor,
-                      opacity: owner.claimed ? 1 : 0.4,
-                    }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor, opacity: owner.claimed ? 1 : 0.4 }} />
                     <span style={{ fontSize: '0.72rem', color: '#aaa' }}>
                       {zoneId.replace('zone_district_', 'D')} — {owner.teamName}
                       {!owner.claimed && ' (contesting)'}
@@ -1100,62 +975,35 @@ useEffect(() => {
         {/* ==================== CHAT TAB ==================== */}
         {activeTab === 'chat' && (
           <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)' }}>
-            <div style={{
-              flex: 1, overflowY: 'auto', padding: '16px 20px',
-              display: 'flex', flexDirection: 'column', gap: 10,
-            }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {chatMessages.length === 0 ? (
                 <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
                   <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
                   <p style={{ fontWeight: 600, color: '#666' }}>No messages yet</p>
-                  <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>
-                    Message the GM with questions or disputes.
-                  </p>
+                  <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>Message the GM with questions or disputes.</p>
                 </div>
               ) : (
                 chatMessages.map((msg: any) => {
                   const isFromGM = msg.channel_type === 'gm_to_team' || msg.channel_type === 'gm_broadcast'
                   const isBroadcast = msg.channel_type === 'gm_broadcast'
-
                   return (
-                    <div key={msg.id} style={{
-                      display: 'flex', flexDirection: 'column',
-                      alignItems: isFromGM ? 'flex-start' : 'flex-end',
-                    }}>
-                      <p style={{
-                        fontSize: '0.68rem', color: '#444', marginBottom: 3,
-                        paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4,
-                      }}>
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isFromGM ? 'flex-start' : 'flex-end' }}>
+                      <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 3, paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4 }}>
                         {isBroadcast ? '📢 GM → All Teams' : isFromGM ? '🎮 GM' : msg.from_name || 'You'}
                       </p>
                       <div style={{
                         maxWidth: '80%',
-                        background: isBroadcast
-                          ? 'rgba(255,209,102,0.1)'
-                          : isFromGM ? 'rgba(255,255,255,0.05)'
-                          : `${myTeam.color}18`,
-                        border: `1px solid ${
-                          isBroadcast ? 'rgba(255,209,102,0.25)'
-                          : isFromGM ? '#222'
-                          : myTeam.color + '35'
-                        }`,
+                        background: isBroadcast ? 'rgba(255,209,102,0.1)' : isFromGM ? 'rgba(255,255,255,0.05)' : `${myTeam.color}18`,
+                        border: `1px solid ${isBroadcast ? 'rgba(255,209,102,0.25)' : isFromGM ? '#222' : myTeam.color + '35'}`,
                         borderRadius: isFromGM ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
                         padding: '10px 14px',
                       }}>
-                        <p style={{
-                          color: isBroadcast ? '#FFD166' : '#e0e0e0',
-                          fontSize: '0.88rem', lineHeight: 1.55, margin: 0,
-                        }}>
+                        <p style={{ color: isBroadcast ? '#FFD166' : '#e0e0e0', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
                           {msg.text}
                         </p>
                       </div>
-                      <p style={{
-                        fontSize: '0.65rem', color: '#333', marginTop: 3,
-                        paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4,
-                      }}>
-                        {msg.created_at?.toDate
-                          ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
+                      <p style={{ fontSize: '0.65rem', color: '#333', marginTop: 3, paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4 }}>
+                        {msg.created_at?.toDate ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </p>
                     </div>
                   )
@@ -1164,26 +1012,17 @@ useEffect(() => {
               <div ref={chatBottomRef} />
             </div>
 
-            <div style={{
-              padding: '12px 16px 100px', borderTop: '1px solid #1a1a1a',
-              background: '#0d0d0d', display: 'flex', gap: 10, alignItems: 'flex-end',
-            }}>
+            <div style={{ padding: '12px 16px 100px', borderTop: '1px solid #1a1a1a', background: '#0d0d0d', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  }
-                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() } }}
                 placeholder="Message the GM..."
                 rows={1}
                 style={{
                   flex: 1, background: '#141414', border: '1px solid #222',
                   borderRadius: 10, padding: '10px 14px', color: '#fff',
-                  fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none',
-                  outline: 'none', lineHeight: 1.5,
+                  fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none', outline: 'none', lineHeight: 1.5,
                 }}
               />
               <button
@@ -1194,8 +1033,7 @@ useEffect(() => {
                   border: 'none', borderRadius: 10, width: 42, height: 42,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: chatInput.trim() ? 'pointer' : 'default',
-                  fontSize: '1rem', flexShrink: 0,
-                  transition: 'background 0.15s',
+                  fontSize: '1rem', flexShrink: 0, transition: 'background 0.15s',
                   opacity: chatSending ? 0.5 : 1,
                 }}
               >
@@ -1207,11 +1045,7 @@ useEffect(() => {
 
         {/* ==================== HISTORY TAB ==================== */}
         {activeTab === 'history' && (
-          <HistoryTab
-            gameId={gameId!}
-            teamId={myTeam.id}
-            totalPoints={myTeam.total_points}
-          />
+          <HistoryTab gameId={gameId!} teamId={myTeam.id} totalPoints={myTeam.total_points} />
         )}
       </div>
 
@@ -1234,29 +1068,19 @@ useEffect(() => {
           background: 'rgba(10,10,10,0.92)',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          gap: 16, padding: '0 32px',
-          fontFamily: "'DM Sans', sans-serif",
+          gap: 16, padding: '0 32px', fontFamily: "'DM Sans', sans-serif",
         }}>
           <span style={{ fontSize: '2.5rem' }}>🏁</span>
-          <h2 style={{ color: '#FFD166', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>
-            Game Over
-          </h2>
+          <h2 style={{ color: '#FFD166', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
           <p style={{ color: '#888', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
             The GM has ended the game. Time to see how you did!
           </p>
           <button
             onClick={() => navigate('/results/' + gameId)}
             style={{
-              marginTop: 8,
-              background: '#FFD166',
-              border: 'none',
-              borderRadius: 12,
-              color: '#0a0a0a',
-              fontFamily: 'inherit',
-              fontSize: '1rem',
-              fontWeight: 800,
-              padding: '14px 32px',
-              cursor: 'pointer',
+              marginTop: 8, background: '#FFD166', border: 'none', borderRadius: 12,
+              color: '#0a0a0a', fontFamily: 'inherit', fontSize: '1rem', fontWeight: 800,
+              padding: '14px 32px', cursor: 'pointer',
             }}
           >
             View Results →
@@ -1272,12 +1096,12 @@ useEffect(() => {
         padding: '10px 0 24px', zIndex: 100,
       }}>
         {([
-            { id: 'home' as const, icon: '🏠', label: 'Home' },
-            { id: 'hand' as const, icon: '🃏', label: 'Hand' },
-            { id: 'map' as const, icon: '🗺️', label: 'Map' },
-            { id: 'chat' as const, icon: '💬', label: 'Chat' },
-            { id: 'history' as const, icon: '📋', label: 'History' },
-          ]).map((tab) => {
+          { id: 'home' as const, icon: '🏠', label: 'Home' },
+          { id: 'hand' as const, icon: '🃏', label: 'Hand' },
+          { id: 'map' as const, icon: '🗺️', label: 'Map' },
+          { id: 'chat' as const, icon: '💬', label: 'Chat' },
+          { id: 'history' as const, icon: '📋', label: 'History' },
+        ]).map((tab) => {
           const unreadChatCount = chatMessages.filter(
             (m: any) => (m.channel_type === 'gm_to_team' || m.channel_type === 'gm_broadcast') && !m.read_by?.includes(user?.uid)
           ).length
@@ -1302,11 +1126,7 @@ useEffect(() => {
               <span style={{ fontSize: '1.2rem', position: 'relative' }}>
                 {tab.icon}
                 {showDot && (
-                  <span style={{
-                    position: 'absolute', top: -2, right: -6,
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: '#FFD166',
-                  }} />
+                  <span style={{ position: 'absolute', top: -2, right: -6, width: 8, height: 8, borderRadius: '50%', background: '#FFD166' }} />
                 )}
               </span>
               {tab.label}

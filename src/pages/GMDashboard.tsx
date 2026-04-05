@@ -1,7 +1,10 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (v2)
-// Tabs: Submissions | Map & Zones | Chat
-// All logic unchanged — only the layout is restructured.
+// Zone Rush — GM Dashboard (v3)
+// CHANGES:
+// - End-game bonuses renamed to Side Quests
+// - New point values: Most Zones (+5), Most Transit Modes (+4), Most Challenges (+3)
+// - Removed Fastest Return and Hydration bonuses
+// - Most Challenges auto-calculated like Most Zones
 // =============================================================================
 
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -23,6 +26,7 @@ import {
 import {
   getTeamBonusSummaries,
   autoSelectMostZones,
+  autoSelectMostChallenges,
   applyEndGameBonuses,
   type BonusAwards,
   type TeamBonusSummary,
@@ -117,7 +121,6 @@ export default function GMDashboard() {
   const navigate = useNavigate()
   const user = auth.currentUser
 
-  // Core state
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
   const [submissions, setSubmissions] = useState<SubmissionData[]>([])
@@ -126,21 +129,16 @@ export default function GMDashboard() {
   const [loading, setLoading] = useState(true)
   const [allZoneData, setAllZoneData] = useState<any[]>([])
 
-  // Review state
   const [reviewState, setReviewState] = useState<
     Map<string, { tier2Approved: boolean; phoneFreeBonus: number; notes: string }>
   >(new Map())
   const [processing, setProcessing] = useState<string | null>(null)
 
-  // Tab + filter
   const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'chat'>('submissions')
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [showFullMap, setShowFullMap] = useState(false)
-
-  // Timer
   const [timeLeft, setTimeLeft] = useState('')
 
-  // Chat state
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
@@ -149,13 +147,12 @@ export default function GMDashboard() {
   const [broadcasting, setBroadcasting] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
-  // End-game bonus state
+  // Side Quests state
   const [bonusSummaries, setBonusSummaries] = useState<TeamBonusSummary[]>([])
   const [bonusAwards, setBonusAwards] = useState<BonusAwards>({
     mostZones: null,
-    fastestReturn: null,
-    hydration: [],
     mostTransitModes: null,
+    mostChallenges: null,
   })
   const [applyingBonuses, setApplyingBonuses] = useState(false)
   const [bonusesApplied, setBonusesApplied] = useState(false)
@@ -166,22 +163,15 @@ export default function GMDashboard() {
       const snapshot = await getDocs(collection(db, 'zones'))
       const loaded = snapshot.docs.map((d) => {
         const data = d.data()
-        return {
-          ...data,
-          boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary,
-        }
+        return { ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
       })
       setAllZoneData(loaded)
     }
     loadZones()
   }, [])
 
-  const zoneDataMap = useMemo(
-    () => new Map(allZoneData.map((z: any) => [z.id, z])),
-    [allZoneData]
-  )
+  const zoneDataMap = useMemo(() => new Map(allZoneData.map((z: any) => [z.id, z])), [allZoneData])
 
-  // Listeners
   useEffect(() => {
     if (!gameId) return
     const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
@@ -202,11 +192,7 @@ export default function GMDashboard() {
 
   useEffect(() => {
     if (!gameId) return
-    const q = query(
-      collection(db, 'submissions'),
-      where('game_id', '==', gameId),
-      orderBy('submitted_at', 'desc')
-    )
+    const q = query(collection(db, 'submissions'), where('game_id', '==', gameId), orderBy('submitted_at', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       const subs: SubmissionData[] = []
       snap.forEach((d) => subs.push({ id: d.id, ...d.data() } as SubmissionData))
@@ -246,11 +232,7 @@ export default function GMDashboard() {
       const hrs = Math.floor(diff / 3600000)
       const mins = Math.floor((diff % 3600000) / 60000)
       const secs = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(
-        hrs > 0
-          ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-          : `${mins}:${String(secs).padStart(2, '0')}`
-      )
+      setTimeLeft(hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}` : `${mins}:${String(secs).padStart(2, '0')}`)
     }, 1000)
     return () => clearInterval(interval)
   }, [game?.ends_at, game?.status])
@@ -269,13 +251,19 @@ export default function GMDashboard() {
     markMessagesRead(gameId, user.uid, selectedTeamId)
   }, [selectedTeamId, gameId, user?.uid])
 
+  // Auto-calculate Side Quests when game ends
   useEffect(() => {
     if (game?.status !== 'ended' || !gameId) return
     if (game.bonuses_applied) { setBonusesApplied(true); return }
     getTeamBonusSummaries(gameId).then((summaries) => {
       setBonusSummaries(summaries)
-      const autoWinner = autoSelectMostZones(summaries)
-      setBonusAwards((prev) => ({ ...prev, mostZones: autoWinner }))
+      const autoZones = autoSelectMostZones(summaries)
+      const autoChallenges = autoSelectMostChallenges(summaries)
+      setBonusAwards((prev) => ({
+        ...prev,
+        mostZones: autoZones,
+        mostChallenges: autoChallenges,
+      }))
     })
   }, [game?.status, game?.bonuses_applied, gameId])
 
@@ -324,7 +312,6 @@ export default function GMDashboard() {
     finally { setApplyingBonuses(false) }
   }
 
-  // Review helpers
   const getReviewState = (subId: string) =>
     reviewState.get(subId) || { tier2Approved: false, phoneFreeBonus: 0, notes: '' }
 
@@ -346,14 +333,11 @@ export default function GMDashboard() {
     return isPointInPolygon(sub.gps_lat, sub.gps_lng, zone.boundary.coordinates) ? 'inside' : 'outside'
   }
 
-  // Approve
   const handleApprove = async (sub: SubmissionData) => {
     if (!gameId || !game || processing) return
     const closedZones = game.closed_zones ?? []
     if (closedZones.includes(sub.zone_id)) {
-      const confirmed = window.confirm(
-        `⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — approve anyway?`
-      )
+      const confirmed = window.confirm(`⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — approve anyway?`)
       if (!confirmed) return
     }
     setProcessing(sub.id)
@@ -439,73 +423,55 @@ export default function GMDashboard() {
       }
 
       try {
-  const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
-  const teamSnap = await getDoc(teamRef)
-  if (teamSnap.exists()) {
-    const teamData = teamSnap.data() as TeamData
-    const currentHand = teamData.hand || []
+        const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
+        const teamSnap = await getDoc(teamRef)
+        if (teamSnap.exists()) {
+          const teamData = teamSnap.data() as TeamData
+          const currentHand = teamData.hand || []
+          const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
 
-    // Remove the used challenge from the hand
-    const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
+          const teamSubsSnap = await getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId), where('team_id', '==', sub.team_id)))
+          const usedChallengeIds = new Set<string>()
+          teamSubsSnap.forEach((d) => usedChallengeIds.add(d.data().challenge_id))
+          updatedHand.forEach((id: string) => usedChallengeIds.add(id))
 
-    // Build set of challenge IDs already used or in hand (no duplicates)
-    const teamSubsSnap = await getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId), where('team_id', '==', sub.team_id)))
-    const usedChallengeIds = new Set<string>()
-    teamSubsSnap.forEach((d) => usedChallengeIds.add(d.data().challenge_id))
-    updatedHand.forEach((id: string) => usedChallengeIds.add(id))
+          const gameCity = 'nyc'
+          const eligible: string[] = []
+          challenges.forEach((ch, chId) => {
+            if (usedChallengeIds.has(chId) || !ch.points) return
+            const cityTags = (ch as any).city_tags || ['*']
+            if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
+            eligible.push(chId)
+          })
 
-    // Filter eligible replacement cards (city-filtered, not already used/in hand)
-    const gameCity = 'nyc'
-    const eligible: string[] = []
-    challenges.forEach((ch, chId) => {
-      if (usedChallengeIds.has(chId) || !ch.points) return
-      const cityTags = (ch as any).city_tags || ['*']
-      if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
-      eligible.push(chId)
-    })
+          if (eligible.length > 0) {
+            const handMinEasy = game.settings.hand_min_easy ?? 1
+            const handMinHard = game.settings.hand_min_hard ?? 1
+            const handMaxHard = game.settings.hand_max_hard ?? 2
 
-    if (eligible.length > 0) {
-      // --- Composition-aware replacement (best effort) ---
-      // Read rules from game.settings (same values used at deal time)
-      const handMinEasy = game.settings.hand_min_easy ?? 1
-      const handMinHard = game.settings.hand_min_hard ?? 1
-      const handMaxHard = game.settings.hand_max_hard ?? 2
+            const remainingEasy = updatedHand.filter((id: string) => challenges.get(id)?.difficulty === 'easy').length
+            const remainingHard = updatedHand.filter((id: string) => challenges.get(id)?.difficulty === 'hard').length
 
-      // Count what's left in the hand after removing the used card
-      const remainingEasy = updatedHand.filter(
-        (id) => challenges.get(id)?.difficulty === 'easy'
-      ).length
-      const remainingHard = updatedHand.filter(
-        (id) => challenges.get(id)?.difficulty === 'hard'
-      ).length
+            let preferredDiff: 'easy' | 'hard' | 'not_hard' | null = null
+            if (remainingEasy < handMinEasy) preferredDiff = 'easy'
+            else if (remainingHard < handMinHard) preferredDiff = 'hard'
+            else if (remainingHard >= handMaxHard) preferredDiff = 'not_hard'
 
-      // Pick a preferred difficulty based on what the hand is missing
-      // Priority: fix easy shortage first, then hard shortage, then avoid hard overflow
-      let preferredDiff: 'easy' | 'hard' | 'not_hard' | null = null
-      if (remainingEasy < handMinEasy) {
-        preferredDiff = 'easy'
-      } else if (remainingHard < handMinHard) {
-        preferredDiff = 'hard'
-      } else if (remainingHard >= handMaxHard) {
-        preferredDiff = 'not_hard' // hand is at hard cap, avoid adding another
-      }
+            const preferred = eligible.filter((id) => {
+              const diff = challenges.get(id)?.difficulty
+              if (preferredDiff === 'easy') return diff === 'easy'
+              if (preferredDiff === 'hard') return diff === 'hard'
+              if (preferredDiff === 'not_hard') return diff !== 'hard'
+              return true
+            })
 
-      // Filter to preferred difficulty — fall back to full pool if none available
-      const preferred = eligible.filter((id) => {
-        const diff = challenges.get(id)?.difficulty
-        if (preferredDiff === 'easy') return diff === 'easy'
-        if (preferredDiff === 'hard') return diff === 'hard'
-        if (preferredDiff === 'not_hard') return diff !== 'hard'
-        return true
-      })
+            const drawPool = preferred.length > 0 ? preferred : eligible
+            updatedHand.push(drawPool[Math.floor(Math.random() * drawPool.length)])
+          }
 
-      const drawPool = preferred.length > 0 ? preferred : eligible
-      updatedHand.push(drawPool[Math.floor(Math.random() * drawPool.length)])
-    }
-
-    await updateDoc(teamRef, { hand: updatedHand })
-  }
-} catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
+          await updateDoc(teamRef, { hand: updatedHand })
+        }
+      } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
 
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
     } catch (err: any) {
@@ -539,14 +505,10 @@ export default function GMDashboard() {
     await updateDoc(doc(db, 'games', gameId), { status: game.status === 'paused' ? 'active' : 'paused' })
   }
 
-  // Computed values
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId)
   const filteredSubmissions = filter === 'all' ? submissions : submissions.filter((s) => s.status === filter)
   const pendingCount = submissions.filter((s) => s.status === 'pending').length
-
-  const totalUnread = chatMessages.filter(
-    (m) => m.channel_type === 'team_to_gm' && !m.read_by?.includes(user?.uid)
-  ).length
+  const totalUnread = chatMessages.filter((m) => m.channel_type === 'team_to_gm' && !m.read_by?.includes(user?.uid)).length
 
   const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number }>()
   for (const zs of zoneScores) {
@@ -565,10 +527,7 @@ export default function GMDashboard() {
     return m
   }, [zoneScores, teams, game?.settings.claim_threshold])
 
-  const activeZones = useMemo(
-    () => allZoneData.filter((z: any) => game?.zones?.includes(z.id)),
-    [game?.zones, allZoneData]
-  )
+  const activeZones = useMemo(() => allZoneData.filter((z: any) => game?.zones?.includes(z.id)), [game?.zones, allZoneData])
 
   const scoreboard = teams
     .map((t) => {
@@ -582,7 +541,6 @@ export default function GMDashboard() {
     })
     .sort((a, b) => b.total_points - a.total_points)
 
-  // Loading state
   if (loading || !game) {
     return (
       <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#555', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'DM Sans', sans-serif" }}>
@@ -595,14 +553,11 @@ export default function GMDashboard() {
     )
   }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", display: 'flex', flexDirection: 'column' }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
-      {/* ====== TOP BAR ====== */}
+      {/* TOP BAR */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid #1a1a1a', background: '#0d0d0d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
@@ -642,27 +597,12 @@ export default function GMDashboard() {
         </div>
       </div>
 
-      {/* ====== TAB BAR ====== */}
+      {/* TAB BAR */}
       <div style={{ borderBottom: '1px solid #1a1a1a', background: '#0d0d0d', display: 'flex', padding: '0 20px', flexShrink: 0 }}>
         {([
-          {
-            id: 'submissions' as const,
-            label: '📋 Submissions',
-            badge: pendingCount > 0 ? pendingCount : null,
-            badgeColor: '#FFD166',
-          },
-          {
-            id: 'map' as const,
-            label: '🗺️ Map & Zones',
-            badge: null,
-            badgeColor: '',
-          },
-          {
-            id: 'chat' as const,
-            label: '💬 Chat',
-            badge: totalUnread > 0 ? totalUnread : null,
-            badgeColor: '#EF476F',
-          },
+          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: '#FFD166' },
+          { id: 'map' as const, label: '🗺️ Map & Zones', badge: null, badgeColor: '' },
+          { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: '#EF476F' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -673,7 +613,7 @@ export default function GMDashboard() {
               color: activeTab === tab.id ? '#FFD166' : '#555',
               padding: '12px 18px', fontSize: '0.85rem', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', gap: 7, position: 'relative',
+              display: 'flex', alignItems: 'center', gap: 7,
             }}
           >
             {tab.label}
@@ -686,57 +626,111 @@ export default function GMDashboard() {
         ))}
       </div>
 
-      {/* ====== END-GAME BONUS PANEL (shown above all tabs when game ended) ====== */}
+      {/* SIDE QUESTS PANEL (shown when game ended) */}
       {game.status === 'ended' && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a1a', background: bonusesApplied ? 'rgba(6,214,160,0.03)' : 'rgba(255,209,102,0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <p style={{ fontSize: '0.7rem', color: bonusesApplied ? '#06D6A0' : '#FFD166', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
-              {bonusesApplied ? '✅ End-Game Bonuses Applied' : '🏁 Award End-Game Bonuses'}
+              {bonusesApplied ? '✅ Side Quests Applied' : '🏁 Award Side Quest Points'}
             </p>
+
             {bonusesApplied ? (
-              <p style={{ color: '#666', fontSize: '0.82rem' }}>Bonus points have been added to team totals.</p>
+              <p style={{ color: '#666', fontSize: '0.82rem' }}>
+                Side Quest points have been added to team totals. Check results to see final scores.
+              </p>
             ) : (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-                  {([
-                    { key: 'mostZones' as const, label: 'Most Zones', icon: '🗺️' },
-                    { key: 'fastestReturn' as const, label: 'Fastest Return', icon: '🏃' },
-                    { key: 'mostTransitModes' as const, label: 'Most Transit Modes', icon: '🚇' },
-                  ]).map(({ key, label, icon }) => (
-                    <div key={key} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
-                      <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 8 }}>{icon} {label} <span style={{ color: '#FFD166' }}>+1</span></p>
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        <button onClick={() => setBonusAwards((p: BonusAwards) => ({ ...p, [key]: null }))} style={{ ...smallBtnStyle, background: bonusAwards[key] === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards[key] === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards[key] === null ? '#EF476F' : '#555' }}>None</button>
-                        {bonusSummaries.map((s) => (
-                          <button key={s.teamId} onClick={() => setBonusAwards((p: BonusAwards) => ({ ...p, [key]: s.teamId }))} style={{ ...smallBtnStyle, background: bonusAwards[key] === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards[key] === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards[key] === s.teamId ? s.teamColor : '#666' }}>
-                            {s.teamName}{key === 'mostZones' ? ` (${s.zonesClaimedCount})` : ''}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 16 }}>
 
-                  {/* Hydration multi-select */}
+                  {/* Most Zones — auto-calculated */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 8 }}>💧 Hydration <span style={{ color: '#FFD166' }}>+1</span> <span style={{ color: '#555', fontWeight: 400 }}>(multi)</span></p>
+                    <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
+                      🗺️ Most Zones Claimed
+                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+5 pts</span>
+                    </p>
+                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Auto-calculated — confirm below</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      {bonusSummaries.map((s) => {
-                        const selected = bonusAwards.hydration.includes(s.teamId)
-                        return (
-                          <button key={s.teamId} onClick={() => setBonusAwards((p: BonusAwards) => ({ ...p, hydration: selected ? p.hydration.filter(id => id !== s.teamId) : [...p.hydration, s.teamId] }))} style={{ ...smallBtnStyle, background: selected ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${selected ? s.teamColor + '50' : '#222'}`, color: selected ? s.teamColor : '#666' }}>
-                            {selected ? '✓ ' : ''}{s.teamName}
-                          </button>
-                        )
-                      })}
+                      <button
+                        onClick={() => setBonusAwards((p) => ({ ...p, mostZones: null }))}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostZones === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZones === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostZones === null ? '#EF476F' : '#555' }}
+                      >
+                        None
+                      </button>
+                      {bonusSummaries.map((s) => (
+                        <button
+                          key={s.teamId}
+                          onClick={() => setBonusAwards((p) => ({ ...p, mostZones: s.teamId }))}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostZones === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZones === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostZones === s.teamId ? s.teamColor : '#666' }}
+                        >
+                          {s.teamName} ({s.zonesClaimedCount})
+                        </button>
+                      ))}
                     </div>
                   </div>
+
+                  {/* Most Transit Modes — GM selects */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
+                      🚇 Most Transit Modes
+                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+4 pts</span>
+                    </p>
+                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Subway, bus, ferry, bike, etc.</p>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setBonusAwards((p) => ({ ...p, mostTransitModes: null }))}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostTransitModes === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostTransitModes === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostTransitModes === null ? '#EF476F' : '#555' }}
+                      >
+                        None
+                      </button>
+                      {bonusSummaries.map((s) => (
+                        <button
+                          key={s.teamId}
+                          onClick={() => setBonusAwards((p) => ({ ...p, mostTransitModes: s.teamId }))}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostTransitModes === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostTransitModes === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostTransitModes === s.teamId ? s.teamColor : '#666' }}
+                        >
+                          {s.teamName}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Most Challenges — auto-calculated */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
+                      🏆 Most Challenges Completed
+                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+3 pts</span>
+                    </p>
+                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Auto-calculated — confirm below</p>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setBonusAwards((p) => ({ ...p, mostChallenges: null }))}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostChallenges === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostChallenges === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostChallenges === null ? '#EF476F' : '#555' }}
+                      >
+                        None
+                      </button>
+                      {bonusSummaries.map((s) => (
+                        <button
+                          key={s.teamId}
+                          onClick={() => setBonusAwards((p) => ({ ...p, mostChallenges: s.teamId }))}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostChallenges === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostChallenges === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostChallenges === s.teamId ? s.teamColor : '#666' }}
+                        >
+                          {s.teamName} ({s.challengesCompletedCount})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <button onClick={handleApplyBonuses} disabled={applyingBonuses} style={{ background: applyingBonuses ? '#1a1a1a' : 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)', color: applyingBonuses ? '#444' : '#FFD166', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: applyingBonuses ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                    {applyingBonuses ? 'Applying...' : 'Apply Bonus Points'}
+                  <button
+                    onClick={handleApplyBonuses}
+                    disabled={applyingBonuses}
+                    style={{ background: applyingBonuses ? '#1a1a1a' : 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)', color: applyingBonuses ? '#444' : '#FFD166', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: applyingBonuses ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {applyingBonuses ? 'Applying...' : 'Apply Side Quest Points'}
                   </button>
-                  <p style={{ fontSize: '0.72rem', color: '#555' }}>One-time. Bonuses are permanent.</p>
+                  <p style={{ fontSize: '0.72rem', color: '#555' }}>One-time. Points are permanent.</p>
                 </div>
               </div>
             )}
@@ -744,13 +738,12 @@ export default function GMDashboard() {
         </div>
       )}
 
-      {/* ====== TAB CONTENT ====== */}
+      {/* TAB CONTENT */}
       <div style={{ flex: 1, overflow: 'auto' }}>
 
-        {/* ============ SUBMISSIONS TAB ============ */}
+        {/* SUBMISSIONS TAB */}
         {activeTab === 'submissions' && (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
-            {/* Filter pills */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {([
                 { id: 'pending', label: `Pending (${pendingCount})`, color: '#FFD166' },
@@ -783,7 +776,6 @@ export default function GMDashboard() {
 
                   return (
                     <div key={sub.id} style={{ background: sub.status === 'pending' ? 'rgba(255,209,102,0.02)' : 'rgba(255,255,255,0.02)', border: `1px solid ${sub.status === 'pending' ? 'rgba(255,209,102,0.15)' : '#1a1a1a'}`, borderRadius: 14, padding: 20, opacity: isProcessing ? 0.6 : 1, transition: 'opacity 0.2s' }}>
-                      {/* Team + difficulty */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 10, height: 10, borderRadius: 3, background: team?.color || '#555' }} />
@@ -799,12 +791,10 @@ export default function GMDashboard() {
                         )}
                       </div>
 
-                      {/* Challenge description */}
                       <p style={{ color: '#ccc', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14, background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid #111' }}>
                         {challenge?.description || `Challenge: ${sub.challenge_id}`}
                       </p>
 
-                      {/* Media */}
                       <div style={{ marginBottom: 14 }}>
                         {sub.media_type === 'video' ? (
                           <video src={sub.media_url} controls style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: '#111', objectFit: 'contain' }} />
@@ -818,33 +808,22 @@ export default function GMDashboard() {
                         )}
                       </div>
 
-                      {/* Metadata */}
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: '#555', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
                         {sub.zone_id && <span>📍 {sub.zone_id.replace('zone_district_', 'D')}</span>}
-                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && (
-                          <span style={{ color: '#FFD166' }}>
-                            ⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}
-                          </span>
-                        )}
-                        {!sub.zone_id && !sub.gps_lat && (
-                          <span style={{ color: '#EF476F' }}>⚠ No zone · No GPS</span>
-                        )}
+                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: '#FFD166' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
+                        {!sub.zone_id && !sub.gps_lat && <span style={{ color: '#EF476F' }}>⚠ No zone · No GPS</span>}
                         {sub.submitted_at && <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>}
                         {gpsCheck === 'inside' && <span style={{ color: '#06D6A0', fontWeight: 600 }}>✓ GPS in zone</span>}
                         {gpsCheck === 'outside' && <span style={{ color: '#EF476F', fontWeight: 700 }}>⚠ GPS OUTSIDE zone</span>}
                       </div>
 
-                      {/* GPS warning */}
                       {gpsCheck === 'outside' && sub.status === 'pending' && (
                         <div style={{ background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.2)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span>🚩</span>
-                          <p style={{ color: '#EF476F', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>
-                            GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}
-                          </p>
+                          <p style={{ color: '#EF476F', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}</p>
                         </div>
                       )}
 
-                      {/* Review controls */}
                       {sub.status === 'pending' && (
                         <div>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -853,25 +832,14 @@ export default function GMDashboard() {
                                 {review.tier2Approved ? '✓' : '○'} Tier 2 (+{challenge.tier2.bonus_points}pt)
                               </button>
                             )}
-                            {sub.phone_free_claimed && (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                {[{ value: 0, label: 'No bonus' }, { value: 1, label: '+1 📵' }, { value: 2, label: '+2 🤫' }].map((opt) => (
-                                  <button key={opt.value} onClick={() => updateReviewState(sub.id, { phoneFreeBonus: opt.value })} style={{ background: review.phoneFreeBonus === opt.value ? 'rgba(6,214,160,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${review.phoneFreeBonus === opt.value ? 'rgba(6,214,160,0.3)' : '#222'}`, color: review.phoneFreeBonus === opt.value ? '#06D6A0' : '#666', padding: '7px 10px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    {opt.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
                           </div>
 
-                          {/* Points preview */}
                           {(() => {
                             const tierPts = sub.attempted_tier2 && review.tier2Approved && challenge?.tier2 ? challenge.tier2.bonus_points : 0
-                            const pfPts = sub.phone_free_claimed ? review.phoneFreeBonus : 0
-                            const total = basePts + tierPts + pfPts
+                            const total = basePts + tierPts
                             return (
                               <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#888' }}>{basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}{pfPts > 0 && ` + ${pfPts}pt phone-free`}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#888' }}>{basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}</span>
                                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1rem', fontWeight: 700, color: '#FFD166' }}>= {total}pt</span>
                               </div>
                             )
@@ -899,10 +867,9 @@ export default function GMDashboard() {
           </div>
         )}
 
-        {/* ============ MAP & ZONES TAB ============ */}
+        {/* MAP & ZONES TAB */}
         {activeTab === 'map' && (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
-            {/* Scoreboard */}
             <p style={sectionLabel}>Scoreboard</p>
             <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
               {scoreboard.map((team, rank) => (
@@ -927,7 +894,6 @@ export default function GMDashboard() {
               ))}
             </div>
 
-            {/* Zone Control */}
             <p style={sectionLabel}>Zone Control</p>
             <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
               {game.zones.map((zoneId) => {
@@ -957,7 +923,6 @@ export default function GMDashboard() {
               })}
             </div>
 
-            {/* Live Map */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <p style={{ ...sectionLabel, margin: 0 }}>Live Map</p>
               <button onClick={() => setShowFullMap(true)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888', padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>⛶ Expand</button>
@@ -970,10 +935,9 @@ export default function GMDashboard() {
           </div>
         )}
 
-        {/* ============ CHAT TAB ============ */}
+        {/* CHAT TAB */}
         {activeTab === 'chat' && (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
-            {/* Broadcast */}
             <p style={sectionLabel}>Broadcast to All Teams</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
               <input type="text" value={broadcastInput} onChange={(e) => setBroadcastInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }} placeholder="📢 Message all teams at once..." style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', borderRadius: 10, padding: '12px 14px', color: '#fff', fontSize: '0.88rem', fontFamily: 'inherit', outline: 'none' }} />
@@ -982,7 +946,6 @@ export default function GMDashboard() {
               </button>
             </div>
 
-            {/* Team threads */}
             <p style={sectionLabel}>Team Messages</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {teams.map((t) => {
@@ -1044,10 +1007,6 @@ export default function GMDashboard() {
     </div>
   )
 }
-
-// ============================================================
-// Shared style helpers
-// ============================================================
 
 const sectionLabel: React.CSSProperties = {
   fontSize: '0.72rem',

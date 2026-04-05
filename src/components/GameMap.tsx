@@ -3,11 +3,12 @@
 // Mapbox map with zone polygons, ownership coloring, and compact mode
 //
 // CHANGES:
-// - UPDATED: ZoneOwner now includes `points` and `claimed` fields
-// - NEW: Gradient fill logic — zones show faint team color at midpoint,
-//        solid team color when claimed. Midpoint = half of claim_threshold.
-// - NEW: GM-closed zones show a gray hatched overlay with a lock indicator
-// - NEW: `claimThreshold` prop so gradient breakpoint matches game settings
+// - Unclaimed zones are fully transparent (no fill) — only border shows
+// - Light team color at 50% of claim_threshold
+// - Heavy shade + lock emoji when claimed
+// - Blacked out when GM-closed with no team owner
+// - Subway stations layer added
+// - Geolocate button styled larger and more visible
 // =============================================================================
 
 import { useEffect, useRef } from 'react'
@@ -33,19 +34,15 @@ interface Zone {
 export interface ZoneOwner {
   teamColor: string
   teamName: string
-  points: number      // total points this team has in this zone
-  claimed: boolean    // true when points >= claim_threshold
+  points: number
+  claimed: boolean
 }
 
 interface GameMapProps {
   zones: Zone[]
-  /** Map of zoneId → ZoneOwner. Leading team per zone. */
   zoneOwnership?: Map<string, ZoneOwner>
-  /** IDs of zones that the GM has closed — no more scoring allowed */
   closedZones?: string[]
-  /** Claim threshold from game.settings — used to compute gradient midpoint */
   claimThreshold?: number
-  /** Compact mode for the GM dashboard mini map — smaller, non-interactive */
   compact?: boolean
 }
 
@@ -53,16 +50,12 @@ interface GameMapProps {
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
-/** Default zone colors when no team has points in a zone */
 const ZONE_COLORS: Record<string, string> = {
   zone_district_33: '#06D6A0',
   zone_district_34: '#FFD166',
   zone_district_35: '#118AB2',
   zone_district_36: '#EF476F',
 }
-
-// Gray used for GM-closed zones
-const CLOSED_COLOR = '#555555'
 
 // --------------- Component ---------------
 
@@ -85,8 +78,7 @@ export default function GameMap({
   ) => {
     if (!map.current || !mapLoaded.current) return
 
-    // Midpoint: zone starts showing team color above this points value.
-    // E.g. claim_threshold=6 → midpoint=3. Always at least 1.
+    // Midpoint: zone starts showing team color above this points value
     const midpoint = Math.max(1, Math.floor(threshold / 2))
 
     zones.forEach((zone) => {
@@ -99,44 +91,58 @@ export default function GameMap({
       let borderColor: string
       let borderWidth: number
       let labelColor: string
+      let labelText: string = zone.name
 
-      if (isClosed) {
-        // GM-closed zone: gray out, regardless of ownership
-        fillColor = CLOSED_COLOR
-        fillOpacity = 0.25
-        borderColor = CLOSED_COLOR
+      if (isClosed && !owner) {
+        // GM-closed with no owner → black out completely
+        fillColor = '#000000'
+        fillOpacity = 0.75
+        borderColor = '#444444'
         borderWidth = 2
-        labelColor = CLOSED_COLOR
+        labelColor = '#333333'
+        labelText = zone.name
+      } else if (isClosed && owner) {
+        // GM-closed but a team owns it — keep their color, slightly muted
+        fillColor = owner.teamColor
+        fillOpacity = 0.35
+        borderColor = owner.teamColor
+        borderWidth = 2
+        labelColor = owner.teamColor
+        labelText = `🔒 ${zone.name}`
       } else if (owner) {
         if (owner.claimed) {
-          // Fully claimed: solid team color
+          // Fully claimed: solid team color + lock emoji
           fillColor = owner.teamColor
-          fillOpacity = 0.5
+          fillOpacity = 0.45
           borderColor = owner.teamColor
           borderWidth = 3
           labelColor = owner.teamColor
+          labelText = `🔒 ${zone.name}`
         } else if (owner.points >= midpoint) {
-          // Past midpoint but not yet claimed: faint team color (35% opacity)
+          // Past midpoint: light team color tint
           fillColor = owner.teamColor
-          fillOpacity = 0.2
+          fillOpacity = 0.18
           borderColor = owner.teamColor
           borderWidth = 2
           labelColor = owner.teamColor
+          labelText = zone.name
         } else {
-          // Team has some points but below midpoint: barely visible hint
+          // Below midpoint: barely visible hint
           fillColor = owner.teamColor
-          fillOpacity = 0.08
-          borderColor = defaultColor
-          borderWidth = 2
+          fillOpacity = 0.06
+          borderColor = owner.teamColor
+          borderWidth = 1.5
           labelColor = defaultColor
+          labelText = zone.name
         }
       } else {
-        // No team has points here: default zone color
+        // No team has any points — fully transparent fill, just show border
         fillColor = defaultColor
-        fillOpacity = 0.12
+        fillOpacity = 0
         borderColor = defaultColor
-        borderWidth = 2
+        borderWidth = 1.5
         labelColor = defaultColor
+        labelText = zone.name
       }
 
       try {
@@ -145,8 +151,8 @@ export default function GameMap({
         map.current!.setPaintProperty(`zone-border-${zone.id}`, 'line-color', borderColor)
         map.current!.setPaintProperty(`zone-border-${zone.id}`, 'line-width', borderWidth)
         map.current!.setPaintProperty(`zone-label-${zone.id}`, 'text-color', labelColor)
+        map.current!.setLayoutProperty(`zone-label-${zone.id}`, 'text-field', labelText)
 
-        // Show/hide the closed overlay layer
         if (map.current!.getLayer(`zone-closed-${zone.id}`)) {
           map.current!.setLayoutProperty(
             `zone-closed-${zone.id}`,
@@ -190,14 +196,14 @@ export default function GameMap({
           },
         })
 
-        // Fill layer
+        // Fill layer — transparent by default
         map.current!.addLayer({
           id: `zone-fill-${zone.id}`,
           type: 'fill',
           source: `zone-${zone.id}`,
           paint: {
             'fill-color': color,
-            'fill-opacity': 0.12,
+            'fill-opacity': 0,
           },
         })
 
@@ -208,12 +214,11 @@ export default function GameMap({
           source: `zone-${zone.id}`,
           paint: {
             'line-color': color,
-            'line-width': 2,
+            'line-width': 1.5,
           },
         })
 
-        // GM-closed overlay: dashed gray border to signal "no more scoring"
-        // Hidden by default, shown via setLayoutProperty when closed
+        // GM-closed overlay: dashed gray border
         map.current!.addLayer({
           id: `zone-closed-${zone.id}`,
           type: 'line',
@@ -245,7 +250,7 @@ export default function GameMap({
           type: 'symbol',
           source: `label-${zone.id}`,
           layout: {
-            'text-field': ['get', 'name'],
+            'text-field': zone.name,
             'text-size': compact ? 11 : 14,
             'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
           },
@@ -257,15 +262,58 @@ export default function GameMap({
         })
       })
 
+      // Subway stations — from Mapbox Streets composite source
+      try {
+        map.current!.addLayer({
+          id: 'subway-stations',
+          type: 'circle',
+          source: 'composite',
+          'source-layer': 'transit_stop',
+          paint: {
+            'circle-radius': 4,
+            'circle-color': '#b0b0b0',
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#111111',
+            'circle-opacity': 0.85,
+          },
+        })
+      } catch {
+        // Transit layer unavailable in this style — not a blocker
+      }
+
       // Geolocate control — player map only
       if (!compact) {
-        map.current!.addControl(
-          new mapboxgl.GeolocateControl({
-            positionOptions: { enableHighAccuracy: true },
-            trackUserLocation: true,
-            showUserHeading: true,
-          })
-        )
+        const geolocate = new mapboxgl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+        })
+        map.current!.addControl(geolocate)
+
+        // Make the locate button more visible
+        if (!document.getElementById('zr-geolocate-style')) {
+          const style = document.createElement('style')
+          style.id = 'zr-geolocate-style'
+          style.textContent = `
+            .mapboxgl-ctrl-geolocate {
+              width: 44px !important;
+              height: 44px !important;
+              background: rgba(20,20,20,0.92) !important;
+              border: 1.5px solid #FFD166 !important;
+              border-radius: 10px !important;
+            }
+            .mapboxgl-ctrl-geolocate .mapboxgl-ctrl-icon {
+              width: 44px !important;
+              height: 44px !important;
+              filter: invert(1) brightness(1.5) sepia(1) hue-rotate(10deg) saturate(5) !important;
+            }
+            .mapboxgl-ctrl-group {
+              background: transparent !important;
+              box-shadow: none !important;
+            }
+          `
+          document.head.appendChild(style)
+        }
       }
 
       // Apply initial state

@@ -573,7 +573,7 @@ export default function ResultsPage() {
               textTransform: 'uppercase', letterSpacing: 1.5,
               fontWeight: 700, marginBottom: 14,
             }}>
-              End-Game Bonuses
+              Side Quests
             </p>
             <div style={{
               background: 'rgba(255,209,102,0.04)',
@@ -607,7 +607,7 @@ export default function ResultsPage() {
                 )
               })}
               <p style={{ fontSize: '0.72rem', color: '#444', marginTop: 4 }}>
-                Bonuses include: most zones · fastest return · hydration · transit modes
+                Bonuses include: Most zones claimed (+5) · Most transit modes (+4) · Most challenges completed (+3)
               </p>
             </div>
           </div>
