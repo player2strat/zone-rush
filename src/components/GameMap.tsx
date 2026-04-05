@@ -169,7 +169,7 @@ export default function GameMap({
         borderColor = owner.teamColor
         borderWidth = 2
         labelColor = owner.teamColor
-        labelText = `${zone.name}\nCLAIMED`
+        labelText = `${zone.name}\nCLOSED`
       } else if (owner) {
         if (owner.claimed) {
           // Fully claimed → solid heavy fill + ★ label
@@ -179,7 +179,7 @@ export default function GameMap({
           borderColor = owner.teamColor
           borderWidth = 4
           labelColor = owner.teamColor
-          labelText = `★ ${zone.name}`
+          labelText = `★ ${zone.name}\nCLAIMED`
         } else if (owner.points >= midpoint) {
           // Past midpoint but not claimed → dashed border, light fill
           // The dashed border makes this clearly "in progress" vs claimed
