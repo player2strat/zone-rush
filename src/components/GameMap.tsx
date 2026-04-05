@@ -1,14 +1,12 @@
 // =============================================================================
 // Zone Rush — Game Map
-// Mapbox map with zone polygons, ownership coloring, and compact mode
 //
 // CHANGES:
-// - Unclaimed zones are fully transparent (no fill) — only border shows
-// - Light team color at 50% of claim_threshold
-// - Heavy shade + lock emoji when claimed
-// - Blacked out when GM-closed with no team owner
-// - Subway stations layer added
-// - Geolocate button styled larger and more visible
+// - Zone coloring: dashed border for "in progress" zones (visually distinct
+//   from claimed). Claimed = solid heavy fill + thick border + ★ label.
+// - Removed emoji from labels (unreliable in Mapbox fonts) — uses ★ instead
+// - Subway stations: full NYC file (Manhattan + Brooklyn), MTA colors
+// - Geolocate button: works across both Safari and Chrome on mobile
 // =============================================================================
 
 import { useEffect, useRef } from 'react'
@@ -57,6 +55,69 @@ const ZONE_COLORS: Record<string, string> = {
   zone_district_36: '#EF476F',
 }
 
+// Official MTA line colors
+const MTA_LINE_COLORS: Record<string, string> = {
+  A: '#0039A6', C: '#0039A6', E: '#0039A6',
+  B: '#FF6319', D: '#FF6319', F: '#FF6319', M: '#FF6319',
+  G: '#6CBE45',
+  J: '#996633', Z: '#996633',
+  L: '#A7A9AC',
+  N: '#FCCC0A', Q: '#FCCC0A', R: '#FCCC0A', W: '#FCCC0A',
+  '1': '#EE352E', '2': '#EE352E', '3': '#EE352E',
+  '4': '#00933C', '5': '#00933C', '6': '#00933C',
+  '7': '#B933AD',
+  S: '#808183',
+}
+
+// Yellow lines need dark text
+const MTA_LABEL_COLOR: Record<string, string> = {
+  N: '#000000', Q: '#000000', R: '#000000', W: '#000000',
+}
+
+// --------------- Helpers ---------------
+
+function parseLineField(raw: string): {
+  label: string
+  color: string
+  textColor: string
+} {
+  const parts = raw
+    .split('-')
+    .map((p) => p.trim().replace(/\s+(Express|Shuttle|Local|Ltd\.?)$/i, '').trim())
+    .filter((p) => p.length > 0)
+
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const p of parts) {
+    if (!seen.has(p)) { seen.add(p); unique.push(p) }
+  }
+
+  const firstLine = unique[0] ?? 'S'
+  const label = unique.join(' ')
+  const color = MTA_LINE_COLORS[firstLine] ?? '#888888'
+  const textColor = MTA_LABEL_COLOR[firstLine] ?? '#ffffff'
+  return { label, color, textColor }
+}
+
+async function loadSubwayStations(): Promise<GeoJSON.FeatureCollection | null> {
+  try {
+    const res = await fetch('/subway-stations.json')
+    if (!res.ok) return null
+    const raw = await res.json() as GeoJSON.FeatureCollection
+    const features = raw.features.map((feature) => {
+      const lineRaw: string = (feature.properties as any)?.LINE ?? 'S'
+      const { label, color, textColor } = parseLineField(lineRaw)
+      return {
+        ...feature,
+        properties: { ...(feature.properties as any), label, circle_color: color, text_color: textColor },
+      }
+    })
+    return { ...raw, features }
+  } catch {
+    return null
+  }
+}
+
 // --------------- Component ---------------
 
 export default function GameMap({
@@ -70,7 +131,7 @@ export default function GameMap({
   const map = useRef<mapboxgl.Map | null>(null)
   const mapLoaded = useRef(false)
 
-  // ---- Apply ownership + closure colors to map layers ----
+  // ---- Apply ownership + closure colors ----
   const applyOwnership = (
     ownership: Map<string, ZoneOwner> | undefined,
     closed: string[],
@@ -78,7 +139,6 @@ export default function GameMap({
   ) => {
     if (!map.current || !mapLoaded.current) return
 
-    // Midpoint: zone starts showing team color above this points value
     const midpoint = Math.max(1, Math.floor(threshold / 2))
 
     zones.forEach((zone) => {
@@ -92,57 +152,59 @@ export default function GameMap({
       let borderWidth: number
       let labelColor: string
       let labelText: string = zone.name
+      // dashed border for "in progress" zones — clearly different from claimed
+      let borderDash: number[] | null = null
 
       if (isClosed && !owner) {
-        // GM-closed with no owner → black out completely
+        // Closed, unclaimed → black out
         fillColor = '#000000'
         fillOpacity = 0.75
         borderColor = '#444444'
         borderWidth = 2
         labelColor = '#333333'
-        labelText = zone.name
       } else if (isClosed && owner) {
-        // GM-closed but a team owns it — keep their color, slightly muted
+        // Closed but owned → muted team color
         fillColor = owner.teamColor
         fillOpacity = 0.35
         borderColor = owner.teamColor
         borderWidth = 2
         labelColor = owner.teamColor
-        labelText = `🔒 ${zone.name}`
+        labelText = `${zone.name}\nCLAIMED`
       } else if (owner) {
         if (owner.claimed) {
-          // Fully claimed: solid team color + lock emoji
+          // Fully claimed → solid heavy fill + ★ label
+          // ★ is a standard Unicode char Mapbox renders reliably
           fillColor = owner.teamColor
-          fillOpacity = 0.45
+          fillOpacity = 0.50
           borderColor = owner.teamColor
-          borderWidth = 3
+          borderWidth = 4
           labelColor = owner.teamColor
-          labelText = `🔒 ${zone.name}`
+          labelText = `★ ${zone.name}`
         } else if (owner.points >= midpoint) {
-          // Past midpoint: light team color tint
+          // Past midpoint but not claimed → dashed border, light fill
+          // The dashed border makes this clearly "in progress" vs claimed
           fillColor = owner.teamColor
-          fillOpacity = 0.18
+          fillOpacity = 0.10
           borderColor = owner.teamColor
-          borderWidth = 2
+          borderWidth = 2.5
+          borderDash = [4, 3]
           labelColor = owner.teamColor
-          labelText = zone.name
         } else {
-          // Below midpoint: barely visible hint
+          // Has some points, below midpoint → barely visible tint
           fillColor = owner.teamColor
-          fillOpacity = 0.06
+          fillOpacity = 0.04
           borderColor = owner.teamColor
           borderWidth = 1.5
+          borderDash = [2, 4]
           labelColor = defaultColor
-          labelText = zone.name
         }
       } else {
-        // No team has any points — fully transparent fill, just show border
+        // No points — transparent, just show the zone outline
         fillColor = defaultColor
         fillOpacity = 0
         borderColor = defaultColor
         borderWidth = 1.5
         labelColor = defaultColor
-        labelText = zone.name
       }
 
       try {
@@ -150,6 +212,9 @@ export default function GameMap({
         map.current!.setPaintProperty(`zone-fill-${zone.id}`, 'fill-opacity', fillOpacity)
         map.current!.setPaintProperty(`zone-border-${zone.id}`, 'line-color', borderColor)
         map.current!.setPaintProperty(`zone-border-${zone.id}`, 'line-width', borderWidth)
+        map.current!.setPaintProperty(`zone-border-${zone.id}`, 'line-dasharray',
+          borderDash ?? [1, 0] // [1,0] = solid
+        )
         map.current!.setPaintProperty(`zone-label-${zone.id}`, 'text-color', labelColor)
         map.current!.setLayoutProperty(`zone-label-${zone.id}`, 'text-field', labelText)
 
@@ -161,7 +226,7 @@ export default function GameMap({
           )
         }
       } catch {
-        // Layers may not exist yet during initial load
+        // Layers not yet added — safe to ignore during init
       }
     })
   }
@@ -179,14 +244,14 @@ export default function GameMap({
       attributionControl: !compact,
     })
 
-    map.current.on('load', () => {
+    map.current.on('load', async () => {
       if (!map.current) return
       mapLoaded.current = true
 
+      // ---- Zone layers ----
       zones.forEach((zone) => {
         const color = ZONE_COLORS[zone.id] || '#ffffff'
 
-        // Zone polygon source
         map.current!.addSource(`zone-${zone.id}`, {
           type: 'geojson',
           data: {
@@ -196,18 +261,15 @@ export default function GameMap({
           },
         })
 
-        // Fill layer — transparent by default
+        // Fill — transparent by default
         map.current!.addLayer({
           id: `zone-fill-${zone.id}`,
           type: 'fill',
           source: `zone-${zone.id}`,
-          paint: {
-            'fill-color': color,
-            'fill-opacity': 0,
-          },
+          paint: { 'fill-color': color, 'fill-opacity': 0 },
         })
 
-        // Border layer
+        // Border — solid by default, dasharray updated dynamically
         map.current!.addLayer({
           id: `zone-border-${zone.id}`,
           type: 'line',
@@ -215,36 +277,29 @@ export default function GameMap({
           paint: {
             'line-color': color,
             'line-width': 1.5,
+            'line-dasharray': [1, 0],
           },
         })
 
-        // GM-closed overlay: dashed gray border
+        // GM-closed overlay (thick dashed gray)
         map.current!.addLayer({
           id: `zone-closed-${zone.id}`,
           type: 'line',
           source: `zone-${zone.id}`,
           layout: { visibility: 'none' },
-          paint: {
-            'line-color': '#888888',
-            'line-width': 4,
-            'line-dasharray': [3, 3],
-          },
+          paint: { 'line-color': '#888888', 'line-width': 4, 'line-dasharray': [3, 3] },
         })
 
-        // Zone label source (point at center)
+        // Zone label
         map.current!.addSource(`label-${zone.id}`, {
           type: 'geojson',
           data: {
             type: 'Feature',
             properties: { name: zone.name },
-            geometry: {
-              type: 'Point',
-              coordinates: [zone.center_lng, zone.center_lat],
-            },
+            geometry: { type: 'Point', coordinates: [zone.center_lng, zone.center_lat] },
           },
         })
 
-        // Label layer
         map.current!.addLayer({
           id: `zone-label-${zone.id}`,
           type: 'symbol',
@@ -253,6 +308,7 @@ export default function GameMap({
             'text-field': zone.name,
             'text-size': compact ? 11 : 14,
             'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+            'text-max-width': 8,
           },
           paint: {
             'text-color': color,
@@ -262,26 +318,59 @@ export default function GameMap({
         })
       })
 
-      // Subway stations — from Mapbox Streets composite source
-      try {
-        map.current!.addLayer({
-          id: 'subway-stations',
+      // ---- MTA Subway Stations ----
+      const stationData = await loadSubwayStations()
+      if (stationData && map.current) {
+        map.current.addSource('subway-stations', {
+          type: 'geojson',
+          data: stationData,
+        })
+
+        // Colored dot per station
+        map.current.addLayer({
+          id: 'subway-station-circles',
           type: 'circle',
-          source: 'composite',
-          'source-layer': 'transit_stop',
+          source: 'subway-stations',
+          minzoom: 11,
           paint: {
-            'circle-radius': 4,
-            'circle-color': '#b0b0b0',
-            'circle-stroke-width': 1.5,
-            'circle-stroke-color': '#111111',
-            'circle-opacity': 0.85,
+            'circle-color': ['get', 'circle_color'],
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              11, 4, 13, 6, 15, 8,
+            ],
+            'circle-stroke-width': [
+              'interpolate', ['linear'], ['zoom'],
+              11, 1, 13, 1.5,
+            ],
+            'circle-stroke-color': '#0a0a0a',
+            'circle-opacity': 0.95,
           },
         })
-      } catch {
-        // Transit layer unavailable in this style — not a blocker
+
+        // Line letter label — zoom 13+ only
+        map.current.addLayer({
+          id: 'subway-station-labels',
+          type: 'symbol',
+          source: 'subway-stations',
+          minzoom: 13,
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': [
+              'interpolate', ['linear'], ['zoom'],
+              13, 7, 15, 10,
+            ],
+            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+            'text-allow-overlap': false,
+            'text-anchor': 'center',
+          },
+          paint: {
+            'text-color': ['get', 'text_color'],
+            'text-halo-width': 0,
+          },
+        })
       }
 
-      // Geolocate control — player map only
+      // ---- Geolocate control ----
       if (!compact) {
         const geolocate = new mapboxgl.GeolocateControl({
           positionOptions: { enableHighAccuracy: true },
@@ -290,33 +379,54 @@ export default function GameMap({
         })
         map.current!.addControl(geolocate)
 
-        // Make the locate button more visible
+        // Inject CSS once — targets both Safari and Chrome on mobile.
+        // Safari on iOS renders .mapboxgl-ctrl-geolocate as a button inside
+        // .mapboxgl-ctrl-group. Chrome wraps it the same way.
+        // We override both the container and the SVG icon inside.
         if (!document.getElementById('zr-geolocate-style')) {
           const style = document.createElement('style')
           style.id = 'zr-geolocate-style'
           style.textContent = `
-            .mapboxgl-ctrl-geolocate {
-              width: 44px !important;
-              height: 44px !important;
-              background: rgba(20,20,20,0.92) !important;
-              border: 1.5px solid #FFD166 !important;
-              border-radius: 10px !important;
-            }
-            .mapboxgl-ctrl-geolocate .mapboxgl-ctrl-icon {
-              width: 44px !important;
-              height: 44px !important;
-              filter: invert(1) brightness(1.5) sepia(1) hue-rotate(10deg) saturate(5) !important;
+            /* Works in both Safari and Chrome on mobile */
+            .mapboxgl-ctrl-top-right {
+              top: 10px !important;
+              right: 10px !important;
             }
             .mapboxgl-ctrl-group {
               background: transparent !important;
               box-shadow: none !important;
+              border: none !important;
+            }
+            .mapboxgl-ctrl-geolocate {
+              width: 48px !important;
+              height: 48px !important;
+              background: rgba(15,15,15,0.92) !important;
+              border: 2px solid #FFD166 !important;
+              border-radius: 12px !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+            }
+            /* Safari uses background-image on the span; Chrome uses SVG */
+            .mapboxgl-ctrl-geolocate .mapboxgl-ctrl-icon {
+              width: 26px !important;
+              height: 26px !important;
+              background-size: 26px 26px !important;
+              filter: brightness(0) saturate(100%) invert(85%) sepia(80%)
+                      saturate(400%) hue-rotate(5deg) brightness(105%) !important;
+            }
+            /* Active/tracking state — pulse yellow */
+            .mapboxgl-ctrl-geolocate-active .mapboxgl-ctrl-icon,
+            .mapboxgl-ctrl-geolocate-background .mapboxgl-ctrl-icon {
+              filter: brightness(0) saturate(100%) invert(85%) sepia(80%)
+                      saturate(600%) hue-rotate(5deg) brightness(110%) !important;
             }
           `
           document.head.appendChild(style)
         }
       }
 
-      // Apply initial state
       applyOwnership(zoneOwnership, closedZones, claimThreshold)
     })
 
@@ -332,7 +442,6 @@ export default function GameMap({
     applyOwnership(zoneOwnership, closedZones, claimThreshold)
   }, [zoneOwnership, closedZones, claimThreshold])
 
-  // ---- Render ----
   return (
     <div
       ref={mapContainer}
