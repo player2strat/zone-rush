@@ -51,8 +51,9 @@ interface GameData {
     zone_bonus_points: number
     [key: string]: any
   }
-  closed_zones?: string[]
-  bonuses_applied?: boolean
+    closed_zones?: string[]
+    bonuses_applied?: boolean
+    milestone_broadcasts_sent?: string[]
 }
 
 interface TeamData {
@@ -225,17 +226,68 @@ export default function GMDashboard() {
   useEffect(() => {
     if (!game?.ends_at) return
     if (game.status === 'ended') { setTimeLeft('GAME OVER'); return }
-    const interval = setInterval(() => {
+
+    const interval = setInterval(async () => {
       const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
       const diff = end.getTime() - Date.now()
       if (diff <= 0) { setTimeLeft('GAME OVER'); clearInterval(interval); return }
+
       const hrs = Math.floor(diff / 3600000)
       const mins = Math.floor((diff % 3600000) / 60000)
       const secs = Math.floor((diff % 60000) / 1000)
       setTimeLeft(hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}` : `${mins}:${String(secs).padStart(2, '0')}`)
+
+      // ---- Automated milestone broadcasts ----
+      // Only fires once per milestone, persisted on the game doc so it
+      // survives GM browser refreshes and doesn't double-send.
+      if (!gameId || !user || game.status !== 'active') return
+
+      const totalMins = game.settings.duration_minutes ?? 180
+      const minsRemaining = Math.floor(diff / 60000)
+      const halfwayMins = Math.floor(totalMins / 2)
+
+      const milestones: { key: string; minsRemaining: number; message: string }[] = [
+        {
+          key: 'halfway',
+          minsRemaining: halfwayMins,
+          message: `⏱ Halfway point! You have ${halfwayMins} minutes left. Check the map — now's a good time to make your move.`,
+        },
+        {
+          key: '30min',
+          minsRemaining: 30,
+          message: `⚠️ 30 minutes remaining! Start thinking about your return route and final zone pushes.`,
+        },
+        {
+          key: '5min',
+          minsRemaining: 5,
+          message: `🚨 5 minutes left! Head back to the start now. Don't forget Side Quests — most zones, most transport modes, most challenges.`,
+        },
+      ]
+
+      const alreadySent: string[] = game.milestone_broadcasts_sent ?? []
+
+      for (const milestone of milestones) {
+        // Fire when the countdown ticks to exactly that minute (within the same tick)
+        if (
+          minsRemaining === milestone.minsRemaining &&
+          secs === 0 &&
+          !alreadySent.includes(milestone.key)
+        ) {
+          try {
+            await sendGMBroadcast(gameId, user.uid, 'Zone Rush', milestone.message)
+            await updateDoc(doc(db, 'games', gameId), {
+              milestone_broadcasts_sent: [...alreadySent, milestone.key],
+            })
+          } catch (err) {
+            console.error('Milestone broadcast failed:', err, milestone.key)
+          }
+          break // Only one milestone per tick
+        }
+      }
     }, 1000)
+
     return () => clearInterval(interval)
-  }, [game?.ends_at, game?.status])
+  }, [game?.ends_at, game?.status, game?.milestone_broadcasts_sent])
 
   useEffect(() => {
     if (!gameId) return
