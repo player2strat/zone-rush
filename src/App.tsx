@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged } from 'firebase/auth'
 import type { User } from 'firebase/auth'
-import { collectionGroup, query, where, getDocs, getDoc, doc } from 'firebase/firestore'
+import { collectionGroup, collection, query, where, getDocs, getDoc } from 'firebase/firestore'
 import { auth, db } from './lib/firebase'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
@@ -24,10 +24,9 @@ async function findActiveGameForUser(uid: string): Promise<string | null> {
   try {
     // Check if user is a GM of an active game
     // (games where created_by == uid and status == 'active' or 'strategy')
-    const { collection, query: q, where: w, getDocs: gd } = await import('firebase/firestore')
     const gamesRef = collection(db, 'games')
-    const gmQuery = q(gamesRef, w('created_by', '==', uid), w('status', 'in', ['active', 'strategy', 'paused']))
-    const gmSnap = await gd(gmQuery)
+    const gmQuery = query(gamesRef, where('created_by', '==', uid), where('status', 'in', ['active', 'strategy', 'paused']))
+    const gmSnap = await getDocs(gmQuery)
     if (!gmSnap.empty) {
       return `/gm/${gmSnap.docs[0].id}`
     }
