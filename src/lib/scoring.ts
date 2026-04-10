@@ -28,8 +28,8 @@ import type { GameSettings, ZoneScore, Submission, Zone, Team } from '../types/g
 
 const DIFFICULTY_POINTS: Record<string, number> = {
   easy: 1,
-  medium: 3,
-  hard: 5,
+  medium: 2,
+  hard: 3,
 }
 
 const PHONE_FREE_BONUS = 1        // No phones used

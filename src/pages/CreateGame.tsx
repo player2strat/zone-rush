@@ -66,7 +66,7 @@ export default function CreateGame() {
   const [claimThreshold, setClaimThreshold] = useState(6)
   const [zoneBonusPoints, setZoneBonusPoints] = useState(3)
   const [discardLimit, setDiscardLimit] = useState(1)
-  const [handSize, setHandSize] = useState(6)
+  const [handSize, setHandSize] = useState(5)
   const [lockThreshold, setLockThreshold] = useState(10)
 
   // Hand composition rules — configurable per game, stored in game.settings
