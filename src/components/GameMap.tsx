@@ -199,12 +199,12 @@ export default function GameMap({
           labelColor = defaultColor
         }
       } else {
-        // No points — transparent, just show the zone outline
+        // No points — transparent, white outline until a team earns points
         fillColor = defaultColor
         fillOpacity = 0
-        borderColor = defaultColor
+        borderColor = '#ffffff'
         borderWidth = 1.5
-        labelColor = defaultColor
+        labelColor = '#ffffff'
       }
 
       try {
@@ -275,7 +275,7 @@ export default function GameMap({
           type: 'line',
           source: `zone-${zone.id}`,
           paint: {
-            'line-color': color,
+            'line-color': '#ffffff',
             'line-width': 1.5,
             'line-dasharray': [1, 0],
           },
