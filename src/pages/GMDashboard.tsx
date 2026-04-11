@@ -1040,23 +1040,26 @@ export default function GMDashboard() {
                           </span>
                         )}
                       </div>
-                      {owner && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-                          <div style={{ width: 7, height: 7, borderRadius: 2, background: owner.teamColor, flexShrink: 0 }} />
-                          <span style={{ fontSize: '0.75rem', color: owner.teamColor, fontWeight: 600 }}>{owner.teamName}</span>
-                        </div>
-                      )}
-                      {!owner && !isClosed && (
-                        <p style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic', marginBottom: 8 }}>Unclaimed</p>
-                      )}
-                      {game.status === 'active' && (
-                        <button
-                          onClick={() => handleCloseZone(zoneId)}
-                          style={{ width: '100%', background: isClosed ? 'rgba(6,214,160,0.08)' : 'rgba(239,71,111,0.08)', border: `1px solid ${isClosed ? 'rgba(6,214,160,0.2)' : 'rgba(239,71,111,0.2)'}`, color: isClosed ? '#06D6A0' : '#EF476F', padding: '5px 0', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                        >
-                          {isClosed ? '↺ Reopen' : '✕ Close Zone'}
-                        </button>
-                      )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        {owner ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 7, height: 7, borderRadius: 2, background: owner.teamColor, flexShrink: 0 }} />
+                            <span style={{ fontSize: '0.75rem', color: owner.teamColor, fontWeight: 600 }}>{owner.teamName}</span>
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic', margin: 0 }}>
+                            {isClosed ? '—' : 'Unclaimed'}
+                          </p>
+                        )}
+                        {game.status === 'active' && (
+                          <button
+                            onClick={() => handleCloseZone(zoneId)}
+                            style={{ background: isClosed ? 'rgba(6,214,160,0.08)' : 'rgba(239,71,111,0.08)', border: `1px solid ${isClosed ? 'rgba(6,214,160,0.2)' : 'rgba(239,71,111,0.2)'}`, color: isClosed ? '#06D6A0' : '#EF476F', padding: '4px 8px', borderRadius: 6, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}
+                          >
+                            {isClosed ? '↺ Reopen' : '✕ Close'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
