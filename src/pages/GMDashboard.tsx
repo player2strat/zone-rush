@@ -597,7 +597,7 @@ export default function GMDashboard() {
         Object.entries(memberLocs).forEach(([uid, loc]: [string, any]) => {
           // Only show locations updated in the last 2 minutes
           if (!loc.lat || !loc.lng) return
-          if (Date.now() - (loc.updated_at ?? 0) > 120000) return
+          if (Date.now() - (loc.updated_at ?? 0) > 300000) return
           locations.push({
             uid,
             lat: loc.lat,
@@ -1045,7 +1045,7 @@ export default function GMDashboard() {
             </div>
             <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', background: '#111' }}>
               {activeZones.length > 0
-                ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} />
+                ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
                 : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '0.78rem' }}>No zone data loaded</div>}
             </div>
           </div>
@@ -1116,7 +1116,7 @@ export default function GMDashboard() {
             <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#ccc', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>
-            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} />
+            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
           </div>
         </div>
       )}

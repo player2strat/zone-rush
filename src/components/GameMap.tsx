@@ -51,6 +51,7 @@ interface GameMapProps {
   claimThreshold?: number
   compact?: boolean
   playerLocations?: PlayerLocation[]
+  showGeolocate?: boolean
 }
 
 // --------------- Constants ---------------
@@ -136,6 +137,7 @@ export default function GameMap({
   claimThreshold = 6,
   compact = false,
   playerLocations = [],
+  showGeolocate = true,
 }: GameMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
@@ -382,7 +384,7 @@ export default function GameMap({
       }
 
       // ---- Geolocate control ----
-      if (!compact) {
+      if (!compact && showGeolocate) {
         const geolocate = new mapboxgl.GeolocateControl({
           positionOptions: { enableHighAccuracy: true },
           trackUserLocation: true,
