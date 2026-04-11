@@ -36,12 +36,21 @@ export interface ZoneOwner {
   claimed: boolean
 }
 
+export interface PlayerLocation {
+  uid: string
+  lat: number
+  lng: number
+  name: string
+  teamColor: string
+}
+
 interface GameMapProps {
   zones: Zone[]
   zoneOwnership?: Map<string, ZoneOwner>
   closedZones?: string[]
   claimThreshold?: number
   compact?: boolean
+  playerLocations?: PlayerLocation[]
 }
 
 // --------------- Constants ---------------
@@ -126,10 +135,12 @@ export default function GameMap({
   closedZones = [],
   claimThreshold = 6,
   compact = false,
+  playerLocations = [],
 }: GameMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
   const mapLoaded = useRef(false)
+  const playerMarkers = useRef<Map<string, mapboxgl.Marker>>(new Map())
 
   // ---- Apply ownership + closure colors ----
   const applyOwnership = (
@@ -441,6 +452,77 @@ export default function GameMap({
   useEffect(() => {
     applyOwnership(zoneOwnership, closedZones, claimThreshold)
   }, [zoneOwnership, closedZones, claimThreshold])
+
+  // ---- Render player location dots ----
+    useEffect(() => {
+      if (!map.current || !mapLoaded.current) return
+
+      const currentUids = new Set(playerLocations.map((p) => p.uid))
+
+      // Remove markers for players no longer in the list
+      playerMarkers.current.forEach((marker, uid) => {
+        if (!currentUids.has(uid)) {
+          marker.remove()
+          playerMarkers.current.delete(uid)
+        }
+      })
+
+      // Add or update markers
+      playerLocations.forEach((player) => {
+        const existing = playerMarkers.current.get(player.uid)
+
+        if (existing) {
+          // Just move it
+          existing.setLngLat([player.lng, player.lat])
+          return
+        }
+
+        // Build the marker element — colored dot + name label
+        const el = document.createElement('div')
+        el.style.cssText = `
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          pointer-events: none;
+        `
+
+        // Dot
+        const dot = document.createElement('div')
+        dot.style.cssText = `
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: ${player.teamColor};
+          border: 2px solid #0a0a0a;
+          box-shadow: 0 0 0 2px ${player.teamColor}60;
+        `
+
+        // Name label
+        const label = document.createElement('div')
+        label.textContent = player.name
+        label.style.cssText = `
+          margin-top: 3px;
+          background: rgba(10,10,10,0.85);
+          color: ${player.teamColor};
+          font-size: 10px;
+          font-weight: 700;
+          font-family: 'DM Sans', sans-serif;
+          padding: 2px 5px;
+          border-radius: 4px;
+          border: 1px solid ${player.teamColor}50;
+          white-space: nowrap;
+        `
+
+        el.appendChild(dot)
+        el.appendChild(label)
+
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'top' })
+          .setLngLat([player.lng, player.lat])
+          .addTo(map.current!)
+
+        playerMarkers.current.set(player.uid, marker)
+      })
+    }, [playerLocations])
 
   return (
     <div

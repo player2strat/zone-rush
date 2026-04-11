@@ -16,7 +16,7 @@ import {
 import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
 import GameMap from '../components/GameMap'
-import type { ZoneOwner } from '../components/GameMap'
+import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
   sendGMBroadcast,
   sendGMReply,
@@ -230,7 +230,15 @@ export default function GMDashboard() {
     const interval = setInterval(async () => {
       const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
       const diff = end.getTime() - Date.now()
-      if (diff <= 0) { setTimeLeft('GAME OVER'); clearInterval(interval); return }
+      if (diff <= 0) {
+        setTimeLeft('GAME OVER')
+        clearInterval(interval)
+        // Write ended status to Firestore so players and redirect logic see it
+        if (gameId) {
+          await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
+        }
+        return
+      }
 
       const hrs = Math.floor(diff / 3600000)
       const mins = Math.floor((diff % 3600000) / 60000)
@@ -550,6 +558,7 @@ export default function GMDashboard() {
   const handleEndGame = async () => {
     if (!gameId || !window.confirm('End this game? This cannot be undone.')) return
     await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
+    window.location.href = '/'
   }
 
   const handlePauseResume = async () => {
@@ -578,6 +587,28 @@ export default function GMDashboard() {
     }
     return m
   }, [zoneScores, teams, game?.settings.claim_threshold])
+
+  // Build player location list from team member_locations for the GM map
+    const playerLocations = useMemo<PlayerLocation[]>(() => {
+      const locations: PlayerLocation[] = []
+      teams.forEach((team) => {
+        const memberLocs = (team as any).member_locations
+        if (!memberLocs) return
+        Object.entries(memberLocs).forEach(([uid, loc]: [string, any]) => {
+          // Only show locations updated in the last 2 minutes
+          if (!loc.lat || !loc.lng) return
+          if (Date.now() - (loc.updated_at ?? 0) > 120000) return
+          locations.push({
+            uid,
+            lat: loc.lat,
+            lng: loc.lng,
+            name: loc.name || 'Player',
+            teamColor: team.color,
+          })
+        })
+      })
+      return locations
+    }, [teams])
 
   const activeZones = useMemo(() => allZoneData.filter((z: any) => game?.zones?.includes(z.id)), [game?.zones, allZoneData])
 
@@ -975,13 +1006,46 @@ export default function GMDashboard() {
               })}
             </div>
 
+    <p style={sectionLabel}>Team Hands</p>
+                <div style={{ display: 'grid', gap: 16, marginBottom: 28 }}>
+                  {teams.map((team) => (
+                    <div key={team.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${team.color}25`, borderRadius: 12, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: team.color }}>{team.name}</span>
+                        <span style={{ fontSize: '0.72rem', color: '#444' }}>{team.hand?.length ?? 0} cards</span>
+                      </div>
+                      {team.hand && team.hand.length > 0 ? (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {team.hand.map((challengeId) => {
+                            const ch = challenges.get(challengeId)
+                            if (!ch) return <span key={challengeId} />
+                            const diffColor = DIFFICULTY_COLORS[ch.difficulty] || '#888'
+                            return (
+                              <div key={challengeId} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 8 }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${diffColor}15`, color: diffColor, flexShrink: 0, marginTop: 2 }}>
+                                  {ch.difficulty?.toUpperCase()}
+                                </span>
+                                <p style={{ color: '#bbb', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>{ch.description}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <p style={{ color: '#333', fontSize: '0.78rem', fontStyle: 'italic' }}>No cards in hand</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <p style={{ ...sectionLabel, margin: 0 }}>Live Map</p>
+
               <button onClick={() => setShowFullMap(true)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888', padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>⛶ Expand</button>
             </div>
             <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', background: '#111' }}>
               {activeZones.length > 0
-                ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} />
+                ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} />
                 : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '0.78rem' }}>No zone data loaded</div>}
             </div>
           </div>
@@ -1052,7 +1116,7 @@ export default function GMDashboard() {
             <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#ccc', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>
-            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} />
+            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} />
           </div>
         </div>
       )}

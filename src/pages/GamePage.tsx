@@ -186,6 +186,38 @@ export default function GamePage() {
     )
   }, [])
 
+  // Write player location to Firestore every 30 seconds so GM can see it
+    useEffect(() => {
+      if (!gameId || !user || !myTeam) return
+      if (!navigator.geolocation) return
+
+      const writeLocation = () => {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
+              await updateDoc(teamRef, {
+                [`member_locations.${user.uid}`]: {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                  name: user.displayName?.split(' ')[0] || 'Player',
+                  updated_at: Date.now(),
+                },
+              })
+            } catch (err) {
+              // Silent fail — location is non-critical
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000 }
+        )
+      }
+
+      writeLocation() // Write immediately on mount
+      const interval = setInterval(writeLocation, 30000) // Then every 30s
+      return () => clearInterval(interval)
+    }, [gameId, user?.uid, myTeam?.id])
+
   // Listen to game document
   useEffect(() => {
     if (!gameId) return
