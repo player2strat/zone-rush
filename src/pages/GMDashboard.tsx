@@ -1031,8 +1031,8 @@ export default function GMDashboard() {
                   return (
                     <div key={zoneId} style={{ background: isClosed ? 'rgba(255,255,255,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(255,255,255,0.02)', border: `1px solid ${isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'}`, borderRadius: 10, padding: '10px 12px', opacity: isClosed ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: owner || isClosed ? 6 : 0 }}>
-                        <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 700 }}>
-                          {zoneId.replace('zone_district_', 'D')}
+                        <span style={{ fontSize: '0.78rem', color: owner ? '#ccc' : '#444', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {zoneId.replace('zone_district_', 'D')} · {allZoneData.find((z: any) => z.id === zoneId)?.name ?? ''}
                         </span>
                         {isClosed && (
                           <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid #333', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>
