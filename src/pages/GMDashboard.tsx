@@ -952,102 +952,117 @@ export default function GMDashboard() {
 
         {/* MAP & ZONES TAB */}
         {activeTab === 'map' && (
-          <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
-            <p style={sectionLabel}>Scoreboard</p>
-            <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
-              {scoreboard.map((team, rank) => (
-                <div key={team.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : '#1a1a1a'}`, borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{team.name}</span>
+          <div style={{ display: 'flex', gap: 20, padding: '20px', alignItems: 'flex-start', maxWidth: 1200, margin: '0 auto' }}>
+
+            {/* LEFT COLUMN — Scoreboard, Map, Team Hands */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+
+              <p style={sectionLabel}>Scoreboard</p>
+              <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+                {scoreboard.map((team, rank) => (
+                  <div key={team.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : '#1a1a1a'}`, borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{team.name}</span>
+                      </div>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.1rem', fontWeight: 700, color: team.total_points > 0 ? '#fff' : '#333' }}>{team.total_points}</span>
                     </div>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.1rem', fontWeight: 700, color: team.total_points > 0 ? '#fff' : '#333' }}>{team.total_points}</span>
+                    {team.zoneBreakdown.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {team.zoneBreakdown.map((zs) => (
+                          <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: zs.status === 'claimed' ? `${team.color}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'}`, color: zs.status === 'claimed' ? team.color : '#555', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                            {zs.zone_id.replace('zone_district_', 'D')} · {zs.points}pt{zs.status === 'claimed' ? ' ★' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    ) : <p style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>No points yet</p>}
                   </div>
-                  {team.zoneBreakdown.length > 0 ? (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {team.zoneBreakdown.map((zs) => (
-                        <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: zs.status === 'claimed' ? `${team.color}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'}`, color: zs.status === 'claimed' ? team.color : '#555', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
-                          {zs.zone_id.replace('zone_district_', 'D')} · {zs.points}pt{zs.status === 'claimed' ? ' ★' : ''}
-                        </span>
-                      ))}
+                ))}
+              </div>
+
+              <p style={sectionLabel}>Live Map</p>
+              <div style={{ height: 380, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', background: '#111', marginBottom: 28 }}>
+                {activeZones.length > 0
+                  ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
+                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '0.78rem' }}>No zone data loaded</div>}
+              </div>
+
+              <p style={sectionLabel}>Team Hands</p>
+              <div style={{ display: 'grid', gap: 16, marginBottom: 40 }}>
+                {teams.map((team) => (
+                  <div key={team.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${team.color}25`, borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
+                      <span style={{ fontWeight: 700, fontSize: '0.88rem', color: team.color }}>{team.name}</span>
+                      <span style={{ fontSize: '0.72rem', color: '#444' }}>{team.hand?.length ?? 0} cards</span>
                     </div>
-                  ) : <p style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>No points yet</p>}
-                </div>
-              ))}
+                    {team.hand && team.hand.length > 0 ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {team.hand.map((challengeId) => {
+                          const ch = challenges.get(challengeId)
+                          if (!ch) return <span key={challengeId} />
+                          const diffColor = DIFFICULTY_COLORS[ch.difficulty] || '#888'
+                          return (
+                            <div key={challengeId} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 8 }}>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${diffColor}15`, color: diffColor, flexShrink: 0, marginTop: 2 }}>
+                                {ch.difficulty?.toUpperCase()}
+                              </span>
+                              <p style={{ color: '#bbb', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>{ch.description}</p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ color: '#333', fontSize: '0.78rem', fontStyle: 'italic' }}>No cards in hand</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <p style={sectionLabel}>Zone Control</p>
-            <div style={{ display: 'grid', gap: 8, marginBottom: 24 }}>
-              {game.zones.map((zoneId) => {
-                const owner = zoneOwnership.get(zoneId)
-                const isClosed = (game.closed_zones ?? []).includes(zoneId)
-                return (
-                  <div key={zoneId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: isClosed ? 'rgba(255,255,255,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(255,255,255,0.02)', border: `1px solid ${isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'}`, borderRadius: 8, opacity: isClosed ? 0.6 : 1, gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 600 }}>{zoneId.replace('zone_district_', 'District ')}</span>
-                      {isClosed && <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid #333', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>Closed</span>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {owner ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor }} />
-                          <span style={{ fontSize: '0.78rem', color: owner.teamColor, fontWeight: 600 }}>{owner.teamName}</span>
+            {/* RIGHT COLUMN — Zone Control (sticky) */}
+            <div style={{ width: '28%', minWidth: 200, flexShrink: 0, position: 'sticky', top: 20 }}>
+              <p style={sectionLabel}>Zone Control</p>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {game.zones.map((zoneId) => {
+                  const owner = zoneOwnership.get(zoneId)
+                  const isClosed = (game.closed_zones ?? []).includes(zoneId)
+                  return (
+                    <div key={zoneId} style={{ background: isClosed ? 'rgba(255,255,255,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(255,255,255,0.02)', border: `1px solid ${isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'}`, borderRadius: 10, padding: '10px 12px', opacity: isClosed ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: owner || isClosed ? 6 : 0 }}>
+                        <span style={{ fontSize: '0.82rem', color: owner ? '#ccc' : '#444', fontWeight: 700 }}>
+                          {zoneId.replace('zone_district_', 'D')}
+                        </span>
+                        {isClosed && (
+                          <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid #333', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>
+                            Closed
+                          </span>
+                        )}
+                      </div>
+                      {owner && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: 2, background: owner.teamColor, flexShrink: 0 }} />
+                          <span style={{ fontSize: '0.75rem', color: owner.teamColor, fontWeight: 600 }}>{owner.teamName}</span>
                         </div>
-                      ) : <span style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>{isClosed ? '—' : 'Unclaimed'}</span>}
+                      )}
+                      {!owner && !isClosed && (
+                        <p style={{ fontSize: '0.72rem', color: '#333', fontStyle: 'italic', marginBottom: 8 }}>Unclaimed</p>
+                      )}
                       {game.status === 'active' && (
-                        <button onClick={() => handleCloseZone(zoneId)} style={{ background: isClosed ? 'rgba(6,214,160,0.08)' : 'rgba(239,71,111,0.08)', border: `1px solid ${isClosed ? 'rgba(6,214,160,0.2)' : 'rgba(239,71,111,0.2)'}`, color: isClosed ? '#06D6A0' : '#EF476F', padding: '4px 10px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {isClosed ? '↺ Reopen' : '✕ Close'}
+                        <button
+                          onClick={() => handleCloseZone(zoneId)}
+                          style={{ width: '100%', background: isClosed ? 'rgba(6,214,160,0.08)' : 'rgba(239,71,111,0.08)', border: `1px solid ${isClosed ? 'rgba(6,214,160,0.2)' : 'rgba(239,71,111,0.2)'}`, color: isClosed ? '#06D6A0' : '#EF476F', padding: '5px 0', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          {isClosed ? '↺ Reopen' : '✕ Close Zone'}
                         </button>
                       )}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
 
-    <p style={sectionLabel}>Team Hands</p>
-                <div style={{ display: 'grid', gap: 16, marginBottom: 28 }}>
-                  {teams.map((team) => (
-                    <div key={team.id} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${team.color}25`, borderRadius: 12, padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
-                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: team.color }}>{team.name}</span>
-                        <span style={{ fontSize: '0.72rem', color: '#444' }}>{team.hand?.length ?? 0} cards</span>
-                      </div>
-                      {team.hand && team.hand.length > 0 ? (
-                        <div style={{ display: 'grid', gap: 8 }}>
-                          {team.hand.map((challengeId) => {
-                            const ch = challenges.get(challengeId)
-                            if (!ch) return <span key={challengeId} />
-                            const diffColor = DIFFICULTY_COLORS[ch.difficulty] || '#888'
-                            return (
-                              <div key={challengeId} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 8 }}>
-                                <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${diffColor}15`, color: diffColor, flexShrink: 0, marginTop: 2 }}>
-                                  {ch.difficulty?.toUpperCase()}
-                                </span>
-                                <p style={{ color: '#bbb', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>{ch.description}</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <p style={{ color: '#333', fontSize: '0.78rem', fontStyle: 'italic' }}>No cards in hand</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <p style={{ ...sectionLabel, margin: 0 }}>Live Map</p>
-
-              <button onClick={() => setShowFullMap(true)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888', padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>⛶ Expand</button>
-            </div>
-            <div style={{ height: 320, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', background: '#111' }}>
-              {activeZones.length > 0
-                ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
-                : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '0.78rem' }}>No zone data loaded</div>}
-            </div>
           </div>
         )}
 
