@@ -186,37 +186,61 @@ export default function GamePage() {
     )
   }, [])
 
-  // Write player location to Firestore every 30 seconds so GM can see it
-    useEffect(() => {
-      if (!gameId || !user || !myTeam) return
-      if (!navigator.geolocation) return
+  // Track player location continuously using watchPosition.
+  // More reliable than setInterval on mobile — fires on movement and
+  // survives backgrounded tabs better than a timer-based approach.
+  // Also writes on a 30s heartbeat so the dot stays alive when player is stationary.
+  useEffect(() => {
+    if (!gameId || !user || !myTeam) return
+    if (!navigator.geolocation) return
 
-      const writeLocation = () => {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            try {
-              const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
-              await updateDoc(teamRef, {
-                [`member_locations.${user.uid}`]: {
-                  lat: pos.coords.latitude,
-                  lng: pos.coords.longitude,
-                  name: user.displayName?.split(' ')[0] || 'Player',
-                  updated_at: Date.now(),
-                },
-              })
-            } catch (err) {
-              // Silent fail — location is non-critical
-            }
+    let lastWrite = 0
+
+    const writeLocation = async (pos: GeolocationPosition) => {
+      const now = Date.now()
+      // Throttle — don't write more than once every 15 seconds
+      if (now - lastWrite < 15000) return
+      lastWrite = now
+      try {
+        const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
+        await updateDoc(teamRef, {
+          [`member_locations.${user.uid}`]: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            name: user.displayName?.split(' ')[0] || 'Player',
+            updated_at: now,
           },
-          () => {},
-          { enableHighAccuracy: true, timeout: 8000 }
-        )
+        })
+      } catch {
+        // Silent fail — location is non-critical
       }
+    }
 
-      writeLocation() // Write immediately on mount
-      const interval = setInterval(writeLocation, 30000) // Then every 30s
-      return () => clearInterval(interval)
-    }, [gameId, user?.uid, myTeam?.id])
+    // watchPosition fires on movement AND at browser-determined intervals
+    const watchId = navigator.geolocation.watchPosition(
+      writeLocation,
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
+    )
+
+    // Heartbeat — force a write every 30s even if player is stationary
+    // This keeps the dot alive on the GM map when nobody is moving
+    const heartbeat = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          lastWrite = 0 // Reset throttle so heartbeat always writes
+          writeLocation(pos)
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000 }
+      )
+    }, 30000)
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId)
+      clearInterval(heartbeat)
+    }
+  }, [gameId, user?.uid, myTeam?.id])
 
   // Listen to game document
   useEffect(() => {
