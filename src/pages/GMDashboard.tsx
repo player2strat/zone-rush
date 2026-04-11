@@ -572,13 +572,18 @@ export default function GMDashboard() {
   const totalUnread = chatMessages.filter((m) => m.channel_type === 'team_to_gm' && !m.read_by?.includes(user?.uid)).length
 
   const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number }>()
+  // Track ALL zone scores (not just claimed) so the map can show partial progress shading
   for (const zs of zoneScores) {
-    if (zs.status === 'claimed') {
+    if (zs.points > 0) {
       const team = getTeam(zs.team_id)
-      if (team) zoneOwnership.set(zs.zone_id, { teamId: zs.team_id, teamColor: team.color, teamName: team.name, points: zs.points })
+      if (!team) continue
+      // If multiple teams have points in the same zone, show the leading team
+      const existing = zoneOwnership.get(zs.zone_id)
+      if (!existing || zs.points > existing.points) {
+        zoneOwnership.set(zs.zone_id, { teamId: zs.team_id, teamColor: team.color, teamName: team.name, points: zs.points })
+      }
     }
   }
-
   const mapZoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
     const claimThreshold = game?.settings.claim_threshold ?? 6
