@@ -255,6 +255,8 @@ export default function GamePage() {
   useEffect(() => {
     if (game?.status !== 'active') return
     const interval = setInterval(() => {
+       if (game?.status === 'paused') return
+     const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
       checkZoneLockouts(gameId!)
       checkZoneClosures(gameId!)
     }, 60000)
@@ -597,7 +599,7 @@ export default function GamePage() {
             color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
             fontWeight: 600,
           }}>
-            {timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
+            {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
           </div>
         </div>
 
