@@ -253,15 +253,13 @@ export default function GamePage() {
 
   // Zone lockout timer
   useEffect(() => {
-    if (game?.status !== 'active') return
-    const interval = setInterval(() => {
-       if (game?.status === 'paused') return
-     const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
-      checkZoneLockouts(gameId!)
-      checkZoneClosures(gameId!)
-    }, 60000)
-    return () => clearInterval(interval)
-  }, [game?.status, gameId])
+  if (game?.status !== 'active') return
+  const interval = setInterval(() => {
+    checkZoneLockouts(gameId!)
+    checkZoneClosures(gameId!)
+  }, 60000)
+  return () => clearInterval(interval)
+}, [game?.status, gameId])
 
   // Find player's team and listen for updates
   useEffect(() => {
@@ -481,27 +479,28 @@ export default function GamePage() {
   // Timer
   const [timeLeft, setTimeLeft] = useState('')
   useEffect(() => {
-    if (!game?.ends_at) return
-    const interval = setInterval(() => {
-      const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
-      const diff = end.getTime() - Date.now()
-      if (diff <= 0) {
-        setTimeLeft('GAME OVER')
-        clearInterval(interval)
-        if (game?.status === 'active' && gameId) {
-          updateDoc(doc(db, 'games', gameId), { status: 'ended' }).catch(() => {})
-        }
-        return
+  if (!game?.ends_at) return
+  const interval = setInterval(() => {
+    if (game?.status === 'paused') return    // ← ONLY NEW LINE
+    const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
+    const diff = end.getTime() - Date.now()
+    if (diff <= 0) {
+      setTimeLeft('GAME OVER')
+      clearInterval(interval)
+      if (game?.status === 'active' && gameId) {
+        updateDoc(doc(db, 'games', gameId), { status: 'ended' }).catch(() => {})
       }
-      const hrs = Math.floor(diff / 3600000)
-      const mins = Math.floor((diff % 3600000) / 60000)
-      const secs = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(hrs > 0
-        ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-        : `${mins}:${String(secs).padStart(2, '0')}`)
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [game?.ends_at])
+      return
+    }
+    const hrs = Math.floor(diff / 3600000)
+    const mins = Math.floor((diff % 3600000) / 60000)
+    const secs = Math.floor((diff % 60000) / 1000)
+    setTimeLeft(hrs > 0
+      ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      : `${mins}:${String(secs).padStart(2, '0')}`)
+  }, 1000)
+  return () => clearInterval(interval)
+}, [game?.ends_at])
 
   const gameEnded = game?.status === 'ended'
   const discardLimit = game?.settings.discard_limit ?? 1
