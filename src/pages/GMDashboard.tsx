@@ -42,6 +42,7 @@ interface GameData {
   zones: string[]
   started_at: any
   ends_at: any
+  paused_at?: any  
   settings: {
     team_size: number
     duration_minutes: number
@@ -565,9 +566,32 @@ export default function GMDashboard() {
   }
 
   const handlePauseResume = async () => {
-    if (!gameId || !game) return
-    await updateDoc(doc(db, 'games', gameId), { status: game.status === 'paused' ? 'active' : 'paused' })
+  if (!gameId || !game) return
+
+  if (game.status === 'paused') {
+    // Resuming — extend ends_at by how long we were paused
+    const pausedAt = game.paused_at?.toDate
+      ? game.paused_at.toDate()
+      : new Date(game.paused_at)
+    const pausedMs = Date.now() - pausedAt.getTime()
+    const currentEndsAt = game.ends_at?.toDate
+      ? game.ends_at.toDate()
+      : new Date(game.ends_at)
+    const newEndsAt = new Date(currentEndsAt.getTime() + pausedMs)
+
+    await updateDoc(doc(db, 'games', gameId), {
+      status: 'active',
+      ends_at: newEndsAt,
+      paused_at: null,
+    })
+  } else {
+    // Pausing — record when we paused
+    await updateDoc(doc(db, 'games', gameId), {
+      status: 'paused',
+      paused_at: new Date(),
+    })
   }
+}
 
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId)
   const filteredSubmissions = filter === 'all' ? submissions : submissions.filter((s) => s.status === filter)
