@@ -560,9 +560,9 @@ export default function GMDashboard() {
   }
 
   const handleEndGame = async () => {
-    if (!gameId || !window.confirm('End this game? This cannot be undone.')) return
-    await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
-    window.location.href = '/'
+  if (!gameId || !window.confirm('End this game? This cannot be undone.')) return
+  await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
+  navigate('/results/' + gameId)  
   }
 
   const handlePauseResume = async () => {
