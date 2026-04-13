@@ -228,8 +228,11 @@ export default function GMDashboard() {
     if (game.status === 'ended') { setTimeLeft('GAME OVER'); return }
 
     const interval = setInterval(async () => {
-      const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
-      const diff = end.getTime() - Date.now()
+  // Don't tick when paused
+  if (game.status === 'paused') return
+
+  const end = game.ends_at.toDate ? game.ends_at.toDate() : new Date(game.ends_at)
+  const diff = end.getTime() - Date.now()
       if (diff <= 0) {
         setTimeLeft('GAME OVER')
         clearInterval(interval)
@@ -989,7 +992,7 @@ export default function GMDashboard() {
               <p style={sectionLabel}>Live Map</p>
               <div style={{ height: 380, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', background: '#111', marginBottom: 28 }}>
                 {activeZones.length > 0
-                  ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
+                  ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} closedZones={game.closed_zones ?? []} playerLocations={playerLocations} showGeolocate={false} />
                   : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: '0.78rem' }}>No zone data loaded</div>}
               </div>
 
@@ -1085,6 +1088,31 @@ export default function GMDashboard() {
               </button>
             </div>
 
+      {/* Broadcast history — shows all gm_broadcast messages sent this game */}
+      {chatMessages.filter((m) => m.channel_type === 'gm_broadcast').length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <p style={{ fontSize: '0.68rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 10 }}>
+            Broadcast History
+          </p>
+          <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+            {chatMessages
+              .filter((m) => m.channel_type === 'gm_broadcast')
+              .map((msg) => (
+                <div key={msg.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: '0.65rem', color: '#444', flexShrink: 0, marginTop: 3, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {msg.sent_at?.toDate
+                      ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : ''}
+                  </span>
+                  <p style={{ color: '#aaa', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>
+                    📢 {msg.text}
+                  </p>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
             <p style={sectionLabel}>Team Messages</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {teams.map((t) => {
@@ -1139,7 +1167,7 @@ export default function GMDashboard() {
             <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#ccc', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>
-            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} playerLocations={playerLocations} showGeolocate={false} />
+            <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} closedZones={game.closed_zones ?? []} playerLocations={playerLocations} showGeolocate={false} />
           </div>
         </div>
       )}
