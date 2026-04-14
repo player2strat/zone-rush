@@ -175,6 +175,7 @@ export default function GameMap({
         borderColor = '#444444'
         borderWidth = 2
         labelColor = '#333333'
+        labelText = `${zone.name}\nLOCKED`
       } else if (isClosed && owner) {
         // Closed but owned → muted team color
         fillColor = owner.teamColor
@@ -182,7 +183,7 @@ export default function GameMap({
         borderColor = owner.teamColor
         borderWidth = 2
         labelColor = owner.teamColor
-        labelText = `${zone.name}\nCLOSED`
+        labelText = `${zone.name}\nLOCKED`
       } else if (owner) {
         if (owner.claimed) {
           // Fully claimed → solid heavy fill + ★ label
