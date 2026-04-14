@@ -393,6 +393,10 @@ export default function GameMap({
         })
         map.current!.addControl(geolocate)
 
+        map.current!.once('idle', () => {
+          geolocate.trigger()
+        })
+
         // Inject CSS once — targets both Safari and Chrome on mobile.
         // Safari on iOS renders .mapboxgl-ctrl-geolocate as a button inside
         // .mapboxgl-ctrl-group. Chrome wraps it the same way.
