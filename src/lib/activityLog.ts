@@ -190,6 +190,7 @@ export async function getActivityLog(
       const ch = challenges.get(sub.challenge_id)
       const team = teams.get(sub.team_id)
       const submitter = users.get(sub.submitted_by)
+      const chLabel = bestChallengeLabel(ch, sub.challenge_id)
       rows.push({
         timestamp: ts,
         team_id: sub.team_id,
@@ -198,11 +199,11 @@ export async function getActivityLog(
         event_type: 'submission_created',
         actor_name: submitter?.name ?? null,
         challenge_id: sub.challenge_id,
-        challenge_title: ch?.title ?? ch?.description?.slice(0, 60) ?? null,
+        challenge_title: chLabel,
         zone_id: sub.zone_id,
         zone_name: zones.get(sub.zone_id)?.name ?? sub.zone_id ?? null,
         points_delta: null,
-        details: `Submitted "${ch?.title ?? ch?.description?.slice(0, 60) ?? sub.challenge_id}" (${sub.media_type})`,
+        details: `Submitted "${chLabel}" (${sub.media_type})`,
         gm_notes: null,
         metadata: { media_type: sub.media_type, attempted_tier2: sub.attempted_tier2, phone_free_claimed: sub.phone_free_claimed },
       })
@@ -215,6 +216,7 @@ export async function getActivityLog(
         : new Date(sub.reviewed_at)
       const ch = challenges.get(sub.challenge_id)
       const team = teams.get(sub.team_id)
+      const chLabel = bestChallengeLabel(ch, sub.challenge_id)
       rows.push({
         timestamp: ts,
         team_id: sub.team_id,
@@ -223,14 +225,14 @@ export async function getActivityLog(
         event_type: sub.status === 'approved' ? 'submission_approved' : 'submission_rejected',
         actor_name: 'GM',
         challenge_id: sub.challenge_id,
-        challenge_title: ch?.title ?? ch?.description?.slice(0, 60) ?? null,
+        challenge_title: chLabel,
         zone_id: sub.zone_id,
         zone_name: zones.get(sub.zone_id)?.name ?? sub.zone_id ?? null,
         points_delta: sub.status === 'approved' ? (sub.points_awarded ?? null) : 0,
         details:
           sub.status === 'approved'
-            ? `Approved "${ch?.title ?? sub.challenge_id}" — +${sub.points_awarded ?? '?'}pt`
-            : `Rejected "${ch?.title ?? sub.challenge_id}"`,
+            ? `Approved "${chLabel}" — +${sub.points_awarded ?? '?'}pt`
+            : `Rejected "${chLabel}"`,
         gm_notes: sub.gm_notes ?? null,
         metadata: { tier2_approved: sub.tier2_approved },
       })
@@ -333,6 +335,26 @@ export async function getActivityLog(
 
 // --------------- Internal helpers ---------------
 
+/**
+ * Returns the best human-readable label for a challenge:
+ *   challenge.title if non-empty,
+ *   else first 60 chars of description if non-empty,
+ *   else the raw challenge ID,
+ *   else empty string.
+ *
+ * Why this exists: `??` only falls back on null/undefined, NOT empty strings,
+ * so `ch.title ?? ch.description` returns an empty string when title is "".
+ * We use `||` here, which falls back on any falsy value (including "").
+ */
+function bestChallengeLabel(
+  ch: { title?: string; description?: string } | undefined | null,
+  fallbackId?: string | null
+): string {
+  const title = ch?.title?.trim()
+  const desc = ch?.description?.trim().slice(0, 60)
+  return title || desc || fallbackId || ''
+}
+
 function buildRowFromEvent(
   timestamp: Date,
   e: any,
@@ -343,8 +365,7 @@ function buildRowFromEvent(
   const zone = e.zone_id ? ctx.zones.get(e.zone_id) : null
   const actor = e.actor_id ? ctx.users.get(e.actor_id) : null
 
-  const challengeTitle =
-    ch?.title ?? ch?.description?.slice(0, 60) ?? null
+  const challengeTitle = bestChallengeLabel(ch, e.challenge_id)
   const zoneName = zone?.name ?? e.zone_id ?? null
   const actorName = actor?.name ?? (e.actor_id === 'gm' ? 'GM' : null)
 
@@ -417,13 +438,17 @@ export function activityLogToCSV(rows: MergedActivityRow[]): string {
   const headers = [
     'Timestamp',
     'Team',
+    'Team ID',
     'Event',
     'Actor',
     'Challenge',
+    'Challenge ID',
     'Zone',
+    'Zone ID',
     'Points',
     'Details',
     'GM Notes',
+    'Metadata',
   ]
 
   const escape = (val: any): string => {
@@ -443,13 +468,17 @@ export function activityLogToCSV(rows: MergedActivityRow[]): string {
       [
         r.timestamp.toISOString(),
         r.team_name,
+        r.team_id,
         r.event_type,
         r.actor_name,
         r.challenge_title,
+        r.challenge_id,
         r.zone_name,
+        r.zone_id,
         r.points_delta,
         r.details,
         r.gm_notes,
+        r.metadata ? JSON.stringify(r.metadata) : '',
       ]
         .map(escape)
         .join(',')
