@@ -160,21 +160,26 @@ export async function getActivityLog(
   const rows: MergedActivityRow[] = []
 
   // --- Source 1: explicit events ---
-  const eventsSnap = await getDocs(
-    query(collection(db, 'games', gameId, 'events'), orderBy('timestamp', 'desc'))
-  )
-  eventsSnap.forEach((d) => {
-    const e = d.data()
-    if (!e.timestamp) return
-    const ts = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp)
-    rows.push(buildRowFromEvent(ts, e, ctx))
-  })
+  try {
+    const eventsSnap = await getDocs(
+      query(collection(db, 'games', gameId, 'events'), orderBy('timestamp', 'desc'))
+    )
+    eventsSnap.forEach((d) => {
+      const e = d.data()
+      if (!e.timestamp) return
+      const ts = e.timestamp.toDate ? e.timestamp.toDate() : new Date(e.timestamp)
+      rows.push(buildRowFromEvent(ts, e, ctx))
+    })
+  } catch (err) {
+    console.error('[activityLog] Source 1 (events) failed:', err)
+  }
 
   // --- Source 2: submissions (create / approve / reject) ---
-  const subsSnap = await getDocs(
-    query(collection(db, 'submissions'), where('game_id', '==', gameId))
-  )
-  subsSnap.forEach((d) => {
+  try {
+    const subsSnap = await getDocs(
+      query(collection(db, 'submissions'), where('game_id', '==', gameId))
+    )
+    subsSnap.forEach((d) => {
     const sub = d.data()
 
     // Submission created
@@ -231,12 +236,17 @@ export async function getActivityLog(
       })
     }
   })
+  } catch (err) {
+    console.error('[activityLog] Source 2 (submissions) failed:', err)
+  }
 
   // --- Source 3: messages (broadcasts and replies) ---
-  const messagesSnap = await getDocs(
-    query(collection(db, 'messages'), where('game_id', '==', gameId))
-  )
-  messagesSnap.forEach((d) => {
+  // Messages are stored as a sub-collection at games/{gameId}/messages
+  try {
+    const messagesSnap = await getDocs(
+      collection(db, 'games', gameId, 'messages')
+    )
+    messagesSnap.forEach((d) => {
     const m = d.data()
     const ts =
       m.sent_at?.toDate?.() ??
@@ -283,30 +293,37 @@ export async function getActivityLog(
       })
     }
   })
+  } catch (err) {
+    console.error('[activityLog] Source 3 (messages) failed:', err)
+  }
 
   // --- Source 4: game lifecycle (started, ended from game doc) ---
-  const gameSnap = await getDoc(doc(db, 'games', gameId))
-  if (gameSnap.exists()) {
-    const g = gameSnap.data()
-    if (g.started_at) {
-      const ts = g.started_at.toDate ? g.started_at.toDate() : new Date(g.started_at)
-      rows.push({
-        timestamp: ts,
-        team_id: null,
-        team_name: null,
-        team_color: null,
-        event_type: 'game_started',
-        actor_name: 'GM',
-        challenge_id: null,
-        challenge_title: null,
-        zone_id: null,
-        zone_name: null,
-        points_delta: null,
-        details: `🎬 Game started — ${g.name ?? gameId}`,
-        gm_notes: null,
-        metadata: { settings: g.settings },
-      })
+  try {
+    const gameSnap = await getDoc(doc(db, 'games', gameId))
+    if (gameSnap.exists()) {
+      const g = gameSnap.data()
+      if (g.started_at) {
+        const ts = g.started_at.toDate ? g.started_at.toDate() : new Date(g.started_at)
+        rows.push({
+          timestamp: ts,
+          team_id: null,
+          team_name: null,
+          team_color: null,
+          event_type: 'game_started',
+          actor_name: 'GM',
+          challenge_id: null,
+          challenge_title: null,
+          zone_id: null,
+          zone_name: null,
+          points_delta: null,
+          details: `🎬 Game started — ${g.name ?? gameId}`,
+          gm_notes: null,
+          metadata: { settings: g.settings },
+        })
+      }
     }
+  } catch (err) {
+    console.error('[activityLog] Source 4 (game doc) failed:', err)
   }
 
   // Sort newest first
