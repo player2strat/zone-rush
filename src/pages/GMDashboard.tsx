@@ -31,6 +31,12 @@ import {
   type BonusAwards,
   type TeamBonusSummary,
 } from '../lib/endGame'
+import {
+  logEvent,
+  getActivityLog,
+  activityLogToCSV,
+  type MergedActivityRow,
+} from '../lib/activityLog'
 
 // --------------- Types ---------------
 
@@ -136,7 +142,7 @@ export default function GMDashboard() {
   >(new Map())
   const [processing, setProcessing] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'chat'>('submissions')
+  const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'chat' | 'activity'>('submissions')
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [showFullMap, setShowFullMap] = useState(false)
   const [timeLeft, setTimeLeft] = useState('')
@@ -158,6 +164,11 @@ export default function GMDashboard() {
   })
   const [applyingBonuses, setApplyingBonuses] = useState(false)
   const [bonusesApplied, setBonusesApplied] = useState(false)
+
+  // Activity log state
+  const [activityRows, setActivityRows] = useState<MergedActivityRow[]>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityTeamFilter, setActivityTeamFilter] = useState<string | 'all'>('all')
 
   // Load zones
   useEffect(() => {
@@ -331,6 +342,38 @@ export default function GMDashboard() {
     })
   }, [game?.status, game?.bonuses_applied, gameId])
 
+  // Load activity log when the Activity tab is opened
+  const refreshActivityLog = async () => {
+    if (!gameId) return
+    setActivityLoading(true)
+    try {
+      const rows = await getActivityLog(gameId)
+      setActivityRows(rows)
+    } catch (err) {
+      console.error('Failed to load activity log:', err)
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'activity' && gameId) {
+      refreshActivityLog()
+    }
+  }, [activeTab, gameId])
+
+  const handleDownloadActivityCSV = () => {
+    if (activityRows.length === 0) return
+    const csv = activityLogToCSV(activityRows)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `zone-rush-activity-${game?.name?.replace(/\s+/g, '-') ?? gameId}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // Chat handlers
   const handleGMReply = async () => {
     if (!chatInput.trim() || !gameId || !user || !selectedTeamId || chatSending) return
@@ -364,6 +407,12 @@ export default function GMDashboard() {
     if (!confirmed) return
     const updated = isAlreadyClosed ? current.filter((z) => z !== zoneId) : [...current, zoneId]
     await updateDoc(doc(db, 'games', gameId), { closed_zones: updated })
+    await logEvent(gameId, {
+      team_id: null,
+      event_type: isAlreadyClosed ? 'zone_reopened' : 'zone_closed',
+      actor_id: user?.uid ?? null,
+      zone_id: zoneId,
+    })
   }
 
   const handleApplyBonuses = async () => {
@@ -372,6 +421,12 @@ export default function GMDashboard() {
     try {
       await applyEndGameBonuses(gameId, bonusAwards)
       setBonusesApplied(true)
+      await logEvent(gameId, {
+        team_id: null,
+        event_type: 'side_quests_applied',
+        actor_id: user?.uid ?? null,
+        metadata: { awards: bonusAwards },
+      })
     } catch (err: any) { alert('Failed to apply bonuses: ' + err.message) }
     finally { setApplyingBonuses(false) }
   }
@@ -468,6 +523,28 @@ export default function GMDashboard() {
           const stolenByTeam = getTeam(highestTeam)
           await sendGMBroadcast(gameId, user?.uid ?? '', 'Game Master',
             `🔁 Zone ${zoneId.replace('zone_district_', 'District ')} was just stolen by ${stolenByTeam?.name ?? 'a team'}!`)
+          // Activity log: zone_stolen
+          await logEvent(gameId, {
+            team_id: sub.team_id,
+            event_type: 'zone_stolen',
+            actor_id: user?.uid ?? null,
+            zone_id: zoneId,
+            metadata: {
+              previous_owner_team_id: previousOwner.teamId,
+              previous_owner_name: previousOwner.teamName,
+              new_points_total: newPoints,
+            },
+          })
+        } else if (!previousOwner && crossingThreshold) {
+          // First-time claim (no previous owner)
+          await logEvent(gameId, {
+            team_id: sub.team_id,
+            event_type: 'zone_claimed',
+            actor_id: user?.uid ?? null,
+            zone_id: zoneId,
+            points_delta: zoneBonusPts,
+            metadata: { new_points_total: newPoints },
+          })
         }
       }
 
@@ -530,10 +607,22 @@ export default function GMDashboard() {
             })
 
             const drawPool = preferred.length > 0 ? preferred : eligible
-            updatedHand.push(drawPool[Math.floor(Math.random() * drawPool.length)])
-          }
+            const drawnCardId = drawPool[Math.floor(Math.random() * drawPool.length)]
+            updatedHand.push(drawnCardId)
 
-          await updateDoc(teamRef, { hand: updatedHand })
+            await updateDoc(teamRef, { hand: updatedHand })
+
+            // Activity log: card drawn as replacement
+            await logEvent(gameId, {
+              team_id: sub.team_id,
+              event_type: 'card_drawn',
+              actor_id: user?.uid ?? null,
+              challenge_id: drawnCardId,
+              metadata: { reason: 'replacement', completed_challenge_id: sub.challenge_id },
+            })
+          } else {
+            await updateDoc(teamRef, { hand: updatedHand })
+          }
         }
       } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
 
@@ -583,11 +672,22 @@ export default function GMDashboard() {
       ends_at: newEndsAt,
       paused_at: null,
     })
+    await logEvent(gameId, {
+      team_id: null,
+      event_type: 'game_resumed',
+      actor_id: user?.uid ?? null,
+      metadata: { paused_ms: pausedMs, new_ends_at: newEndsAt.toISOString() },
+    })
   } else {
     // Pausing — record when we paused
     await updateDoc(doc(db, 'games', gameId), {
       status: 'paused',
       paused_at: new Date(),
+    })
+    await logEvent(gameId, {
+      team_id: null,
+      event_type: 'game_paused',
+      actor_id: user?.uid ?? null,
     })
   }
 }
@@ -717,6 +817,7 @@ export default function GMDashboard() {
           { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: '#FFD166' },
           { id: 'map' as const, label: '🗺️ Map & Zones', badge: null, badgeColor: '' },
           { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: '#EF476F' },
+          { id: 'activity' as const, label: '📜 Activity Log', badge: null, badgeColor: '' },
         ]).map((tab) => (
           <button
             key={tab.id}
@@ -1176,6 +1277,116 @@ export default function GMDashboard() {
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#444' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
                 <p style={{ fontWeight: 600, color: '#555' }}>Select a team above to view their messages</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ACTIVITY LOG TAB */}
+        {activeTab === 'activity' && (
+          <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px 20px 60px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <p style={sectionLabel}>Activity Log</p>
+                <p style={{ fontSize: '0.78rem', color: '#666', marginTop: -8 }}>
+                  Chronological feed of every event this game · {activityRows.length} entries
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={refreshActivityLog}
+                  disabled={activityLoading}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #222', color: '#888', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: activityLoading ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                >
+                  {activityLoading ? '⏳ Loading...' : '↻ Refresh'}
+                </button>
+                <button
+                  onClick={handleDownloadActivityCSV}
+                  disabled={activityRows.length === 0}
+                  style={{ background: activityRows.length > 0 ? 'rgba(6,214,160,0.12)' : '#1a1a1a', border: '1px solid rgba(6,214,160,0.3)', color: activityRows.length > 0 ? '#06D6A0' : '#444', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: activityRows.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit' }}
+                >
+                  ⬇ Download CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Team filter chips */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              <button
+                onClick={() => setActivityTeamFilter('all')}
+                style={{ background: activityTeamFilter === 'all' ? 'rgba(255,209,102,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${activityTeamFilter === 'all' ? 'rgba(255,209,102,0.4)' : '#1a1a1a'}`, color: activityTeamFilter === 'all' ? '#FFD166' : '#555', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                All ({activityRows.length})
+              </button>
+              {teams.map((t) => {
+                const count = activityRows.filter((r) => r.team_id === t.id).length
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActivityTeamFilter(t.id)}
+                    style={{ background: activityTeamFilter === t.id ? `${t.color}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${activityTeamFilter === t.id ? `${t.color}50` : '#1a1a1a'}`, color: activityTeamFilter === t.id ? t.color : '#555', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {t.name} ({count})
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setActivityTeamFilter('' as any)}
+                style={{ background: (activityTeamFilter as any) === '' ? 'rgba(155,93,229,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${(activityTeamFilter as any) === '' ? 'rgba(155,93,229,0.4)' : '#1a1a1a'}`, color: (activityTeamFilter as any) === '' ? '#9B5DE5' : '#555', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                System/GM only
+              </button>
+            </div>
+
+            {activityLoading && activityRows.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>⏳</p>
+                <p>Loading activity log...</p>
+              </div>
+            ) : activityRows.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>📜</p>
+                <p style={{ fontWeight: 600, color: '#555' }}>No activity yet</p>
+                <p style={{ fontSize: '0.82rem', color: '#333', marginTop: 6 }}>Events will appear here once the game starts.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 6 }}>
+                {activityRows
+                  .filter((r) => {
+                    if (activityTeamFilter === 'all') return true
+                    if ((activityTeamFilter as any) === '') return r.team_id === null
+                    return r.team_id === activityTeamFilter
+                  })
+                  .map((r, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${r.team_color ? r.team_color + '20' : '#1a1a1a'}`,
+                        borderLeft: r.team_color ? `3px solid ${r.team_color}` : '3px solid #333',
+                        borderRadius: 8,
+                        padding: '10px 14px',
+                        display: 'grid',
+                        gridTemplateColumns: '90px 110px 1fr 90px',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem', color: '#555' }}>
+                        {r.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: r.team_color ?? '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {r.team_name ?? 'System'}
+                      </span>
+                      <span style={{ fontSize: '0.84rem', color: '#ccc', lineHeight: 1.4 }}>
+                        {r.details}
+                        {r.gm_notes && <span style={{ color: '#EF476F', fontStyle: 'italic', marginLeft: 6 }}>— {r.gm_notes}</span>}
+                      </span>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.72rem', color: r.points_delta && r.points_delta > 0 ? '#06D6A0' : '#444', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {r.points_delta !== null && r.points_delta !== 0 ? (r.points_delta > 0 ? `+${r.points_delta}pt` : `${r.points_delta}pt`) : ''}
+                      </span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

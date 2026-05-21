@@ -28,6 +28,7 @@ import {
   subscribeToPlayerMessages,
   markMessagesRead,
 } from '../lib/chat'
+import { logEvent } from '../lib/activityLog'
 
 // --------------- Types ---------------
 
@@ -464,6 +465,24 @@ export default function GamePage() {
         hand: newHand,
         discards_used: discardsUsed + 1,
         discarded_challenges: [...previouslyDiscarded, challengeToRemove.id],
+      })
+
+      // Activity log: card discarded + replacement card drawn
+      await logEvent(gameId, {
+        team_id: myTeam.id,
+        event_type: 'card_discarded',
+        actor_id: user?.uid ?? null,
+        challenge_id: challengeToRemove.id,
+      })
+      await logEvent(gameId, {
+        team_id: myTeam.id,
+        event_type: 'card_drawn',
+        actor_id: user?.uid ?? null,
+        challenge_id: replacement,
+        metadata: {
+          reason: 'discard_swap',
+          discarded_challenge_id: challengeToRemove.id,
+        },
       })
 
       setDiscardMode(false)

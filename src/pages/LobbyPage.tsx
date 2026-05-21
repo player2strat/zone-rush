@@ -3,9 +3,10 @@
 // GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
 //
-// NEW in this version:
-//   Feature 1 — Player team self-selection: prominent "Pick Your Team" section
-//   Feature 2 — GM Roster Manager: move players between teams, rename teams, remove players
+// CHANGES in this version:
+//   - handleStartGame now also writes dealt_challenges (immutable record of
+//     initial hand) and logs a card_drawn event per dealt card with
+//     reason: 'initial_deal' so the full card history is preserved.
 // =============================================================================
 
 import { useState, useEffect } from 'react'
@@ -17,6 +18,7 @@ import {
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { dealChallenges } from '../lib/dealChallenges'
+import { logEvent } from '../lib/activityLog'
 
 interface GameData {
   id: string
@@ -345,6 +347,12 @@ export default function LobbyPage() {
 
   // -----------------------------------------------------------------------
   // GM: start game
+  //
+  // After dealChallenges runs, we read each team's freshly-dealt hand back
+  // and save it permanently as `dealt_challenges` (immutable record of the
+  // initial hand) AND log a `card_drawn` event per card so the activity log
+  // captures every card a team ever held — from the opening deal through
+  // every replacement and discard.
   // -----------------------------------------------------------------------
 
   const handleStartGame = async () => {
@@ -368,6 +376,36 @@ export default function LobbyPage() {
       }
 
       await dealChallenges(gameId, city, game.zones, handSize, teamIds, compositionRules)
+
+      // Activity log: record the initial deal for each team.
+      // We re-read each team doc to see exactly what dealChallenges wrote.
+      for (const teamId of teamIds) {
+        try {
+          const teamSnap = await getDoc(doc(db, 'games', gameId, 'teams', teamId))
+          if (!teamSnap.exists()) continue
+          const dealtHand: string[] = teamSnap.data().hand ?? []
+
+          // Save the immutable record of the starting hand. Same pattern as
+          // `discarded_challenges` — write-once, never modified.
+          await updateDoc(doc(db, 'games', gameId, 'teams', teamId), {
+            dealt_challenges: dealtHand,
+          })
+
+          // Log one card_drawn event per dealt card
+          for (const cardId of dealtHand) {
+            await logEvent(gameId, {
+              team_id: teamId,
+              event_type: 'card_drawn',
+              actor_id: user?.uid ?? null,
+              challenge_id: cardId,
+              metadata: { reason: 'initial_deal' },
+            })
+          }
+        } catch (logErr) {
+          // Logging must never block game start
+          console.error('Initial deal logging failed for team', teamId, logErr)
+        }
+      }
 
       const now = new Date()
       const endTime = new Date(now.getTime() + game.settings.duration_minutes * 60 * 1000)
