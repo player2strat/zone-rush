@@ -1,9 +1,13 @@
 // =============================================================================
 // Zone Rush — Submit Proof Component
-// Full-screen overlay for photo/video submission with GPS capture
+// Full-screen overlay for photo/video submission with GPS capture.
 //
-// CHANGES:
-// - Removed phone-free bonus toggle (removed from alpha)
+// CHANGES (this version):
+// - Uses the shared useLocation hook instead of its own getCurrentPosition.
+// - Hard submission gate: cannot submit unless GPS is good or low_accuracy.
+// - On submit, calls refresh() to grab a FRESH fix at the moment of submit,
+//   not the stale one from when the user opened the modal.
+// - Clear UI block when GPS is missing/denied/stale, with troubleshooting.
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react'
@@ -12,6 +16,7 @@ import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore
 import { db, storage, auth } from '../lib/firebase'
 import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
+import { useLocation, isLocationSubmittable, locationStatusLabel } from '../hooks/useLocation'
 
 interface SubmitProofProps {
   gameId: string
@@ -44,11 +49,10 @@ export default function SubmitProof({
   const [uploadProgress, setUploadProgress] = useState(0)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
   const [zones, setZones] = useState<any[]>([])
-  const [gpsLat, setGpsLat] = useState<number | null>(null)
-  const [gpsLng, setGpsLng] = useState<number | null>(null)
-  const [gpsStatus, setGpsStatus] = useState<'loading' | 'success' | 'error'>('loading')
+
+  // Shared location hook — same source as the pill in the top bar
+  const location = useLocation()
 
   // Load zones from Firestore
   useEffect(() => {
@@ -63,25 +67,9 @@ export default function SubmitProof({
     loadZones()
   }, [])
 
-  // Capture GPS on mount
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setGpsStatus('error')
-      return
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGpsLat(pos.coords.latitude)
-        setGpsLng(pos.coords.longitude)
-        setGpsStatus('success')
-      },
-      () => setGpsStatus('error'),
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  }, [])
-
-  const detectedZoneId = detectZone(gpsLat, gpsLng, zones)
+  const detectedZoneId = detectZone(location.lat, location.lng, zones)
   const isZoneClosed = !!detectedZoneId && closedZones.includes(detectedZoneId)
+  const canSubmitWithLocation = isLocationSubmittable(location)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
@@ -99,10 +87,25 @@ export default function SubmitProof({
 
   const handleSubmit = async () => {
     if (!file || !user) return
-    setUploading(true)
+
     setError(null)
+    setUploading(true)
 
     try {
+      // Re-acquire a FRESH fix at the moment of submit. This is the key fix
+      // for "I opened the modal, walked 100m, took a photo, then submitted."
+      const fresh = await location.refresh()
+
+      if (!isLocationSubmittable(fresh)) {
+        setError(
+          fresh.status === 'denied'
+            ? 'Location is off. Re-enable location access and try again.'
+            : `Couldn't get your location (${locationStatusLabel(fresh.status)}). Step outside or walk a few feet, then try again.`
+        )
+        setUploading(false)
+        return
+      }
+
       const timestamp = Date.now()
       const mediaType = getMediaType(file)
       const ext = file.name.split('.').pop() || 'jpg'
@@ -124,11 +127,12 @@ export default function SubmitProof({
         )
       })
 
-      const detectedZoneId = detectZone(gpsLat, gpsLng, zones)
-      const detectedZone = zones.find((z) => z.id === detectedZoneId) ?? null
-      const inZone = gpsLat !== null && gpsLng !== null && detectedZone !== null
-        ? validateSubmissionZone(gpsLat, gpsLng, detectedZone)
-        : false
+      const submitZoneId = detectZone(fresh.lat, fresh.lng, zones)
+      const submitZone = zones.find((z) => z.id === submitZoneId) ?? null
+      const inZone =
+        fresh.lat !== null && fresh.lng !== null && submitZone !== null
+          ? validateSubmissionZone(fresh.lat, fresh.lng, submitZone)
+          : false
 
       await addDoc(collection(db, 'submissions'), {
         game_id: gameId,
@@ -136,12 +140,14 @@ export default function SubmitProof({
         challenge_id: challenge.id,
         challenge_description: challenge.description,
         challenge_difficulty: challenge.difficulty,
-        zone_id: detectZone(gpsLat, gpsLng, zones),
+        zone_id: submitZoneId,
         submitted_by: user.uid,
         media_url: downloadURL,
         media_type: mediaType,
-        gps_lat: gpsLat,
-        gps_lng: gpsLng,
+        gps_lat: fresh.lat,
+        gps_lng: fresh.lng,
+        gps_accuracy: fresh.accuracy,           // NEW — surfaces accuracy in GM dashboard
+        gps_captured_at: fresh.timestamp,        // NEW — proves freshness
         in_zone: inZone,
         status: 'pending',
         gm_notes: '',
@@ -232,6 +238,66 @@ export default function SubmitProof({
           </p>
         </div>
 
+        {/* GPS status — prominent, with refresh button if not good */}
+        <div
+          style={{
+            background: canSubmitWithLocation
+              ? 'rgba(6,214,160,0.06)'
+              : 'rgba(239,71,111,0.06)',
+            border: `1px solid ${canSubmitWithLocation ? 'rgba(6,214,160,0.25)' : 'rgba(239,71,111,0.25)'}`,
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: canSubmitWithLocation ? 0 : 8 }}>
+            <span
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: canSubmitWithLocation ? '#06D6A0' : '#EF476F',
+                flexShrink: 0,
+              }}
+            />
+            <p style={{ color: canSubmitWithLocation ? '#06D6A0' : '#EF476F', fontWeight: 700, fontSize: '0.85rem', margin: 0 }}>
+              {locationStatusLabel(location.status)}
+              {location.accuracy != null && canSubmitWithLocation && (
+                <span style={{ color: '#666', fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, marginLeft: 8 }}>
+                  ±{Math.round(location.accuracy)}m
+                </span>
+              )}
+            </p>
+          </div>
+          {!canSubmitWithLocation && (
+            <>
+              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 10 }}>
+                {location.status === 'denied'
+                  ? 'Location access is denied. Re-enable it in your browser/phone settings, then reload this page.'
+                  : location.status === 'acquiring' || location.status === 'prompt'
+                  ? 'Waiting for your first GPS fix. This can take 10–30 seconds.'
+                  : 'Your location can\'t be confirmed. Step outside, away from tall buildings, then tap below.'}
+              </p>
+              <button
+                onClick={() => location.refresh()}
+                style={{
+                  background: 'rgba(255,209,102,0.12)',
+                  border: '1px solid rgba(255,209,102,0.3)',
+                  color: '#FFD166',
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                🔄 Try again
+              </button>
+            </>
+          )}
+        </div>
+
         {/* File picker */}
         <input
           ref={fileInputRef}
@@ -299,27 +365,8 @@ export default function SubmitProof({
           </div>
         )}
 
-        {/* GPS status */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: gpsStatus === 'success' && !detectedZoneId ? 10 : 20,
-          fontSize: '0.8rem',
-        }}>
-          <span style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: gpsStatus === 'success' ? '#06D6A0' : gpsStatus === 'error' ? '#EF476F' : '#FFD166',
-          }} />
-          <span style={{ color: '#888' }}>
-            {gpsStatus === 'success'
-              ? `GPS captured (${gpsLat?.toFixed(4)}, ${gpsLng?.toFixed(4)})`
-              : gpsStatus === 'error'
-              ? 'GPS unavailable — submission still allowed'
-              : 'Getting your location...'}
-          </span>
-        </div>
-
         {/* Out-of-zone warning */}
-        {gpsStatus === 'success' && !detectedZoneId && (
+        {canSubmitWithLocation && !detectedZoneId && (
           <div style={{
             background: 'rgba(255,209,102,0.08)', border: '1px solid rgba(255,209,102,0.25)',
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
@@ -398,7 +445,7 @@ export default function SubmitProof({
           </div>
         )}
 
-        {/* Submit button */}
+        {/* Submit button — DISABLED if no GPS */}
         {isZoneClosed ? (
           <div style={{
             background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
@@ -415,19 +462,37 @@ export default function SubmitProof({
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!file || uploading}
+            disabled={!file || uploading || !canSubmitWithLocation}
             style={{
               width: '100%',
-              background: !file || uploading ? '#1a1a1a' : 'rgba(6,214,160,0.15)',
-              border: `1px solid ${!file || uploading ? '#222' : 'rgba(6,214,160,0.3)'}`,
-              color: !file || uploading ? '#444' : '#06D6A0',
-              padding: '14px 20px', borderRadius: 10,
-              fontSize: '0.95rem', fontWeight: 700,
-              cursor: !file || uploading ? 'default' : 'pointer',
+              background:
+                !file || uploading || !canSubmitWithLocation
+                  ? '#1a1a1a'
+                  : 'rgba(6,214,160,0.15)',
+              border: `1px solid ${
+                !file || uploading || !canSubmitWithLocation
+                  ? '#222'
+                  : 'rgba(6,214,160,0.3)'
+              }`,
+              color:
+                !file || uploading || !canSubmitWithLocation
+                  ? '#444'
+                  : '#06D6A0',
+              padding: '14px 20px',
+              borderRadius: 10,
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              cursor: !file || uploading || !canSubmitWithLocation ? 'default' : 'pointer',
               fontFamily: 'inherit',
             }}
           >
-            {uploading ? 'Submitting...' : 'Submit for GM Review'}
+            {uploading
+              ? 'Submitting...'
+              : !canSubmitWithLocation
+              ? '📍 Waiting for location'
+              : !file
+              ? 'Add a photo or video first'
+              : 'Submit for GM Review'}
           </button>
         )}
       </div>

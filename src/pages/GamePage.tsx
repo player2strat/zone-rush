@@ -29,6 +29,8 @@ import {
   markMessagesRead,
 } from '../lib/chat'
 import { logEvent } from '../lib/activityLog'
+import { useLocation } from '../hooks/useLocation'
+import LocationStatusPill from '../components/LocationStatusPill'
 
 // --------------- Types ---------------
 
@@ -173,75 +175,34 @@ export default function GamePage() {
     loadZones()
   }, [])
 
-  // Request GPS permission on mount
-  useEffect(() => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      () => {},
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          alert('📍 Zone Rush needs your location to verify challenge submissions and show your position on the map. Please enable location access in your browser settings.')
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  }, [])
+ // Unified location — single source of truth for the whole app.
+  // Optionally driven by game.settings.gps if present (no Firestore migration
+  // required; defaults apply when the field is absent).
+  const location = useLocation(game?.settings.gps ?? {})
 
-  // Track player location continuously using watchPosition.
-  // More reliable than setInterval on mobile — fires on movement and
-  // survives backgrounded tabs better than a timer-based approach.
-  // Also writes on a 30s heartbeat so the dot stays alive when player is stationary.
+  // Write player location to Firestore for the GM map.
+  // Driven by hook state changes, throttled to 1 write per 15s.
+  const lastLocationWriteRef = useRef(0)
   useEffect(() => {
     if (!gameId || !user || !myTeam) return
-    if (!navigator.geolocation) return
+    if (location.lat == null || location.lng == null) return
+    const now = Date.now()
+    if (now - lastLocationWriteRef.current < 15000) return
+    lastLocationWriteRef.current = now
 
-    let lastWrite = 0
-
-    const writeLocation = async (pos: GeolocationPosition) => {
-      const now = Date.now()
-      // Throttle — don't write more than once every 15 seconds
-      if (now - lastWrite < 15000) return
-      lastWrite = now
-      try {
-        const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
-        await updateDoc(teamRef, {
-          [`member_locations.${user.uid}`]: {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            name: user.displayName?.split(' ')[0] || 'Player',
-            updated_at: now,
-          },
-        })
-      } catch {
-        // Silent fail — location is non-critical
-      }
-    }
-
-    // watchPosition fires on movement AND at browser-determined intervals
-    const watchId = navigator.geolocation.watchPosition(
-      writeLocation,
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
-    )
-
-    // Heartbeat — force a write every 30s even if player is stationary
-    // This keeps the dot alive on the GM map when nobody is moving
-    const heartbeat = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          lastWrite = 0 // Reset throttle so heartbeat always writes
-          writeLocation(pos)
-        },
-        () => {},
-        { enableHighAccuracy: true, timeout: 8000 }
-      )
-    }, 30000)
-
-    return () => {
-      navigator.geolocation.clearWatch(watchId)
-      clearInterval(heartbeat)
-    }
-  }, [gameId, user?.uid, myTeam?.id])
+    const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
+    updateDoc(teamRef, {
+      [`member_locations.${user.uid}`]: {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        name: user.displayName?.split(' ')[0] || 'Player',
+        updated_at: now,
+      },
+    }).catch(() => {
+      // Silent fail — location write is non-critical
+    })
+  }, [gameId, user?.uid, myTeam?.id, location.lat, location.lng, location.accuracy, user?.displayName])
 
   // Listen to game document
   useEffect(() => {
@@ -606,18 +567,21 @@ export default function GamePage() {
         padding: '12px 20px', borderBottom: '1px solid #1a1a1a',
         background: '#0d0d0d', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: myTeam.color }} />
-            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{myTeam.name}</span>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: myTeam.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{myTeam.name}</span>
           </div>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.85rem',
-            color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
-            fontWeight: 600,
-          }}>
-            {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <LocationStatusPill location={location} onRefresh={() => location.refresh()} />
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '0.85rem',
+              color: timeLeft === 'GAME OVER' ? '#EF476F' : '#FFD166',
+              fontWeight: 600,
+            }}>
+              {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
+            </div>
           </div>
         </div>
 
