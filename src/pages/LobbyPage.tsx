@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Navigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, updateDoc, collection,
   getDocs, setDoc, arrayUnion,
@@ -411,31 +411,6 @@ export default function LobbyPage() {
 
   const copyCode = () => {
     if (game?.join_code) navigator.clipboard.writeText(game.join_code)
-  }
-
-// -----------------------------------------------------------------------
-  // Redirect when game becomes active (or enters the pre-game strategy phase).
-  // Render-time redirect via <Navigate> instead of useEffect+navigate —
-  // more reliable on mobile, especially iOS Safari, where backgrounded
-  // tabs can cause effect-based redirects to miss snapshot updates.
-  // -----------------------------------------------------------------------
-
-  if (game?.status === 'active' || game?.status === 'strategy' || game?.status === 'paused') {
-    // Wait until auth has resolved before deciding GM vs player route.
-    // Otherwise a refreshing GM could briefly be sent to the player view.
-    if (!user) {
-      return (
-        <div style={{
-          minHeight: '100vh', background: '#0a0a0a', color: '#555',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
-          Starting game...
-        </div>
-      )
-    }
-    const isCreator = user.uid === game.created_by
-    return <Navigate to={isCreator ? `/gm/${gameId}` : `/game/${gameId}`} replace />
   }
 
   // -----------------------------------------------------------------------

@@ -15,6 +15,7 @@ import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
 import ZoneManager from './pages/ZoneManager'
 import ResultsPage from './pages/ResultsPage.tsx'
+import GameRouteGuard from './components/GameRouteGuard'
 
 // ---------------------------------------------------------------------------
 // Checks Firestore for an active game this user is part of (player or GM).
@@ -125,9 +126,30 @@ export default function App() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/create" element={<CreateGame />} />
         <Route path="/join" element={<JoinGame />} />
-        <Route path="/lobby/:gameId" element={<LobbyPage />} />
-        <Route path="/game/:gameId" element={<GamePage />} />
-        <Route path="/gm/:gameId" element={<GMDashboard />} />
+<Route
+          path="/lobby/:gameId"
+          element={
+            <GameRouteGuard expectedPathPrefix="/lobby">
+              <LobbyPage />
+            </GameRouteGuard>
+          }
+        />
+        <Route
+          path="/game/:gameId"
+          element={
+            <GameRouteGuard expectedPathPrefix="/game">
+              <GamePage />
+            </GameRouteGuard>
+          }
+        />
+        <Route
+          path="/gm/:gameId"
+          element={
+            <GameRouteGuard expectedPathPrefix="/gm">
+              <GMDashboard />
+            </GameRouteGuard>
+          }
+        />
         <Route path="/admin/seed" element={<AdminSeed />} />
         <Route path="/admin/zones" element={<ZoneManager />} />
         <Route path="/results/:gameId" element={<ResultsPage />} />
