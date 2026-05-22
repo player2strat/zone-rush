@@ -54,14 +54,6 @@ export default function GameRouteGuard({
   // We check the *prefix* (e.g. '/lobby') because the actual route has the
   // gameId baked in, and expectedPath also has the gameId — so comparing
   // prefixes tells us "is the user on the right type of screen?"
-console.log('🔍 Guard:', {
-    prefix: expectedPathPrefix,
-    expectedPath: route.expectedPath,
-    loading: route.loading,
-    gameStatus: route.gameStatus,
-    isGM: route.isGM,
-  })
-
   if (route.expectedPath && !route.expectedPath.startsWith(expectedPathPrefix)) {
     return <Navigate to={route.expectedPath} replace />
   }
