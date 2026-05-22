@@ -69,17 +69,6 @@ export default function LocationStatusPill({ location, onRefresh }: Props) {
         <span style={{ fontSize: '0.7rem', color, fontWeight: 600 }}>
           {label}
         </span>
-        {location.accuracy && location.status !== 'denied' && (
-          <span
-            style={{
-              fontSize: '0.65rem',
-              color: '#666',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            ±{Math.round(location.accuracy)}m
-          </span>
-        )}
       </button>
 
       <style>{`
