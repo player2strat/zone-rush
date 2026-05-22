@@ -242,17 +242,18 @@ export default function GamePage() {
         setMyTeam(foundTeam)
         setAllTeams(teamsArr)
 
-        if (foundTeam) {
+      if (foundTeam) {
           const teamHand = (foundTeam as TeamData).hand
           if (teamHand && teamHand.length > 0) {
-            const challengeDocs: Challenge[] = []
-            for (const chId of teamHand) {
-              const chDoc = await getDoc(doc(db, 'challenges', chId))
-              if (chDoc.exists()) {
-                challengeDocs.push({ id: chDoc.id, ...chDoc.data() } as Challenge)
-              }
-            }
-            setChallenges(challengeDocs)
+            // Fetch all challenges in parallel instead of sequentially.
+            // 6 sequential reads on mobile = 1.5-3s. Parallel = ~300ms.
+            const challengeDocs = await Promise.all(
+              teamHand.map((chId) => getDoc(doc(db, 'challenges', chId)))
+            )
+            const loaded: Challenge[] = challengeDocs
+              .filter((d) => d.exists())
+              .map((d) => ({ id: d.id, ...d.data() } as Challenge))
+            setChallenges(loaded)
           }
         }
 
@@ -567,7 +568,7 @@ export default function GamePage() {
         padding: '12px 20px', borderBottom: '1px solid #1a1a1a',
         background: '#0d0d0d', flexShrink: 0,
       }}>
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <div style={{ width: 10, height: 10, borderRadius: 3, background: myTeam.color, flexShrink: 0 }} />
             <span style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{myTeam.name}</span>
