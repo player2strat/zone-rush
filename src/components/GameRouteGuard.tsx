@@ -11,13 +11,14 @@
 // Eliminates races between multiple components trying to navigate at once.
 // =============================================================================
 
+import type { ReactNode } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { useGameRoute } from '../hooks/useGameRoute'
 
 interface GameRouteGuardProps {
   /** The path pattern this route handles, e.g. '/lobby' or '/game' */
   expectedPathPrefix: string
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export default function GameRouteGuard({
@@ -49,10 +50,13 @@ export default function GameRouteGuard({
     return <Navigate to="/" replace />
   }
 
-  // If the current URL doesn't match where this user should be, redirect.
+// If the current URL doesn't match where this user should be, redirect.
   // We check the *prefix* (e.g. '/lobby') because the actual route has the
   // gameId baked in, and expectedPath also has the gameId — so comparing
   // prefixes tells us "is the user on the right type of screen?"
   if (route.expectedPath && !route.expectedPath.startsWith(expectedPathPrefix)) {
     return <Navigate to={route.expectedPath} replace />
   }
+
+  return <>{children}</>
+}
