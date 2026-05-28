@@ -50,26 +50,40 @@ export default function SubmitProof({
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [zones, setZones] = useState<any[]>([])
+  const [zonesLoaded, setZonesLoaded] = useState(false)
+  const [zonesError, setZonesError] = useState(false)
 
   // Shared location hook — same source as the pill in the top bar
   const location = useLocation()
 
-  // Load zones from Firestore
+// Load zones from Firestore.
+  // We track zonesLoaded separately so the Submit button can be gated on it —
+  // submitting before zones finish loading would write zone_id: null (C7 fix).
   useEffect(() => {
     async function loadZones() {
-      const snapshot = await getDocs(collection(db, 'zones'))
-      const loaded = snapshot.docs.map((d) => {
-        const data = d.data()
-        return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
-      })
-      setZones(loaded)
+      try {
+        const snapshot = await getDocs(collection(db, 'zones'))
+        const loaded = snapshot.docs.map((d) => {
+          const data = d.data()
+          return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
+        })
+        setZones(loaded)
+        setZonesLoaded(true)
+      } catch (err) {
+        console.error('Failed to load zones:', err)
+        setZonesError(true)
+      }
     }
     loadZones()
   }, [])
 
-  const detectedZoneId = detectZone(location.lat, location.lng, zones)
+const detectedZoneId = detectZone(location.lat, location.lng, zones)
   const isZoneClosed = !!detectedZoneId && closedZones.includes(detectedZoneId)
   const canSubmitWithLocation = isLocationSubmittable(location)
+
+  // Single source of truth for whether the Submit button is live.
+  // Must have a file, not be mid-upload, have a usable GPS fix, AND have zones loaded.
+  const canSubmit = !!file && !uploading && canSubmitWithLocation && zonesLoaded
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
@@ -87,6 +101,13 @@ export default function SubmitProof({
 
   const handleSubmit = async () => {
     if (!file || !user) return
+
+    // Safety net behind the disabled button: never submit before zones load,
+    // or zone_id would be written as null (C7).
+    if (!zonesLoaded) {
+      setError('Game zones haven\'t loaded yet. Wait a moment and try again.')
+      return
+    }
 
     setError(null)
     setUploading(true)
@@ -365,8 +386,41 @@ export default function SubmitProof({
           </div>
         )}
 
-        {/* Out-of-zone warning */}
-        {canSubmitWithLocation && !detectedZoneId && (
+        {/* Zones still loading — submit is gated until this resolves */}
+        {canSubmitWithLocation && !zonesLoaded && !zonesError && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid #222',
+            borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+            display: 'flex', gap: 10, alignItems: 'center',
+          }}>
+            <span style={{ fontSize: '1rem', flexShrink: 0 }}>⏳</span>
+            <p style={{ color: '#888', fontSize: '0.8rem', lineHeight: 1.5, margin: 0 }}>
+              Loading game zones…
+            </p>
+          </div>
+        )}
+
+        {/* Zone load failed — can't safely tag a submission without zones */}
+        {zonesError && (
+          <div style={{
+            background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.25)',
+            borderRadius: 10, padding: '12px 16px', marginBottom: 20,
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <p style={{ color: '#EF476F', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
+                Couldn't load game zones
+              </p>
+              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                Reload the page and try again. If it keeps happening, tell the GM.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Out-of-zone warning — only meaningful once zones have actually loaded */}
+        {canSubmitWithLocation && zonesLoaded && !detectedZoneId && (
           <div style={{
             background: 'rgba(255,209,102,0.08)', border: '1px solid rgba(255,209,102,0.25)',
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
@@ -459,30 +513,20 @@ export default function SubmitProof({
               Points and claims already earned here are kept.
             </p>
           </div>
-        ) : (
+) : (
           <button
             onClick={handleSubmit}
-            disabled={!file || uploading || !canSubmitWithLocation}
+            disabled={!canSubmit}
             style={{
               width: '100%',
-              background:
-                !file || uploading || !canSubmitWithLocation
-                  ? '#1a1a1a'
-                  : 'rgba(6,214,160,0.15)',
-              border: `1px solid ${
-                !file || uploading || !canSubmitWithLocation
-                  ? '#222'
-                  : 'rgba(6,214,160,0.3)'
-              }`,
-              color:
-                !file || uploading || !canSubmitWithLocation
-                  ? '#444'
-                  : '#06D6A0',
+              background: !canSubmit ? '#1a1a1a' : 'rgba(6,214,160,0.15)',
+              border: `1px solid ${!canSubmit ? '#222' : 'rgba(6,214,160,0.3)'}`,
+              color: !canSubmit ? '#444' : '#06D6A0',
               padding: '14px 20px',
               borderRadius: 10,
               fontSize: '0.95rem',
               fontWeight: 700,
-              cursor: !file || uploading || !canSubmitWithLocation ? 'default' : 'pointer',
+              cursor: !canSubmit ? 'default' : 'pointer',
               fontFamily: 'inherit',
             }}
           >
@@ -490,6 +534,8 @@ export default function SubmitProof({
               ? 'Submitting...'
               : !canSubmitWithLocation
               ? '📍 Waiting for location'
+              : !zonesLoaded
+              ? 'Loading zones…'
               : !file
               ? 'Add a photo or video first'
               : 'Submit for GM Review'}
