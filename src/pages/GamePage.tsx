@@ -63,7 +63,7 @@ interface TeamData {
   zones_claimed: number
   hand: string[]
   taxi_used: boolean
-  discards_used: number
+  discard_used: number
   discarded_challenges?: string[]
 }
 
@@ -374,7 +374,7 @@ export default function GamePage() {
     if (!gameId || !myTeam || !game || discarding) return
 
     const discardLimit = game.settings.discard_limit ?? 1
-    const discardsUsed = myTeam.discards_used ?? 0
+    const discardsUsed = myTeam.discard_used ?? 0
 
     if (discardsUsed >= discardLimit) {
       alert(`You've already used your ${discardLimit === 1 ? 'discard' : `${discardLimit} discards`}.`)
@@ -425,7 +425,7 @@ export default function GamePage() {
       const teamRef = doc(db, 'games', gameId, 'teams', myTeam.id)
       await updateDoc(teamRef, {
         hand: newHand,
-        discards_used: discardsUsed + 1,
+        discard_used: discardsUsed + 1,
         discarded_challenges: [...previouslyDiscarded, challengeToRemove.id],
       })
 
@@ -485,7 +485,7 @@ export default function GamePage() {
 
   const gameEnded = game?.status === 'ended'
   const discardLimit = game?.settings.discard_limit ?? 1
-  const discardsUsed = myTeam?.discards_used ?? 0
+  const discardsUsed = myTeam?.discard_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
 
   const pendingCount = Array.from(submissions.values()).filter(s => s.status === 'pending').length

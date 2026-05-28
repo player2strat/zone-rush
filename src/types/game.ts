@@ -96,6 +96,7 @@ export interface Team {
   taxi_used: boolean              // Whether the team has used their one taxi ride
   hand: string[]                  // Challenge IDs currently in hand
   discard_used: number            // How many discards have been used (max: settings.discard_limit)
+  discarded_challenges?: string[]   // Challenge IDs this team has discarded (never recycled back)
   color: string                   // Hex color for map display (e.g. "#EF476F")
 }
 
