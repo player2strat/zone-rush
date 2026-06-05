@@ -6,7 +6,6 @@ import { collectionGroup, collection, query, where, getDocs, getDoc } from 'fire
 import { auth, db } from './lib/firebase'
 import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
-import MapPage from './pages/MapPage'
 import CreateGame from './pages/CreateGame'
 import JoinGame from './pages/JoinGame'
 import LobbyPage from './pages/LobbyPage'
@@ -123,7 +122,6 @@ export default function App() {
             <HomePage />
           </>
         } />
-        <Route path="/map" element={<MapPage />} />
         <Route path="/create" element={<CreateGame />} />
         <Route path="/join" element={<JoinGame />} />
 <Route
