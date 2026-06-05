@@ -65,6 +65,11 @@ export interface GameSettings {
   score_reveal_times: number[]    // % of game time to auto-broadcast scores (e.g. [50, 75])
   zone_close_schedule?: { zone_id: string; close_at_minutes: number }[]
   closed_zones?: string[]
+  points_easy?: number              // Points for easy challenges (default: 1)
+  points_medium?: number            // Points for medium challenges (default: 2)
+  points_hard?: number              // Points for hard challenges (default: 3)
+  phone_free_bonus?: number         // Bonus for no phones (default: 1)
+  phone_free_no_talk_bonus?: number // Bonus for no phones + no talking (default: 2)
 }
 
 

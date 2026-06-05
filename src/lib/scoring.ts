@@ -26,14 +26,10 @@ import type { GameSettings, ZoneScore, Submission, Zone, Team } from '../types/g
 
 // ─── Point Values ─────────────────────────────────────────────────────────────
 
-const DIFFICULTY_POINTS: Record<string, number> = {
-  easy: 1,
-  medium: 2,
-  hard: 3,
-}
-
-const PHONE_FREE_BONUS = 1        // No phones used
-const PHONE_FREE_SILENT_BONUS = 2 // No phones AND no talking (replaces, not stacks)
+// Default fallbacks — only used if game.settings doesn't specify
+const DEFAULT_POINTS: Record<string, number> = { easy: 1, medium: 2, hard: 3 }
+const DEFAULT_PHONE_FREE = 1
+const DEFAULT_PHONE_FREE_SILENT = 2
 
 // ─── Helper: read a ZoneScore doc with its id included ───────────────────────
 
@@ -93,17 +89,26 @@ export async function approveSubmission(
   const challenge = challengeSnap.data()
 
   // 4. Calculate points earned
+  // Read point values from game settings, fall back to defaults
+  const difficultyPoints: Record<string, number> = {
+    easy: settings.points_easy ?? DEFAULT_POINTS.easy,
+    medium: settings.points_medium ?? DEFAULT_POINTS.medium,
+    hard: settings.points_hard ?? DEFAULT_POINTS.hard,
+  }
+  const phoneFreeBonus = settings.phone_free_bonus ?? DEFAULT_PHONE_FREE
+  const phoneFreeSilentBonus = settings.phone_free_no_talk_bonus ?? DEFAULT_PHONE_FREE_SILENT
+
   const difficultyKey = (challenge.difficulty ?? 'easy').toLowerCase()
-  let points = DIFFICULTY_POINTS[difficultyKey] ?? 1
+  let points = difficultyPoints[difficultyKey] ?? DEFAULT_POINTS.easy
 
   if (tier2Approved && challenge.tier2?.bonus_points) {
     points += challenge.tier2.bonus_points
   }
 
   if (phoneFreeApproved) {
-    points += PHONE_FREE_SILENT_BONUS
+    points += phoneFreeSilentBonus
   } else if (submission.phone_free_claimed) {
-    points += PHONE_FREE_BONUS
+    points += phoneFreeBonus
   }
 
   // 5. Get or create this team's zone_score record
