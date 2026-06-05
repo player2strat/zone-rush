@@ -11,10 +11,11 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
-  updateDoc, setDoc, getDoc, getDocs, serverTimestamp,
+  updateDoc, getDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
+import { approveSubmission } from '../lib/scoring'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
@@ -117,7 +118,6 @@ interface ZoneScoreData {
 
 // --------------- Constants ---------------
 
-const DIFFICULTY_PTS: Record<string, number> = { easy: 1, medium: 3, hard: 5 }
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: '#06D6A0', medium: '#FFD166', hard: '#EF476F',
 }
@@ -451,8 +451,7 @@ export default function GMDashboard() {
     if (!zone?.boundary?.coordinates) return 'unknown'
     return isPointInPolygon(sub.gps_lat, sub.gps_lng, zone.boundary.coordinates) ? 'inside' : 'outside'
   }
-
-  const handleApprove = async (sub: SubmissionData) => {
+const handleApprove = async (sub: SubmissionData) => {
     if (!gameId || !game || processing) return
     const closedZones = game.closed_zones ?? []
     if (closedZones.includes(sub.zone_id)) {
@@ -461,108 +460,47 @@ export default function GMDashboard() {
     }
     setProcessing(sub.id)
     try {
-      const challenge = challenges.get(sub.challenge_id)
-      if (!challenge) throw new Error('Challenge not found')
       const review = getReviewState(sub.id)
-      const claimThreshold = game.settings.claim_threshold ?? 6
-      const basePoints = DIFFICULTY_PTS[challenge.difficulty] || 3
-      const tier2Points = sub.attempted_tier2 && review.tier2Approved && challenge.tier2 ? challenge.tier2.bonus_points : 0
-      const phoneFreePoints = sub.phone_free_claimed ? review.phoneFreeBonus : 0
-      const totalPointsEarned = basePoints + tier2Points + phoneFreePoints
 
-      await updateDoc(doc(db, 'submissions', sub.id), {
-        status: 'approved', tier2_approved: review.tier2Approved,
-        reviewed_by: user?.uid || null, reviewed_at: serverTimestamp(), gm_notes: '',
-        points_awarded: totalPointsEarned,
-      })
+      // Snapshot who owns this zone BEFORE approval (for steal detection)
+      const previousOwner = zoneOwnership.get(sub.zone_id)
 
-      const zoneId = sub.zone_id || 'unknown'
-      const scoreDocId = `${sub.team_id}__${zoneId}`
-      const scoreRef = doc(db, 'games', gameId, 'zone_scores', scoreDocId)
-      const scoreSnap = await getDoc(scoreRef)
-      let currentPoints = 0
-      let completedChallenges: string[] = []
-      if (scoreSnap.exists()) {
-        const data = scoreSnap.data() as ZoneScoreData
-        currentPoints = data.points
-        completedChallenges = data.challenges_completed || []
-      }
+      // Single scoring path — all point math lives in scoring.ts
+      const result = await approveSubmission(
+        sub.id,
+        user?.uid ?? '',
+        review.tier2Approved,
+        review.phoneFreeBonus > 0
+      )
 
-      const zoneBonusPts = game.settings.zone_bonus_points ?? 3
-      const crossingThreshold = currentPoints < claimThreshold && (currentPoints + totalPointsEarned) >= claimThreshold
-      const bonusPoints = crossingThreshold ? zoneBonusPts : 0
-      const newPoints = currentPoints + totalPointsEarned + bonusPoints
-      completedChallenges.push(sub.challenge_id)
-      const newStatus: 'none' | 'claimed' = newPoints >= claimThreshold ? 'claimed' : 'none'
-
-      await setDoc(scoreRef, {
-        team_id: sub.team_id, zone_id: zoneId, points: newPoints,
-        status: newStatus, challenges_completed: completedChallenges,
-      })
-
-      if (newStatus === 'claimed') {
-        const allScoresSnap = await getDocs(collection(db, 'games', gameId, 'zone_scores'))
-        let highestPoints = 0; let highestTeam = ''
-        allScoresSnap.forEach((d) => {
-          const data = d.data() as ZoneScoreData
-          if (data.zone_id === zoneId && data.points > highestPoints) {
-            highestPoints = data.points; highestTeam = data.team_id
-          }
+      // Zone steal broadcast + activity logging
+      if (result.zoneStolen && previousOwner && previousOwner.teamId !== sub.team_id) {
+        const stealingTeam = getTeam(sub.team_id)
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Game Master',
+          `🔁 Zone ${sub.zone_id.replace('zone_district_', 'District ')} was just stolen by ${stealingTeam?.name ?? 'a team'}!`)
+        await logEvent(gameId, {
+          team_id: sub.team_id,
+          event_type: 'zone_stolen',
+          actor_id: user?.uid ?? null,
+          zone_id: sub.zone_id,
+          metadata: {
+            previous_owner_team_id: previousOwner.teamId,
+            previous_owner_name: previousOwner.teamName,
+            points_awarded: result.pointsAwarded,
+          },
         })
-        for (const d of allScoresSnap.docs) {
-          const data = d.data() as ZoneScoreData
-          if (data.zone_id === zoneId) {
-            const shouldBeClaimed = data.team_id === highestTeam && data.points >= claimThreshold
-            if ((shouldBeClaimed && data.status !== 'claimed') || (!shouldBeClaimed && data.status === 'claimed')) {
-              await updateDoc(d.ref, { status: shouldBeClaimed ? 'claimed' : 'none' })
-            }
-          }
-        }
-        const previousOwner = zoneOwnership.get(zoneId)
-        if (previousOwner && previousOwner.teamId !== sub.team_id && highestTeam === sub.team_id) {
-          const stolenByTeam = getTeam(highestTeam)
-          await sendGMBroadcast(gameId, user?.uid ?? '', 'Game Master',
-            `🔁 Zone ${zoneId.replace('zone_district_', 'District ')} was just stolen by ${stolenByTeam?.name ?? 'a team'}!`)
-          // Activity log: zone_stolen
-          await logEvent(gameId, {
-            team_id: sub.team_id,
-            event_type: 'zone_stolen',
-            actor_id: user?.uid ?? null,
-            zone_id: zoneId,
-            metadata: {
-              previous_owner_team_id: previousOwner.teamId,
-              previous_owner_name: previousOwner.teamName,
-              new_points_total: newPoints,
-            },
-          })
-        } else if (!previousOwner && crossingThreshold) {
-          // First-time claim (no previous owner)
-          await logEvent(gameId, {
-            team_id: sub.team_id,
-            event_type: 'zone_claimed',
-            actor_id: user?.uid ?? null,
-            zone_id: zoneId,
-            points_delta: zoneBonusPts,
-            metadata: { new_points_total: newPoints },
-          })
-        }
-      }
-
-      const teamScoresSnap = await getDocs(collection(db, 'games', gameId, 'zone_scores'))
-      const teamTotals = new Map<string, { points: number; claimed: number }>()
-      teamScoresSnap.forEach((d) => {
-        const data = d.data() as ZoneScoreData
-        const existing = teamTotals.get(data.team_id) || { points: 0, claimed: 0 }
-        existing.points += data.points
-        if (data.status === 'claimed') existing.claimed += 1
-        teamTotals.set(data.team_id, existing)
-      })
-      for (const [teamId, totals] of teamTotals) {
-        await updateDoc(doc(db, 'games', gameId, 'teams', teamId), {
-          total_points: totals.points, zones_claimed: totals.claimed,
+      } else if (result.zoneClaimed && !previousOwner) {
+        await logEvent(gameId, {
+          team_id: sub.team_id,
+          event_type: 'zone_claimed',
+          actor_id: user?.uid ?? null,
+          zone_id: sub.zone_id,
+          points_delta: game.settings.zone_bonus_points ?? 3,
+          metadata: { points_awarded: result.pointsAwarded },
         })
       }
 
+      // Card replacement — remove completed challenge from hand, draw a new one
       try {
         const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
         const teamSnap = await getDoc(teamRef)
@@ -612,7 +550,6 @@ export default function GMDashboard() {
 
             await updateDoc(teamRef, { hand: updatedHand })
 
-            // Activity log: card drawn as replacement
             await logEvent(gameId, {
               team_id: sub.team_id,
               event_type: 'card_drawn',
@@ -986,7 +923,7 @@ export default function GMDashboard() {
                   const review = getReviewState(sub.id)
                   const isProcessing = processing === sub.id
                   const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || '#FFD166'
-                  const basePts = DIFFICULTY_PTS[challenge?.difficulty || 'medium'] || 3
+                  const basePts = (game?.settings as any)?.[`points_${challenge?.difficulty || 'medium'}`] ?? ({ easy: 1, medium: 2, hard: 3 }[challenge?.difficulty || 'medium'] ?? 2)
                   const gpsCheck = checkGpsProximity(sub)
 
                   return (
