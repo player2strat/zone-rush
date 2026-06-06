@@ -135,6 +135,18 @@ export default function LobbyPage() {
     return () => unsubTeams()
   }, [gameId, user])
 
+  // Redirect players to game screen when GM starts the game
+  useEffect(() => {
+    if (!game || !gameId || !user) return
+    if (game.status === 'active' || game.status === 'strategy') {
+      if (game.created_by === user.uid) {
+        navigate('/gm/' + gameId, { replace: true })
+      } else {
+        navigate('/game/' + gameId, { replace: true })
+      }
+    }
+  }, [game?.status])
+
   // -----------------------------------------------------------------------
   // Player: join or switch teams
   // -----------------------------------------------------------------------
