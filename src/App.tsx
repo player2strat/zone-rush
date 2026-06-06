@@ -16,6 +16,7 @@ import ZoneManager from './pages/ZoneManager'
 import ResultsPage from './pages/ResultsPage.tsx'
 import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
+import SeedMaps from './pages/SeedMaps'
 
 // ---------------------------------------------------------------------------
 // Checks Firestore for an active game this user is part of (player or GM).
@@ -151,6 +152,7 @@ export default function App() {
         />
         <Route path="/admin/seed" element={<AdminGuard><AdminSeed /></AdminGuard>} />
         <Route path="/admin/zones" element={<AdminGuard><ZoneManager /></AdminGuard>} />
+        <Route path="/admin/seed-maps" element={<AdminGuard><SeedMaps /></AdminGuard>} />
         <Route path="/results/:gameId" element={<ResultsPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

@@ -1,8 +1,8 @@
 // =============================================================================
-// Zone Rush — Create Game Page (v2)
-// 3-step flow: Basics → Zones → Settings & Create
-// Zones are NOT pre-selected — GM picks them.
-// Zone closure uses a dropdown, not a free-form number input.
+// Zone Rush — Create Game Page (v3)
+// 3-step flow: Basics → Map & Zones → Settings & Create
+// NEW: map_sets picker in Step 2. GM picks a map_set, zones auto-populate.
+//      GM can still toggle individual zones on/off after selecting a set.
 // All settings stored in Firestore — never hardcoded.
 // =============================================================================
 
@@ -11,13 +11,33 @@ import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, setDoc, query, where } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 interface ZoneDoc {
   id: string
   name: string
-  district_number: number
+  district_number?: number
+  borough?: string
   city: string
 }
 
+interface MapSetDoc {
+  id: string
+  name: string
+  description: string
+  city: string
+  borough: string
+  zone_ids: string[]
+  map_center: { lat: number; lng: number; zoom: number }
+  is_active: boolean
+  recommended_teams?: number
+  recommended_duration?: number
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function generateJoinCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
@@ -27,7 +47,6 @@ function generateJoinCode(): string {
   return code
 }
 
-// Closure time presets — filtered to only show options that fit within game duration
 const CLOSURE_PRESETS = [
   { label: 'Never', value: '' },
   { label: '30 min', value: '30' },
@@ -39,20 +58,28 @@ const CLOSURE_PRESETS = [
   { label: '150 min', value: '150' },
 ]
 
+// =============================================================================
+// Main Component
+// =============================================================================
 export default function CreateGame() {
   const navigate = useNavigate()
   const user = auth.currentUser
 
-  // Step tracker: 1 = Basics, 2 = Zones, 3 = Settings & Create
+  // Step tracker: 1 = Basics, 2 = Map & Zones, 3 = Settings & Create
   const [step, setStep] = useState(1)
 
   // Zone data
   const [zones, setZones] = useState<ZoneDoc[]>([])
-  const [selectedZones, setSelectedZones] = useState<string[]>([]) // nothing pre-selected
+  const [selectedZones, setSelectedZones] = useState<string[]>([])
   const [loadingZones, setLoadingZones] = useState(true)
   const [cityFilter, setCityFilter] = useState('nyc')
 
-  // Closure schedule: zone_id → close_at_minutes string ('' = never)
+  // Map sets
+  const [mapSets, setMapSets] = useState<MapSetDoc[]>([])
+  const [selectedMapSet, setSelectedMapSet] = useState<string | null>(null)
+  const [loadingMapSets, setLoadingMapSets] = useState(true)
+
+  // Closure schedule
   const [zoneCloseMinutes, setZoneCloseMinutes] = useState<Record<string, string>>({})
 
   // Step 1: Basics
@@ -61,7 +88,7 @@ export default function CreateGame() {
   const [teamSize, setTeamSize] = useState(3)
   const [durationMinutes, setDurationMinutes] = useState(180)
 
-  // Step 3: Advanced settings (collapsed by default)
+  // Step 3: Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [claimThreshold, setClaimThreshold] = useState(6)
   const [zoneBonusPoints, setZoneBonusPoints] = useState(3)
@@ -69,17 +96,43 @@ export default function CreateGame() {
   const [handSize, setHandSize] = useState(5)
   const [lockThreshold, setLockThreshold] = useState(10)
 
-  // Hand composition rules — configurable per game, stored in game.settings
-  // These control how challenge cards are distributed when the game starts.
-  // dealChallenges.ts uses these values; falls back to these defaults if missing.
-  const [handMinEasy, setHandMinEasy] = useState(1) // minimum Easy cards per hand
-  const [handMinHard, setHandMinHard] = useState(1) // minimum Hard cards per hand
-  const [handMaxHard, setHandMaxHard] = useState(2) // maximum Hard cards per hand
+  // Hand composition rules
+  const [handMinEasy, setHandMinEasy] = useState(1)
+  const [handMinHard, setHandMinHard] = useState(1)
+  const [handMaxHard, setHandMaxHard] = useState(2)
 
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
 
-  // Load zones on mount
+  // ---------------------------------------------------------------------------
+  // Load map_sets on mount
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    async function loadMapSets() {
+      setLoadingMapSets(true)
+      try {
+        const q = query(
+          collection(db, 'map_sets'),
+          where('city', '==', cityFilter),
+          where('is_active', '==', true)
+        )
+        const snapshot = await getDocs(q)
+        const sets: MapSetDoc[] = []
+        snapshot.forEach((d) => {
+          sets.push({ id: d.id, ...d.data() } as MapSetDoc)
+        })
+        setMapSets(sets)
+      } catch (err: any) {
+        console.error('Failed to load map_sets:', err)
+      }
+      setLoadingMapSets(false)
+    }
+    loadMapSets()
+  }, [cityFilter])
+
+  // ---------------------------------------------------------------------------
+  // Load zones when city changes
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     async function loadZones() {
       setLoadingZones(true)
@@ -93,12 +146,19 @@ export default function CreateGame() {
             id: d.id,
             name: data.name,
             district_number: data.district_number,
+            borough: data.borough,
             city: data.city,
           })
         })
-        zoneDocs.sort((a, b) => a.district_number - b.district_number)
+        // Sort: Brooklyn first (by district), then Manhattan alphabetically
+        zoneDocs.sort((a, b) => {
+          if (a.borough !== b.borough) return (a.borough || '').localeCompare(b.borough || '')
+          if (a.district_number && b.district_number) return a.district_number - b.district_number
+          return a.name.localeCompare(b.name)
+        })
         setZones(zoneDocs)
-        setSelectedZones([]) // always start with nothing selected
+        setSelectedZones([])
+        setSelectedMapSet(null)
       } catch (err: any) {
         setError('Failed to load zones: ' + err.message)
       }
@@ -107,14 +167,33 @@ export default function CreateGame() {
     loadZones()
   }, [cityFilter])
 
+  // ---------------------------------------------------------------------------
+  // When a map_set is selected, auto-populate zones and apply recommendations
+  // ---------------------------------------------------------------------------
+  const handleSelectMapSet = (mapSetId: string) => {
+    const ms = mapSets.find((m) => m.id === mapSetId)
+    if (!ms) return
+
+    setSelectedMapSet(mapSetId)
+    // Auto-select all zones in this map_set
+    setSelectedZones(ms.zone_ids.filter((zid) => zones.some((z) => z.id === zid)))
+    // Clear any closure schedule from previous selection
+    setZoneCloseMinutes({})
+  }
+
   const toggleZone = (zoneId: string) => {
     setSelectedZones((prev) =>
       prev.includes(zoneId) ? prev.filter((id) => id !== zoneId) : [...prev, zoneId]
     )
+    // If user manually changes zones, they've customized — clear map_set selection label
+    // (but don't reset the zones — they're already toggled)
   }
 
   const selectAll = () => setSelectedZones(zones.map((z) => z.id))
-  const clearAll = () => setSelectedZones([])
+  const clearAll = () => {
+    setSelectedZones([])
+    setSelectedMapSet(null)
+  }
 
   // Closure presets filtered to fit within game duration
   const availablePresets = CLOSURE_PRESETS.filter(
@@ -136,6 +215,20 @@ export default function CreateGame() {
   const step1Valid = gameName.trim().length > 0
   const step2Valid = selectedZones.length > 0
 
+  // Get the active map set (for display)
+  const activeMapSet = mapSets.find((m) => m.id === selectedMapSet) || null
+
+  // Group zones by borough for the zone picker
+  const zonesByBorough = zones.reduce<Record<string, ZoneDoc[]>>((acc, z) => {
+    const borough = z.borough || 'Other'
+    if (!acc[borough]) acc[borough] = []
+    acc[borough].push(z)
+    return acc
+  }, {})
+
+  // ---------------------------------------------------------------------------
+  // Create Game
+  // ---------------------------------------------------------------------------
   const handleCreateGame = async () => {
     if (!user) return
     setCreating(true)
@@ -154,6 +247,7 @@ export default function CreateGame() {
         max_teams: maxTeams,
         zones: selectedZones,
         closed_zones: [],
+        map_set_id: selectedMapSet || null,
         started_at: null,
         ends_at: null,
         created_at: new Date(),
@@ -165,7 +259,6 @@ export default function CreateGame() {
           zone_bonus_points: zoneBonusPoints,
           discard_limit: discardLimit,
           hand_size: handSize,
-          // Hand composition rules — read by dealChallenges.ts when game starts
           hand_min_easy: handMinEasy,
           hand_min_hard: handMinHard,
           hand_max_hard: handMaxHard,
@@ -191,6 +284,9 @@ export default function CreateGame() {
     }
   }
 
+  // ==========================================================================
+  // Render
+  // ==========================================================================
   return (
     <div style={{
       minHeight: '100vh',
@@ -217,7 +313,7 @@ export default function CreateGame() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
           {[
             { n: 1, label: 'Basics' },
-            { n: 2, label: 'Zones' },
+            { n: 2, label: 'Map & Zones' },
             { n: 3, label: 'Settings' },
           ].map(({ n, label }, i) => (
             <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -251,9 +347,9 @@ export default function CreateGame() {
           ))}
         </div>
 
-        {/* ================================================================
-            STEP 1: Basics
-        ================================================================ */}
+        {/* ==============================================================
+            STEP 1: Basics (unchanged from v2)
+        ============================================================== */}
         {step === 1 && (
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
@@ -263,7 +359,6 @@ export default function CreateGame() {
               Name your game and set the format
             </p>
 
-            {/* City (hidden if only 1 city) */}
             <CityPicker value={cityFilter} onChange={setCityFilter} />
 
             <div style={{ marginBottom: 20 }}>
@@ -314,29 +409,119 @@ export default function CreateGame() {
               disabled={!step1Valid}
               style={primaryBtnStyle(!step1Valid)}
             >
-              Next: Select Zones →
+              Next: Select Map →
             </button>
           </div>
         )}
 
-        {/* ================================================================
-            STEP 2: Zone Selection
-        ================================================================ */}
+        {/* ==============================================================
+            STEP 2: Map Set Picker + Zone Selection
+        ============================================================== */}
         {step === 2 && (
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
-              Select Zones
+              Pick a Map
             </h1>
             <p style={{ color: '#555', fontSize: '0.85rem', marginBottom: 20 }}>
-              Tap to include a zone in this game
+              Choose a pre-configured map, then fine-tune which zones to include
             </p>
 
+            {/* Map Set Picker */}
+            {loadingMapSets ? (
+              <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading maps...</p>
+            ) : mapSets.length > 0 ? (
+              <div style={{ marginBottom: 24 }}>
+                <label style={labelStyle}>Map Sets</label>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {mapSets.map((ms) => {
+                    const isActive = selectedMapSet === ms.id
+                    return (
+                      <button
+                        key={ms.id}
+                        onClick={() => handleSelectMapSet(ms.id)}
+                        style={{
+                          background: isActive
+                            ? 'rgba(155,93,229,0.1)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${isActive ? 'rgba(155,93,229,0.35)' : '#1e1e1e'}`,
+                          borderRadius: 10,
+                          padding: '14px 16px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          transition: 'all 0.12s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <p style={{
+                              color: isActive ? '#9B5DE5' : '#ccc',
+                              fontWeight: 700,
+                              fontSize: '0.95rem',
+                              marginBottom: 4,
+                            }}>
+                              {ms.name}
+                            </p>
+                            <p style={{
+                              color: isActive ? '#9B5DE5aa' : '#555',
+                              fontSize: '0.82rem',
+                              lineHeight: 1.4,
+                            }}>
+                              {ms.description}
+                            </p>
+                          </div>
+                          <div style={{
+                            width: 22, height: 22, borderRadius: '50%',
+                            border: `2px solid ${isActive ? '#9B5DE5' : '#333'}`,
+                            background: isActive ? 'rgba(155,93,229,0.2)' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.7rem', color: '#9B5DE5', fontWeight: 700,
+                            flexShrink: 0, marginLeft: 12,
+                          }}>
+                            {isActive ? '✓' : ''}
+                          </div>
+                        </div>
+                        {/* Recommendation hints */}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                          <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
+                            {ms.zone_ids.length} zones
+                          </span>
+                          <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
+                            {ms.borough}
+                          </span>
+                          {ms.recommended_teams && (
+                            <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
+                              ~{ms.recommended_teams} teams
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Divider between map sets and zone list */}
+            {mapSets.length > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                margin: '8px 0 20px',
+              }}>
+                <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
+                <span style={{ color: '#444', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+                  {selectedMapSet ? 'Fine-tune zones' : 'Or pick zones manually'}
+                </span>
+                <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
+              </div>
+            )}
+
+            {/* Zone list */}
             {loadingZones ? (
               <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading zones...</p>
             ) : (
               <>
                 {/* Select all / clear */}
-                <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                   <button onClick={selectAll} style={ghostBtnStyle}>
                     Select all ({zones.length})
                   </button>
@@ -346,54 +531,69 @@ export default function CreateGame() {
                     </button>
                   )}
                   {selectedZones.length > 0 && (
-                    <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600, alignSelf: 'center' }}>
+                    <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600 }}>
                       {selectedZones.length} selected
                     </span>
                   )}
                 </div>
 
-                <div style={{ display: 'grid', gap: 8, marginBottom: 28 }}>
-                  {zones.map((zone) => {
-                    const isSelected = selectedZones.includes(zone.id)
-                    return (
-                      <button
-                        key={zone.id}
-                        onClick={() => toggleZone(zone.id)}
-                        style={{
-                          background: isSelected
-                            ? 'rgba(6,214,160,0.1)' : 'rgba(255,255,255,0.03)',
-                          border: `1px solid ${isSelected ? 'rgba(6,214,160,0.3)' : '#1e1e1e'}`,
-                          borderRadius: 8,
-                          padding: '12px 16px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          transition: 'all 0.12s',
-                        }}
-                      >
-                        <span style={{
-                          color: isSelected ? '#06D6A0' : '#888',
-                          fontWeight: 600, fontSize: '0.9rem',
-                        }}>
-                          {zone.name}
-                        </span>
-                        <div style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          border: `1.5px solid ${isSelected ? '#06D6A0' : '#333'}`,
-                          background: isSelected ? 'rgba(6,214,160,0.15)' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.7rem', color: '#06D6A0', fontWeight: 700,
-                          flexShrink: 0,
-                        }}>
-                          {isSelected ? '✓' : ''}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                {/* Zones grouped by borough */}
+                {Object.entries(zonesByBorough).map(([borough, boroughZones]) => (
+                  <div key={borough} style={{ marginBottom: 16 }}>
+                    <p style={{
+                      fontSize: '0.7rem',
+                      color: '#555',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                      fontWeight: 700,
+                      marginBottom: 8,
+                    }}>
+                      {borough} ({boroughZones.length})
+                    </p>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {boroughZones.map((zone) => {
+                        const isSelected = selectedZones.includes(zone.id)
+                        return (
+                          <button
+                            key={zone.id}
+                            onClick={() => toggleZone(zone.id)}
+                            style={{
+                              background: isSelected
+                                ? 'rgba(6,214,160,0.1)' : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${isSelected ? 'rgba(6,214,160,0.3)' : '#1e1e1e'}`,
+                              borderRadius: 8,
+                              padding: '10px 14px',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              transition: 'all 0.12s',
+                            }}
+                          >
+                            <span style={{
+                              color: isSelected ? '#06D6A0' : '#888',
+                              fontWeight: 600, fontSize: '0.88rem',
+                            }}>
+                              {zone.name}
+                            </span>
+                            <div style={{
+                              width: 18, height: 18, borderRadius: 4,
+                              border: `1.5px solid ${isSelected ? '#06D6A0' : '#333'}`,
+                              background: isSelected ? 'rgba(6,214,160,0.15)' : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.65rem', color: '#06D6A0', fontWeight: 700,
+                              flexShrink: 0,
+                            }}>
+                              {isSelected ? '✓' : ''}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
 
                 {error && <p style={errorStyle}>{error}</p>}
 
@@ -412,9 +612,9 @@ export default function CreateGame() {
           </div>
         )}
 
-        {/* ================================================================
+        {/* ==============================================================
             STEP 3: Zone Closure + Advanced Settings + Create
-        ================================================================ */}
+        ============================================================== */}
         {step === 3 && (
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
@@ -487,7 +687,6 @@ export default function CreateGame() {
                   })}
               </div>
 
-              {/* Summary if any closures set */}
               {buildCloseSchedule().length > 0 && (
                 <div style={{
                   marginTop: 12,
@@ -510,7 +709,7 @@ export default function CreateGame() {
               )}
             </div>
 
-            {/* Advanced settings (collapsed) */}
+            {/* Advanced settings */}
             <div style={{ marginBottom: 28 }}>
               <button
                 onClick={() => setShowAdvanced((v) => !v)}
@@ -546,39 +745,13 @@ export default function CreateGame() {
                   background: 'rgba(255,255,255,0.01)',
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                    <SettingInput
-                      label="Zone Claim (pts)"
-                      value={claimThreshold}
-                      onChange={setClaimThreshold}
-                      min={4} max={10}
-                    />
-                    <SettingInput
-                      label="Zone Bonus"
-                      value={zoneBonusPoints}
-                      onChange={setZoneBonusPoints}
-                      min={0} max={5}
-                    />
-                    <SettingInput
-                      label="Zone Lock (pts)"
-                      value={lockThreshold}
-                      onChange={setLockThreshold}
-                      min={claimThreshold} max={20}
-                    />
-                    <SettingInput
-                      label="Discards"
-                      value={discardLimit}
-                      onChange={setDiscardLimit}
-                      min={0} max={5}
-                    />
-                    <SettingInput
-                      label="Hand Size"
-                      value={handSize}
-                      onChange={setHandSize}
-                      min={3} max={8}
-                    />
+                    <SettingInput label="Zone Claim (pts)" value={claimThreshold} onChange={setClaimThreshold} min={4} max={10} />
+                    <SettingInput label="Zone Bonus" value={zoneBonusPoints} onChange={setZoneBonusPoints} min={0} max={5} />
+                    <SettingInput label="Zone Lock (pts)" value={lockThreshold} onChange={setLockThreshold} min={claimThreshold} max={20} />
+                    <SettingInput label="Discards" value={discardLimit} onChange={setDiscardLimit} min={0} max={5} />
+                    <SettingInput label="Hand Size" value={handSize} onChange={setHandSize} min={3} max={8} />
                   </div>
 
-                  {/* Hand composition divider */}
                   <p style={{
                     fontSize: '0.7rem', color: '#444',
                     textTransform: 'uppercase', letterSpacing: 1,
@@ -590,34 +763,16 @@ export default function CreateGame() {
                   <p style={{ color: '#555', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 12 }}>
                     Controls the mix of Easy / Hard cards dealt to each team at game start.
                   </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-                    <SettingInput
-                      label="Min Easy"
-                      value={handMinEasy}
-                      onChange={setHandMinEasy}
-                      min={0} max={handSize}
-                      compact
-                    />
-                    <SettingInput
-                      label="Min Hard"
-                      value={handMinHard}
-                      onChange={setHandMinHard}
-                      min={0} max={handSize}
-                      compact
-                    />
-                    <SettingInput
-                      label="Max Hard"
-                      value={handMaxHard}
-                      onChange={setHandMaxHard}
-                      min={0} max={handSize}
-                      compact
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                    <SettingInput label="Min Easy" value={handMinEasy} onChange={setHandMinEasy} min={0} max={handSize} compact />
+                    <SettingInput label="Min Hard" value={handMinHard} onChange={setHandMinHard} min={0} max={handSize} compact />
+                    <SettingInput label="Max Hard" value={handMaxHard} onChange={setHandMaxHard} min={0} max={handSize} compact />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Game summary before creating */}
+            {/* Game summary */}
             <div style={{
               background: 'rgba(255,255,255,0.02)',
               border: '1px solid #1e1e1e',
@@ -631,6 +786,9 @@ export default function CreateGame() {
               <div style={{ display: 'grid', gap: 6 }}>
                 {[
                   { label: 'Name', value: gameName },
+                  activeMapSet
+                    ? { label: 'Map', value: activeMapSet.name }
+                    : null,
                   { label: 'Zones', value: `${selectedZones.length} selected` },
                   { label: 'Teams', value: `${maxTeams} teams × ${teamSize} players` },
                   { label: 'Duration', value: `${durationMinutes} min` },
@@ -826,4 +984,13 @@ const primaryBtnStyle = (disabled: boolean): React.CSSProperties => ({
   fontWeight: 700,
   cursor: disabled ? 'not-allowed' : 'pointer',
   fontFamily: 'inherit',
+})
+
+const tagStyle = (color: string): React.CSSProperties => ({
+  fontSize: '0.7rem',
+  padding: '3px 8px',
+  borderRadius: 4,
+  background: `${color}15`,
+  color: color,
+  fontWeight: 600,
 })
