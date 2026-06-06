@@ -250,7 +250,7 @@ export default function SeedMaps() {
           transit_lines: zone.transit_lines,
           landmarks: zone.landmarks,
           difficulty_rating: zone.difficulty_rating,
-          boundary: zone.boundary,
+          boundary: JSON.stringify(zone.boundary),
         }, { merge: true })
         created++
         log(`  \u2713 ${zone.name} (${zone.id})`)
