@@ -2,9 +2,8 @@
 // Zone Rush — End-Game Bonus Logic (Side Quests)
 //
 // Side Quest rules (stored in game settings, never hardcoded):
-//   +5  Most zones claimed      (auto-calculated)
-//   +4  Most transit modes used (GM selects)
-//   +3  Most challenges completed (auto-calculated)
+//   +8  Most zones claimed               (auto-calculated from zone_scores)
+//   +8  Most zones with ≥1 challenge     (auto-calculated from zone_scores)
 //
 // Bonuses stored on the game doc:
 //   end_game_bonuses: { [teamId]: number }
@@ -17,23 +16,20 @@ import {
   updateDoc,
   collection,
   getDocs,
-  query,
-  where,
 } from 'firebase/firestore'
 import { db } from './firebase'
 
 export interface BonusAwards {
-  mostZones: string | null          // +5pts — auto-calculated from zone_scores
-  mostTransitModes: string | null   // +4pts — GM selects
-  mostChallenges: string | null     // +3pts — auto-calculated from submissions
+  mostZonesClaimed: string | null        // team with most claimed zones
+  mostZonesWithChallenges: string | null // team with most zones where ≥1 challenge completed
 }
 
 export interface TeamBonusSummary {
   teamId: string
   teamName: string
   teamColor: string
-  zonesClaimedCount: number
-  challengesCompletedCount: number
+  zonesClaimedCount: number           // zones at or above claim threshold
+  zonesWithChallengesCount: number    // zones with at least 1 completed challenge
 }
 
 // ---------------------------------------------------------------------------
@@ -50,30 +46,27 @@ export async function getTeamBonusSummaries(
     collection(db, 'games', gameId, 'zone_scores')
   )
 
-  // Count claimed zones per team
+  // Count per team: claimed zones AND zones with ≥1 challenge
   const claimedCounts = new Map<string, number>()
+  const zonesWithChallengeCounts = new Map<string, number>()
+
   zoneScoresSnap.forEach((d) => {
     const data = d.data()
+    const teamId = data.team_id as string
+
+    // Count claimed zones
     if (data.status === 'claimed') {
-      claimedCounts.set(
-        data.team_id,
-        (claimedCounts.get(data.team_id) ?? 0) + 1
+      claimedCounts.set(teamId, (claimedCounts.get(teamId) ?? 0) + 1)
+    }
+
+    // Count zones with at least 1 completed challenge
+    const completed = data.challenges_completed as string[] | undefined
+    if (completed && completed.length > 0) {
+      zonesWithChallengeCounts.set(
+        teamId,
+        (zonesWithChallengeCounts.get(teamId) ?? 0) + 1
       )
     }
-  })
-
-  // Count approved submissions per team
-  const subsSnap = await getDocs(
-    query(
-      collection(db, 'submissions'),
-      where('game_id', '==', gameId),
-      where('status', '==', 'approved')
-    )
-  )
-  const challengeCounts = new Map<string, number>()
-  subsSnap.forEach((d) => {
-    const teamId = d.data().team_id as string
-    challengeCounts.set(teamId, (challengeCounts.get(teamId) ?? 0) + 1)
   })
 
   const summaries: TeamBonusSummary[] = []
@@ -84,7 +77,7 @@ export async function getTeamBonusSummaries(
       teamName: team.name,
       teamColor: team.color,
       zonesClaimedCount: claimedCounts.get(d.id) ?? 0,
-      challengesCompletedCount: challengeCounts.get(d.id) ?? 0,
+      zonesWithChallengesCount: zonesWithChallengeCounts.get(d.id) ?? 0,
     })
   })
 
@@ -92,41 +85,45 @@ export async function getTeamBonusSummaries(
 }
 
 // ---------------------------------------------------------------------------
-// autoSelectMostZones
-// Returns team_id with most claimed zones. Null if tied.
+// autoSelectMostZonesClaimed
+// Returns team_id with most claimed zones. Null if tied at top.
 // ---------------------------------------------------------------------------
-export function autoSelectMostZones(
+export function autoSelectMostZonesClaimed(
   summaries: TeamBonusSummary[]
 ): string | null {
   if (summaries.length === 0) return null
-  const top = summaries[0]
-  const second = summaries[1]
+  const sorted = [...summaries].sort(
+    (a, b) => b.zonesClaimedCount - a.zonesClaimedCount
+  )
+  const top = sorted[0]
+  const second = sorted[1]
   if (second && top.zonesClaimedCount === second.zonesClaimedCount) return null
   if (top.zonesClaimedCount === 0) return null
   return top.teamId
 }
 
 // ---------------------------------------------------------------------------
-// autoSelectMostChallenges
-// Returns team_id with most approved submissions. Null if tied.
+// autoSelectMostZonesWithChallenges
+// Returns team_id with most zones where ≥1 challenge was completed. Null if tied.
 // ---------------------------------------------------------------------------
-export function autoSelectMostChallenges(
+export function autoSelectMostZonesWithChallenges(
   summaries: TeamBonusSummary[]
 ): string | null {
   if (summaries.length === 0) return null
   const sorted = [...summaries].sort(
-    (a, b) => b.challengesCompletedCount - a.challengesCompletedCount
+    (a, b) => b.zonesWithChallengesCount - a.zonesWithChallengesCount
   )
   const top = sorted[0]
   const second = sorted[1]
-  if (second && top.challengesCompletedCount === second.challengesCompletedCount) return null
-  if (top.challengesCompletedCount === 0) return null
+  if (second && top.zonesWithChallengesCount === second.zonesWithChallengesCount) return null
+  if (top.zonesWithChallengesCount === 0) return null
   return top.teamId
 }
 
 // ---------------------------------------------------------------------------
 // applyEndGameBonuses
 // Writes Side Quest points to the game doc and updates each team's total_points.
+// Reads point values from game.settings — never hardcoded.
 // Safe to call once — guarded by bonuses_applied flag.
 // ---------------------------------------------------------------------------
 export async function applyEndGameBonuses(
@@ -135,9 +132,15 @@ export async function applyEndGameBonuses(
 ): Promise<void> {
   const gameSnap = await getDoc(doc(db, 'games', gameId))
   if (!gameSnap.exists()) throw new Error('Game not found')
-  if (gameSnap.data().bonuses_applied) {
+  const gameData = gameSnap.data()
+  if (gameData.bonuses_applied) {
     throw new Error('Bonuses already applied for this game')
   }
+
+  // Read point values from game.settings (with defaults)
+  const settings = gameData.settings || {}
+  const mostZonesClaimedBonus = settings.most_zones_claimed_bonus ?? 8
+  const mostZonesWithChallengesBonus = settings.most_zones_with_challenges_bonus ?? 8
 
   const bonusMap = new Map<string, number>()
 
@@ -146,9 +149,8 @@ export async function applyEndGameBonuses(
     bonusMap.set(teamId, (bonusMap.get(teamId) ?? 0) + pts)
   }
 
-  addBonus(awards.mostZones, 5)
-  addBonus(awards.mostTransitModes, 4)
-  addBonus(awards.mostChallenges, 3)
+  addBonus(awards.mostZonesClaimed, mostZonesClaimedBonus)
+  addBonus(awards.mostZonesWithChallenges, mostZonesWithChallengesBonus)
 
   const bonusRecord: Record<string, number> = {}
   bonusMap.forEach((pts, teamId) => {

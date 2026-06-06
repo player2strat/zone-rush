@@ -27,8 +27,8 @@ import {
 } from '../lib/chat'
 import {
   getTeamBonusSummaries,
-  autoSelectMostZones,
-  autoSelectMostChallenges,
+  autoSelectMostZonesClaimed,
+  autoSelectMostZonesWithChallenges,
   applyEndGameBonuses,
   type BonusAwards,
   type TeamBonusSummary,
@@ -159,9 +159,8 @@ export default function GMDashboard() {
   // Side Quests state
   const [bonusSummaries, setBonusSummaries] = useState<TeamBonusSummary[]>([])
   const [bonusAwards, setBonusAwards] = useState<BonusAwards>({
-    mostZones: null,
-    mostTransitModes: null,
-    mostChallenges: null,
+    mostZonesClaimed: null,
+    mostZonesWithChallenges: null,
   })
   const [applyingBonuses, setApplyingBonuses] = useState(false)
   const [bonusesApplied, setBonusesApplied] = useState(false)
@@ -333,13 +332,12 @@ export default function GMDashboard() {
     if (game.bonuses_applied) { setBonusesApplied(true); return }
     getTeamBonusSummaries(gameId).then((summaries) => {
       setBonusSummaries(summaries)
-      const autoZones = autoSelectMostZones(summaries)
-      const autoChallenges = autoSelectMostChallenges(summaries)
-      setBonusAwards((prev) => ({
-        ...prev,
-        mostZones: autoZones,
-        mostChallenges: autoChallenges,
-      }))
+      const autoZones = autoSelectMostZonesClaimed(summaries)
+      const autoZonesWithChallenges = autoSelectMostZonesWithChallenges(summaries)
+      setBonusAwards({
+        mostZonesClaimed: autoZones,
+        mostZonesWithChallenges: autoZonesWithChallenges,
+      })
     })
   }, [game?.status, game?.bonuses_applied, gameId])
 
@@ -737,7 +735,7 @@ const handleApprove = async (sub: SubmissionData) => {
       </div>
 
       {/* SIDE QUESTS PANEL (shown when game ended) */}
-      {game.status === 'ended' && (
+     {game.status === 'ended' && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a1a', background: bonusesApplied ? 'rgba(6,214,160,0.03)' : 'rgba(255,209,102,0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <p style={{ fontSize: '0.7rem', color: bonusesApplied ? '#06D6A0' : '#FFD166', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
@@ -750,27 +748,27 @@ const handleApprove = async (sub: SubmissionData) => {
               </p>
             ) : (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, marginBottom: 16 }}>
 
-                  {/* Most Zones — auto-calculated */}
+                  {/* Most Zones Claimed */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
                       🗺️ Most Zones Claimed
-                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+5 pts</span>
+                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
                     </p>
                     <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Auto-calculated — confirm below</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       <button
-                        onClick={() => setBonusAwards((p) => ({ ...p, mostZones: null }))}
-                        style={{ ...smallBtnStyle, background: bonusAwards.mostZones === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZones === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostZones === null ? '#EF476F' : '#555' }}
+                        onClick={() => setBonusAwards((p) => ({ ...p, mostZonesClaimed: null }))}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostZonesClaimed === null ? '#EF476F' : '#555' }}
                       >
                         None
                       </button>
                       {bonusSummaries.map((s) => (
                         <button
                           key={s.teamId}
-                          onClick={() => setBonusAwards((p) => ({ ...p, mostZones: s.teamId }))}
-                          style={{ ...smallBtnStyle, background: bonusAwards.mostZones === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZones === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostZones === s.teamId ? s.teamColor : '#666' }}
+                          onClick={() => setBonusAwards((p) => ({ ...p, mostZonesClaimed: s.teamId }))}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor : '#666' }}
                         >
                           {s.teamName} ({s.zonesClaimedCount})
                         </button>
@@ -778,53 +776,27 @@ const handleApprove = async (sub: SubmissionData) => {
                     </div>
                   </div>
 
-                  {/* Most Transit Modes — GM selects */}
+                  {/* Most Zones With Challenges */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
-                      🚇 Most Transit Modes
-                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+4 pts</span>
+                      🏆 Most Zones Explored
+                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
                     </p>
-                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Subway, bus, ferry, bike, etc.</p>
+                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Zones with at least 1 challenge completed</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       <button
-                        onClick={() => setBonusAwards((p) => ({ ...p, mostTransitModes: null }))}
-                        style={{ ...smallBtnStyle, background: bonusAwards.mostTransitModes === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostTransitModes === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostTransitModes === null ? '#EF476F' : '#555' }}
+                        onClick={() => setBonusAwards((p) => ({ ...p, mostZonesWithChallenges: null }))}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostZonesWithChallenges === null ? '#EF476F' : '#555' }}
                       >
                         None
                       </button>
                       {bonusSummaries.map((s) => (
                         <button
                           key={s.teamId}
-                          onClick={() => setBonusAwards((p) => ({ ...p, mostTransitModes: s.teamId }))}
-                          style={{ ...smallBtnStyle, background: bonusAwards.mostTransitModes === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostTransitModes === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostTransitModes === s.teamId ? s.teamColor : '#666' }}
+                          onClick={() => setBonusAwards((p) => ({ ...p, mostZonesWithChallenges: s.teamId }))}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor : '#666' }}
                         >
-                          {s.teamName}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Most Challenges — auto-calculated */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
-                      🏆 Most Challenges Completed
-                      <span style={{ color: '#FFD166', marginLeft: 6 }}>+3 pts</span>
-                    </p>
-                    <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Auto-calculated — confirm below</p>
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      <button
-                        onClick={() => setBonusAwards((p) => ({ ...p, mostChallenges: null }))}
-                        style={{ ...smallBtnStyle, background: bonusAwards.mostChallenges === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostChallenges === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: bonusAwards.mostChallenges === null ? '#EF476F' : '#555' }}
-                      >
-                        None
-                      </button>
-                      {bonusSummaries.map((s) => (
-                        <button
-                          key={s.teamId}
-                          onClick={() => setBonusAwards((p) => ({ ...p, mostChallenges: s.teamId }))}
-                          style={{ ...smallBtnStyle, background: bonusAwards.mostChallenges === s.teamId ? `${s.teamColor}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${bonusAwards.mostChallenges === s.teamId ? s.teamColor + '50' : '#222'}`, color: bonusAwards.mostChallenges === s.teamId ? s.teamColor : '#666' }}
-                        >
-                          {s.teamName} ({s.challengesCompletedCount})
+                          {s.teamName} ({s.zonesWithChallengesCount})
                         </button>
                       ))}
                     </div>
