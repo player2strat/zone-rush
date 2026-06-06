@@ -87,7 +87,7 @@ export function useGameRoute(gameId: string | undefined): GameRoute {
         expectedPath = isGM ? `/gm/${gameId}` : `/game/${gameId}`
         break
       case 'ended':
-        expectedPath = `/results/${gameId}`
+        expectedPath = isGM ? `/gm/${gameId}` : `/results/${gameId}`
         break
     }
   }
