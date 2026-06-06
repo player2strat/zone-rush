@@ -51,6 +51,7 @@ export type EventType =
   | 'zone_closed'
   | 'zone_reopened'
   | 'side_quests_applied'
+  | 'zone_locked'
 
 export interface ActivityEvent {
   team_id: string | null

@@ -472,11 +472,26 @@ const handleApprove = async (sub: SubmissionData) => {
         review.phoneFreeBonus > 0
       )
 
-      // Zone steal broadcast + activity logging
-      if (result.zoneStolen && previousOwner && previousOwner.teamId !== sub.team_id) {
-        const stealingTeam = getTeam(sub.team_id)
-        await sendGMBroadcast(gameId, user?.uid ?? '', 'Game Master',
-          `🔁 Zone ${sub.zone_id.replace('zone_district_', 'District ')} was just stolen by ${stealingTeam?.name ?? 'a team'}!`)
+    // Auto-broadcasts for zone events
+      const approvedTeam = getTeam(sub.team_id)
+      const zoneName = allZoneData.find((z: any) => z.id === sub.zone_id)?.name ?? sub.zone_id
+
+      if (result.zoneLocked) {
+        // Zone locked — broadcast to all teams
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+          `🔒 ${zoneName} has been LOCKED by ${approvedTeam?.name ?? 'a team'}! (+${game.settings.zone_bonus_points ?? 3} bonus pts)`)
+        await logEvent(gameId, {
+          team_id: sub.team_id,
+          event_type: 'zone_locked',
+          actor_id: user?.uid ?? null,
+          zone_id: sub.zone_id,
+          points_delta: game.settings.zone_bonus_points ?? 3,
+          metadata: { points_awarded: result.pointsAwarded },
+        })
+      } else if (result.zoneStolen && previousOwner && previousOwner.teamId !== sub.team_id) {
+        // Zone stolen — broadcast to all teams
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+          `🔁 ${zoneName} was just stolen by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,
           event_type: 'zone_stolen',
@@ -488,13 +503,15 @@ const handleApprove = async (sub: SubmissionData) => {
             points_awarded: result.pointsAwarded,
           },
         })
-      } else if (result.zoneClaimed && !previousOwner) {
+      } else if (result.zoneClaimed) {
+        // Zone claimed — broadcast to all teams
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+          `🏴 ${zoneName} has been CLAIMED by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,
           event_type: 'zone_claimed',
           actor_id: user?.uid ?? null,
           zone_id: sub.zone_id,
-          points_delta: game.settings.zone_bonus_points ?? 3,
           metadata: { points_awarded: result.pointsAwarded },
         })
       }
