@@ -448,7 +448,7 @@ export function validateSubmissionZone(
   zone: Zone
 ): { inZone: boolean } {
   if (!lat || !lng) return { inZone: false }
-  return { inZone: isPointInPolygon(lat, lng, zone.boundary.coordinates) }
+  return { inZone: isPointInPolygon(lat, lng, JSON.parse(zone.boundary).coordinates) }
 }
 
 // ─── Zone Ownership Map ───────────────────────────────────────────────────────
