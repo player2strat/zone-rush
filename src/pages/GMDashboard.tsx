@@ -11,12 +11,13 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
-  updateDoc, getDoc, getDocs, serverTimestamp,
+  updateDoc, getDocs, serverTimestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission } from '../lib/scoring'
 import GameMap from '../components/GameMap'
+import { drawReplacementCard } from '../lib/dealChallenges'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
   sendGMBroadcast,
@@ -500,66 +501,23 @@ const handleApprove = async (sub: SubmissionData) => {
         })
       }
 
-      // Card replacement — remove completed challenge from hand, draw a new one
+ // Card replacement — draw a new card using shared utility
       try {
-        const teamRef = doc(db, 'games', gameId, 'teams', sub.team_id)
-        const teamSnap = await getDoc(teamRef)
-        if (teamSnap.exists()) {
-          const teamData = teamSnap.data() as TeamData
-          const currentHand = teamData.hand || []
-          const updatedHand = currentHand.filter((id: string) => id !== sub.challenge_id)
+        const compositionRules = {
+          minEasy: game.settings.hand_min_easy ?? 1,
+          minHard: game.settings.hand_min_hard ?? 1,
+          maxHard: game.settings.hand_max_hard ?? 2,
+        }
+        const drawnCardId = await drawReplacementCard(gameId, sub.team_id, sub.challenge_id, compositionRules)
 
-          const teamSubsSnap = await getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId), where('team_id', '==', sub.team_id)))
-          const usedChallengeIds = new Set<string>()
-          teamSubsSnap.forEach((d) => usedChallengeIds.add(d.data().challenge_id))
-          updatedHand.forEach((id: string) => usedChallengeIds.add(id))
-
-          const gameCity = 'nyc'
-          const eligible: string[] = []
-          challenges.forEach((ch, chId) => {
-            if (usedChallengeIds.has(chId) || !ch.points) return
-            const cityTags = (ch as any).city_tags || ['*']
-            if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
-            eligible.push(chId)
+        if (drawnCardId) {
+          await logEvent(gameId, {
+            team_id: sub.team_id,
+            event_type: 'card_drawn',
+            actor_id: user?.uid ?? null,
+            challenge_id: drawnCardId,
+            metadata: { reason: 'replacement', completed_challenge_id: sub.challenge_id },
           })
-
-          if (eligible.length > 0) {
-            const handMinEasy = game.settings.hand_min_easy ?? 1
-            const handMinHard = game.settings.hand_min_hard ?? 1
-            const handMaxHard = game.settings.hand_max_hard ?? 2
-
-            const remainingEasy = updatedHand.filter((id: string) => challenges.get(id)?.difficulty === 'easy').length
-            const remainingHard = updatedHand.filter((id: string) => challenges.get(id)?.difficulty === 'hard').length
-
-            let preferredDiff: 'easy' | 'hard' | 'not_hard' | null = null
-            if (remainingEasy < handMinEasy) preferredDiff = 'easy'
-            else if (remainingHard < handMinHard) preferredDiff = 'hard'
-            else if (remainingHard >= handMaxHard) preferredDiff = 'not_hard'
-
-            const preferred = eligible.filter((id) => {
-              const diff = challenges.get(id)?.difficulty
-              if (preferredDiff === 'easy') return diff === 'easy'
-              if (preferredDiff === 'hard') return diff === 'hard'
-              if (preferredDiff === 'not_hard') return diff !== 'hard'
-              return true
-            })
-
-            const drawPool = preferred.length > 0 ? preferred : eligible
-            const drawnCardId = drawPool[Math.floor(Math.random() * drawPool.length)]
-            updatedHand.push(drawnCardId)
-
-            await updateDoc(teamRef, { hand: updatedHand })
-
-            await logEvent(gameId, {
-              team_id: sub.team_id,
-              event_type: 'card_drawn',
-              actor_id: user?.uid ?? null,
-              challenge_id: drawnCardId,
-              metadata: { reason: 'replacement', completed_challenge_id: sub.challenge_id },
-            })
-          } else {
-            await updateDoc(teamRef, { hand: updatedHand })
-          }
         }
       } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
 

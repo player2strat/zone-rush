@@ -1,17 +1,19 @@
 // =============================================================================
 // Zone Rush — Challenge Dealing Logic
 //
-// CHANGES:
-// - NEW: HandCompositionRules type — minEasy, minHard, maxHard
-// - CHANGED: dealChallenges accepts optional compositionRules param
-// - CHANGED: isValidHand uses rules instead of hardcoded checks
-// - CHANGED: last-resort hand builder respects rules
-// - CHANGED: pool validation checks minEasy + minHard against available pool
+// Two exported functions:
+//   dealChallenges()       — deals initial hands to all teams at game start
+//   drawReplacementCard()  — draws one replacement card after a challenge is
+//                            completed or approved. Respects hand composition
+//                            rules and avoids re-dealing used/discarded cards.
+//
+// Both functions read composition rules from game.settings (passed in by the
+// caller). Never hardcoded here.
 // =============================================================================
 
 import {
   collection, getDocs, query, where,
-  doc, updateDoc,
+  doc, updateDoc, getDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
 
@@ -62,20 +64,12 @@ function isValidHand(hand: Challenge[], rules: HandCompositionRules): boolean {
   )
 }
 
-// --------------- Main Deal Function ---------------
+// --------------- Initial Deal ---------------
 
 /**
  * Deal challenge cards to all teams in a game.
  * Each team gets handSize cards. Teams CAN receive the same challenge
  * as another team (no global dedup by design).
- *
- * Hand rules enforced via compositionRules (defaults if not passed):
- *  - minEasy: minimum Easy cards per hand
- *  - minHard: minimum Hard cards per hand
- *  - maxHard: maximum Hard cards per hand
- *
- * All rules are stored in game.settings and passed in from LobbyPage —
- * never hardcoded here.
  *
  * @param gameId           - Firestore game document ID
  * @param city             - City string (e.g. "nyc") for filtering
@@ -92,7 +86,6 @@ export async function dealChallenges(
   teamIds: string[],
   compositionRules?: HandCompositionRules
 ): Promise<void> {
-  // Use provided rules or fall back to defaults
   const rules: HandCompositionRules = compositionRules ?? DEFAULT_RULES
 
   // 1. Fetch all active challenges
@@ -109,13 +102,13 @@ export async function dealChallenges(
     throw new Error('No active challenges found in the database')
   }
 
-  // 2. Filter by city — challenge must include this city OR "*" (universal)
+  // 2. Filter by city
   const cityFiltered = allChallenges.filter((c) => {
     if (!c.city_tags || c.city_tags.length === 0) return true
     return c.city_tags.includes(city) || c.city_tags.includes('*')
   })
 
-  // 3. Filter by zones — empty zone_tags = works anywhere
+  // 3. Filter by zones
   const eligible = cityFiltered.filter((c) => {
     if (!c.zone_tags || c.zone_tags.length === 0) return true
     return c.zone_tags.some((zt) => zoneIds.includes(zt))
@@ -127,18 +120,18 @@ export async function dealChallenges(
     )
   }
 
-  // 4. Validate pool has enough cards to satisfy composition rules
+  // 4. Validate pool has enough cards for composition rules
   const easyInPool = eligible.filter((c) => c.difficulty.toLowerCase() === 'easy').length
   const hardInPool = eligible.filter((c) => c.difficulty.toLowerCase() === 'hard').length
 
   if (rules.minEasy > 0 && easyInPool < rules.minEasy) {
     throw new Error(
-      `Hand requires ≥${rules.minEasy} Easy card(s) but only ${easyInPool} Easy challenge(s) exist in the pool. Add more Easy challenges or lower minEasy.`
+      `Hand requires ≥${rules.minEasy} Easy card(s) but only ${easyInPool} Easy challenge(s) exist in the pool.`
     )
   }
   if (rules.minHard > 0 && hardInPool < rules.minHard) {
     throw new Error(
-      `Hand requires ≥${rules.minHard} Hard card(s) but only ${hardInPool} Hard challenge(s) exist in the pool. Add more Hard challenges or lower minHard.`
+      `Hand requires ≥${rules.minHard} Hard card(s) but only ${hardInPool} Hard challenge(s) exist in the pool.`
     )
   }
 
@@ -148,11 +141,9 @@ export async function dealChallenges(
     let attempts = 0
     const maxAttempts = 50
 
-    // Try random shuffles first — usually succeeds quickly
     while (attempts < maxAttempts) {
       const shuffled = shuffle(eligible)
       const candidate = shuffled.slice(0, handSize)
-
       if (isValidHand(candidate, rules)) {
         hand = candidate
         break
@@ -160,34 +151,23 @@ export async function dealChallenges(
       attempts++
     }
 
-    // Last resort: build a valid hand manually by placing required cards first,
-    // then filling remaining slots while respecting maxHard
+    // Last resort: build manually
     if (!isValidHand(hand, rules)) {
       const easyCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'easy'))
       const hardCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'hard'))
       const mediumCards = shuffle(eligible.filter((c) => c.difficulty.toLowerCase() === 'medium'))
 
       const built: Challenge[] = []
+      for (let i = 0; i < rules.minEasy && easyCards[i]; i++) built.push(easyCards[i])
+      for (let i = 0; i < rules.minHard && hardCards[i]; i++) built.push(hardCards[i])
 
-      // Place required minimums first
-      for (let i = 0; i < rules.minEasy && easyCards[i]; i++) {
-        built.push(easyCards[i])
-      }
-      for (let i = 0; i < rules.minHard && hardCards[i]; i++) {
-        built.push(hardCards[i])
-      }
-
-      // Fill remaining slots — don't exceed maxHard
       const currentHardCount = built.filter((c) => c.difficulty.toLowerCase() === 'hard').length
       const fillers = shuffle([
         ...easyCards.slice(rules.minEasy),
         ...mediumCards,
-        // Only include more Hard cards if we haven't hit maxHard yet
         ...hardCards.slice(rules.minHard, rules.maxHard - currentHardCount + rules.minHard),
       ])
-
-      const remaining = handSize - built.length
-      built.push(...fillers.slice(0, remaining))
+      built.push(...fillers.slice(0, handSize - built.length))
       hand = built.slice(0, handSize)
     }
 
@@ -197,4 +177,118 @@ export async function dealChallenges(
   })
 
   await Promise.all(dealPromises)
+}
+
+// --------------- Replacement Card Draw ---------------
+
+/**
+ * After a challenge is approved, remove it from the team's hand and draw
+ * a replacement card. Respects hand composition rules and avoids cards
+ * the team has already used, discarded, or currently holds.
+ *
+ * Returns the drawn card ID (or null if no eligible cards remain).
+ * Also updates the team's hand in Firestore.
+ *
+ * @param gameId            - Firestore game document ID
+ * @param teamId            - Team document ID
+ * @param completedCardId   - Challenge ID that was just completed
+ * @param compositionRules  - Hand composition rules from game.settings
+ */
+export async function drawReplacementCard(
+  gameId: string,
+  teamId: string,
+  completedCardId: string,
+  compositionRules?: HandCompositionRules
+): Promise<string | null> {
+  const rules = compositionRules ?? DEFAULT_RULES
+
+  // 1. Read team's current hand
+  const teamRef = doc(db, 'games', gameId, 'teams', teamId)
+  const teamSnap = await getDoc(teamRef)
+  if (!teamSnap.exists()) return null
+
+  const teamData = teamSnap.data()
+  const currentHand: string[] = teamData.hand || []
+  const discardedChallenges: string[] = teamData.discarded_challenges || []
+
+  // Remove the completed challenge from hand
+  const updatedHand = currentHand.filter((id) => id !== completedCardId)
+
+  // 2. Gather all challenge IDs this team has already used
+  const usedIds = new Set<string>()
+
+  // From submissions (completed/attempted challenges)
+  const subsSnap = await getDocs(
+    query(
+      collection(db, 'submissions'),
+      where('game_id', '==', gameId),
+      where('team_id', '==', teamId)
+    )
+  )
+  subsSnap.forEach((d) => usedIds.add(d.data().challenge_id))
+
+  // Cards still in hand
+  updatedHand.forEach((id) => usedIds.add(id))
+
+  // Discarded cards (never recycled back)
+  discardedChallenges.forEach((id) => usedIds.add(id))
+
+  // 3. Fetch all active challenges and filter to eligible ones
+  const challengesSnap = await getDocs(
+    query(collection(db, 'challenges'), where('is_active', '==', true))
+  )
+
+  const allChallenges = new Map<string, Challenge>()
+  challengesSnap.forEach((d) => {
+    allChallenges.set(d.id, { id: d.id, ...d.data() } as Challenge)
+  })
+
+  // Read game doc for city
+  const gameSnap = await getDoc(doc(db, 'games', gameId))
+  const gameCity = gameSnap.exists() ? gameSnap.data().city || 'nyc' : 'nyc'
+
+  const eligible: string[] = []
+  allChallenges.forEach((ch, chId) => {
+    if (usedIds.has(chId)) return
+    if (!ch.points) return
+    const cityTags = ch.city_tags || ['*']
+    if (!cityTags.includes('*') && !cityTags.includes(gameCity)) return
+    eligible.push(chId)
+  })
+
+  // 4. If no eligible cards remain, just update the hand without a replacement
+  if (eligible.length === 0) {
+    await updateDoc(teamRef, { hand: updatedHand })
+    return null
+  }
+
+  // 5. Apply composition rules to prefer the right difficulty
+  const remainingEasy = updatedHand.filter(
+    (id) => allChallenges.get(id)?.difficulty === 'easy'
+  ).length
+  const remainingHard = updatedHand.filter(
+    (id) => allChallenges.get(id)?.difficulty === 'hard'
+  ).length
+
+  let preferredDiff: 'easy' | 'hard' | 'not_hard' | null = null
+  if (remainingEasy < rules.minEasy) preferredDiff = 'easy'
+  else if (remainingHard < rules.minHard) preferredDiff = 'hard'
+  else if (remainingHard >= rules.maxHard) preferredDiff = 'not_hard'
+
+  const preferred = eligible.filter((id) => {
+    const diff = allChallenges.get(id)?.difficulty
+    if (preferredDiff === 'easy') return diff === 'easy'
+    if (preferredDiff === 'hard') return diff === 'hard'
+    if (preferredDiff === 'not_hard') return diff !== 'hard'
+    return true
+  })
+
+  const drawPool = preferred.length > 0 ? preferred : eligible
+  const drawnCardId = drawPool[Math.floor(Math.random() * drawPool.length)]
+
+  // 6. Update hand in Firestore
+  updatedHand.push(drawnCardId)
+  await updateDoc(teamRef, { hand: updatedHand })
+
+  return drawnCardId
 }
