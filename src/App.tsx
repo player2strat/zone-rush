@@ -16,7 +16,7 @@ import ZoneManager from './pages/ZoneManager'
 import ResultsPage from './pages/ResultsPage.tsx'
 import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
-import SeedMaps from './pages/SeedMaps.tsx'
+import SeedMaps from './pages/SeedMaps'
 
 // ---------------------------------------------------------------------------
 // Checks Firestore for an active game this user is part of (player or GM).
