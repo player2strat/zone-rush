@@ -1,8 +1,7 @@
 // =============================================================================
-// Zone Rush — Create Game Page (v3)
-// 3-step flow: Basics → Map & Zones → Settings & Create
-// NEW: map_sets picker in Step 2. GM picks a map_set, zones auto-populate.
-//      GM can still toggle individual zones on/off after selecting a set.
+// Zone Rush — Create Game Page (v4)
+// 3-step flow: Basics → Pick Map → Settings & Create
+// Step 2 is two-stage: pick a map set first, THEN see zones with toggles.
 // All settings stored in Firestore — never hardcoded.
 // =============================================================================
 
@@ -65,7 +64,7 @@ export default function CreateGame() {
   const navigate = useNavigate()
   const user = auth.currentUser
 
-  // Step tracker: 1 = Basics, 2 = Map & Zones, 3 = Settings & Create
+  // Step tracker: 1 = Basics, 2 = Pick Map, 3 = Settings & Create
   const [step, setStep] = useState(1)
 
   // Zone data
@@ -76,7 +75,7 @@ export default function CreateGame() {
 
   // Map sets
   const [mapSets, setMapSets] = useState<MapSetDoc[]>([])
-  const [selectedMapSet, setSelectedMapSet] = useState<string | null>(null)
+  const [selectedMapSet, setSelectedMapSet] = useState<string | null>(null) // null = no selection yet, 'custom' = custom mode
   const [loadingMapSets, setLoadingMapSets] = useState(true)
 
   // Closure schedule
@@ -150,7 +149,6 @@ export default function CreateGame() {
             city: data.city,
           })
         })
-        // Sort: Brooklyn first (by district), then Manhattan alphabetically
         zoneDocs.sort((a, b) => {
           if (a.borough !== b.borough) return (a.borough || '').localeCompare(b.borough || '')
           if (a.district_number && b.district_number) return a.district_number - b.district_number
@@ -168,16 +166,27 @@ export default function CreateGame() {
   }, [cityFilter])
 
   // ---------------------------------------------------------------------------
-  // When a map_set is selected, auto-populate zones and apply recommendations
+  // Map set selection — auto-populates zones
   // ---------------------------------------------------------------------------
   const handleSelectMapSet = (mapSetId: string) => {
+    if (mapSetId === 'custom') {
+      setSelectedMapSet('custom')
+      setSelectedZones([])
+      setZoneCloseMinutes({})
+      return
+    }
     const ms = mapSets.find((m) => m.id === mapSetId)
     if (!ms) return
 
     setSelectedMapSet(mapSetId)
-    // Auto-select all zones in this map_set
     setSelectedZones(ms.zone_ids.filter((zid) => zones.some((z) => z.id === zid)))
-    // Clear any closure schedule from previous selection
+    setZoneCloseMinutes({})
+  }
+
+  // Go back to map set picker (reset zone selection)
+  const handleChangeMapSet = () => {
+    setSelectedMapSet(null)
+    setSelectedZones([])
     setZoneCloseMinutes({})
   }
 
@@ -185,15 +194,23 @@ export default function CreateGame() {
     setSelectedZones((prev) =>
       prev.includes(zoneId) ? prev.filter((id) => id !== zoneId) : [...prev, zoneId]
     )
-    // If user manually changes zones, they've customized — clear map_set selection label
-    // (but don't reset the zones — they're already toggled)
   }
 
-  const selectAll = () => setSelectedZones(zones.map((z) => z.id))
-  const clearAll = () => {
-    setSelectedZones([])
-    setSelectedMapSet(null)
-  }
+  // Zones to show based on current map set selection
+  const visibleZones = (() => {
+    if (selectedMapSet === 'custom') return zones
+    const ms = mapSets.find((m) => m.id === selectedMapSet)
+    if (!ms) return []
+    return zones.filter((z) => ms.zone_ids.includes(z.id))
+  })()
+
+  // Group visible zones by borough
+  const visibleZonesByBorough = visibleZones.reduce<Record<string, ZoneDoc[]>>((acc, z) => {
+    const borough = z.borough || 'Other'
+    if (!acc[borough]) acc[borough] = []
+    acc[borough].push(z)
+    return acc
+  }, {})
 
   // Closure presets filtered to fit within game duration
   const availablePresets = CLOSURE_PRESETS.filter(
@@ -218,14 +235,6 @@ export default function CreateGame() {
   // Get the active map set (for display)
   const activeMapSet = mapSets.find((m) => m.id === selectedMapSet) || null
 
-  // Group zones by borough for the zone picker
-  const zonesByBorough = zones.reduce<Record<string, ZoneDoc[]>>((acc, z) => {
-    const borough = z.borough || 'Other'
-    if (!acc[borough]) acc[borough] = []
-    acc[borough].push(z)
-    return acc
-  }, {})
-
   // ---------------------------------------------------------------------------
   // Create Game
   // ---------------------------------------------------------------------------
@@ -247,7 +256,7 @@ export default function CreateGame() {
         max_teams: maxTeams,
         zones: selectedZones,
         closed_zones: [],
-        map_set_id: selectedMapSet || null,
+        map_set_id: selectedMapSet === 'custom' ? null : selectedMapSet,
         started_at: null,
         ends_at: null,
         created_at: new Date(),
@@ -348,7 +357,7 @@ export default function CreateGame() {
         </div>
 
         {/* ==============================================================
-            STEP 1: Basics (unchanged from v2)
+            STEP 1: Basics
         ============================================================== */}
         {step === 1 && (
           <div>
@@ -415,199 +424,247 @@ export default function CreateGame() {
         )}
 
         {/* ==============================================================
-            STEP 2: Map Set Picker + Zone Selection
+            STEP 2: Two-stage — Pick Map Set, then Fine-Tune Zones
         ============================================================== */}
         {step === 2 && (
           <div>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
-              Pick a Map
-            </h1>
-            <p style={{ color: '#555', fontSize: '0.85rem', marginBottom: 20 }}>
-              Choose a pre-configured map, then fine-tune which zones to include
-            </p>
+            {/* ----- STAGE 1: Pick a map set (no map set selected yet) ----- */}
+            {selectedMapSet === null && (
+              <div>
+                <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
+                  Pick a Map
+                </h1>
+                <p style={{ color: '#555', fontSize: '0.85rem', marginBottom: 24 }}>
+                  Choose which area to play in
+                </p>
 
-            {/* Map Set Picker */}
-            {loadingMapSets ? (
-              <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading maps...</p>
-            ) : mapSets.length > 0 ? (
-              <div style={{ marginBottom: 24 }}>
-                <label style={labelStyle}>Map Sets</label>
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {mapSets.map((ms) => {
-                    const isActive = selectedMapSet === ms.id
-                    return (
+                {loadingMapSets || loadingZones ? (
+                  <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading maps...</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {/* Map set cards */}
+                    {mapSets.map((ms) => (
                       <button
                         key={ms.id}
                         onClick={() => handleSelectMapSet(ms.id)}
                         style={{
-                          background: isActive
-                            ? 'rgba(155,93,229,0.1)' : 'rgba(255,255,255,0.02)',
-                          border: `1px solid ${isActive ? 'rgba(155,93,229,0.35)' : '#1e1e1e'}`,
-                          borderRadius: 10,
-                          padding: '14px 16px',
+                          background: 'rgba(255,255,255,0.02)',
+                          border: '1px solid #1e1e1e',
+                          borderRadius: 12,
+                          padding: '18px 18px 14px',
                           textAlign: 'left',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
-                          transition: 'all 0.12s',
+                          transition: 'all 0.15s',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <p style={{
-                              color: isActive ? '#9B5DE5' : '#ccc',
-                              fontWeight: 700,
-                              fontSize: '0.95rem',
-                              marginBottom: 4,
-                            }}>
-                              {ms.name}
-                            </p>
-                            <p style={{
-                              color: isActive ? '#9B5DE5aa' : '#555',
-                              fontSize: '0.82rem',
-                              lineHeight: 1.4,
-                            }}>
-                              {ms.description}
-                            </p>
-                          </div>
-                          <div style={{
-                            width: 22, height: 22, borderRadius: '50%',
-                            border: `2px solid ${isActive ? '#9B5DE5' : '#333'}`,
-                            background: isActive ? 'rgba(155,93,229,0.2)' : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.7rem', color: '#9B5DE5', fontWeight: 700,
-                            flexShrink: 0, marginLeft: 12,
-                          }}>
-                            {isActive ? '✓' : ''}
-                          </div>
-                        </div>
-                        {/* Recommendation hints */}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                          <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
+                        <p style={{
+                          color: '#e0e0e0',
+                          fontWeight: 700,
+                          fontSize: '1rem',
+                          marginBottom: 6,
+                        }}>
+                          {ms.name}
+                        </p>
+                        <p style={{
+                          color: '#666',
+                          fontSize: '0.82rem',
+                          lineHeight: 1.5,
+                          marginBottom: 10,
+                        }}>
+                          {ms.description}
+                        </p>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={tagStyle('#9B5DE5')}>
                             {ms.zone_ids.length} zones
                           </span>
-                          <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
+                          <span style={tagStyle('#9B5DE5')}>
                             {ms.borough}
                           </span>
                           {ms.recommended_teams && (
-                            <span style={tagStyle(isActive ? '#9B5DE5' : '#444')}>
-                              ~{ms.recommended_teams} teams
+                            <span style={tagStyle('#555')}>
+                              ~{ms.recommended_teams} teams rec.
                             </span>
                           )}
                         </div>
                       </button>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : null}
+                    ))}
 
-            {/* Divider between map sets and zone list */}
-            {mapSets.length > 0 && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                margin: '8px 0 20px',
-              }}>
-                <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
-                <span style={{ color: '#444', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-                  {selectedMapSet ? 'Fine-tune zones' : 'Or pick zones manually'}
-                </span>
-                <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
+                    {/* Custom option */}
+                    <button
+                      onClick={() => handleSelectMapSet('custom')}
+                      style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px dashed #333',
+                        borderRadius: 12,
+                        padding: '18px 18px 14px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <p style={{
+                        color: '#888',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        marginBottom: 6,
+                      }}>
+                        Custom
+                      </p>
+                      <p style={{
+                        color: '#555',
+                        fontSize: '0.82rem',
+                        lineHeight: 1.5,
+                      }}>
+                        Hand-pick zones from all available areas
+                      </p>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Zone list */}
-            {loadingZones ? (
-              <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading zones...</p>
-            ) : (
-              <>
-                {/* Select all / clear */}
-                <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button onClick={selectAll} style={ghostBtnStyle}>
-                    Select all ({zones.length})
+            {/* ----- STAGE 2: Fine-tune zones within the selected map ----- */}
+            {selectedMapSet !== null && (
+              <div>
+                {/* Header with selected map + change button */}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                  marginBottom: 20,
+                }}>
+                  <div>
+                    <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
+                      {selectedMapSet === 'custom' ? 'Select Zones' : activeMapSet?.name || 'Zones'}
+                    </h1>
+                    <p style={{ color: '#555', fontSize: '0.85rem' }}>
+                      {selectedMapSet === 'custom'
+                        ? 'Tap to include zones in this game'
+                        : 'All zones included — toggle any off if needed'
+                      }
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleChangeMapSet}
+                    style={{
+                      background: 'none',
+                      border: '1px solid #333',
+                      borderRadius: 6,
+                      color: '#666',
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      flexShrink: 0,
+                      marginTop: 4,
+                    }}
+                  >
+                    Change map
                   </button>
-                  {selectedZones.length > 0 && (
-                    <button onClick={clearAll} style={ghostBtnStyle}>
-                      Clear
-                    </button>
-                  )}
-                  {selectedZones.length > 0 && (
-                    <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600 }}>
-                      {selectedZones.length} selected
-                    </span>
-                  )}
                 </div>
 
-                {/* Zones grouped by borough */}
-                {Object.entries(zonesByBorough).map(([borough, boroughZones]) => (
-                  <div key={borough} style={{ marginBottom: 16 }}>
-                    <p style={{
-                      fontSize: '0.7rem',
-                      color: '#555',
-                      textTransform: 'uppercase',
-                      letterSpacing: 1,
-                      fontWeight: 700,
-                      marginBottom: 8,
-                    }}>
-                      {borough} ({boroughZones.length})
-                    </p>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      {boroughZones.map((zone) => {
-                        const isSelected = selectedZones.includes(zone.id)
-                        return (
-                          <button
-                            key={zone.id}
-                            onClick={() => toggleZone(zone.id)}
-                            style={{
-                              background: isSelected
-                                ? 'rgba(6,214,160,0.1)' : 'rgba(255,255,255,0.03)',
-                              border: `1px solid ${isSelected ? 'rgba(6,214,160,0.3)' : '#1e1e1e'}`,
-                              borderRadius: 8,
-                              padding: '10px 14px',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              fontFamily: 'inherit',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              transition: 'all 0.12s',
-                            }}
-                          >
-                            <span style={{
-                              color: isSelected ? '#06D6A0' : '#888',
-                              fontWeight: 600, fontSize: '0.88rem',
-                            }}>
-                              {zone.name}
-                            </span>
-                            <div style={{
-                              width: 18, height: 18, borderRadius: 4,
-                              border: `1.5px solid ${isSelected ? '#06D6A0' : '#333'}`,
-                              background: isSelected ? 'rgba(6,214,160,0.15)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '0.65rem', color: '#06D6A0', fontWeight: 700,
-                              flexShrink: 0,
-                            }}>
-                              {isSelected ? '✓' : ''}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
+                {/* Zone count */}
+                {selectedZones.length > 0 && (
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    marginBottom: 14,
+                  }}>
+                    <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600 }}>
+                      {selectedZones.length} zone{selectedZones.length !== 1 ? 's' : ''} selected
+                    </span>
+                    {selectedMapSet !== 'custom' && selectedZones.length < visibleZones.length && (
+                      <button
+                        onClick={() => setSelectedZones(visibleZones.map((z) => z.id))}
+                        style={ghostBtnStyle}
+                      >
+                        Select all
+                      </button>
+                    )}
                   </div>
-                ))}
+                )}
 
-                {error && <p style={errorStyle}>{error}</p>}
+                {/* Zone toggles */}
+                {loadingZones ? (
+                  <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading zones...</p>
+                ) : (
+                  <>
+                    {Object.entries(visibleZonesByBorough).map(([borough, boroughZones]) => (
+                      <div key={borough} style={{ marginBottom: 16 }}>
+                        {/* Borough header — only show if multiple boroughs visible */}
+                        {Object.keys(visibleZonesByBorough).length > 1 && (
+                          <p style={{
+                            fontSize: '0.7rem',
+                            color: '#555',
+                            textTransform: 'uppercase',
+                            letterSpacing: 1,
+                            fontWeight: 700,
+                            marginBottom: 8,
+                          }}>
+                            {borough} ({boroughZones.length})
+                          </p>
+                        )}
+                        <div style={{ display: 'grid', gap: 6 }}>
+                          {boroughZones.map((zone) => {
+                            const isSelected = selectedZones.includes(zone.id)
+                            return (
+                              <button
+                                key={zone.id}
+                                onClick={() => toggleZone(zone.id)}
+                                style={{
+                                  background: isSelected
+                                    ? 'rgba(6,214,160,0.08)' : 'rgba(255,255,255,0.02)',
+                                  border: `1px solid ${isSelected ? 'rgba(6,214,160,0.25)' : '#1a1a1a'}`,
+                                  borderRadius: 8,
+                                  padding: '11px 14px',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  fontFamily: 'inherit',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  transition: 'all 0.12s',
+                                }}
+                              >
+                                <span style={{
+                                  color: isSelected ? '#06D6A0' : '#777',
+                                  fontWeight: 600, fontSize: '0.88rem',
+                                }}>
+                                  {zone.name}
+                                </span>
+                                <div style={{
+                                  width: 18, height: 18, borderRadius: 4,
+                                  border: `1.5px solid ${isSelected ? '#06D6A0' : '#333'}`,
+                                  background: isSelected ? 'rgba(6,214,160,0.15)' : 'transparent',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '0.65rem', color: '#06D6A0', fontWeight: 700,
+                                  flexShrink: 0,
+                                }}>
+                                  {isSelected ? '✓' : ''}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
 
-                <button
-                  onClick={() => {
-                    if (!step2Valid) { setError('Select at least one zone'); return }
-                    setError('')
-                    setStep(3)
-                  }}
-                  style={primaryBtnStyle(false)}
-                >
-                  Next: Settings →
-                </button>
-              </>
+                    {error && <p style={errorStyle}>{error}</p>}
+
+                    <button
+                      onClick={() => {
+                        if (!step2Valid) { setError('Select at least one zone'); return }
+                        setError('')
+                        setStep(3)
+                      }}
+                      disabled={!step2Valid}
+                      style={primaryBtnStyle(!step2Valid)}
+                    >
+                      Next: Settings →
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -788,6 +845,8 @@ export default function CreateGame() {
                   { label: 'Name', value: gameName },
                   activeMapSet
                     ? { label: 'Map', value: activeMapSet.name }
+                    : selectedMapSet === 'custom'
+                    ? { label: 'Map', value: 'Custom' }
                     : null,
                   { label: 'Zones', value: `${selectedZones.length} selected` },
                   { label: 'Teams', value: `${maxTeams} teams × ${teamSize} players` },
