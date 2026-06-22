@@ -1,6 +1,14 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (v3)
-// CHANGES:
+// Zone Rush — GM Dashboard (v4)
+// CHANGES (Sprint 2 — chat / attention queue):
+// - New "Needs your attention" queue at the top of the Chat tab: every unread
+//   flagged (team_to_gm) message across all teams in THIS game, oldest first,
+//   labeled by team. Tapping one jumps to that team's thread.
+// - Per-team thread now shows team_internal chatter + flagged team_to_gm +
+//   gm_to_team replies, with flagged messages marked so the GM can tell a
+//   "Message GM" ping from normal team chatter.
+//
+// CHANGES (v3):
 // - End-game bonuses renamed to Side Quests
 // - New point values: Most Zones (+5), Most Transit Modes (+4), Most Challenges (+3)
 // - Removed Fastest Return and Hydration bonuses
@@ -23,6 +31,7 @@ import {
   sendGMBroadcast,
   sendGMReply,
   subscribeToGMMessages,
+  subscribeToGMAttentionQueue,
   markMessagesRead,
 } from '../lib/chat'
 import {
@@ -149,6 +158,7 @@ export default function GMDashboard() {
   const [timeLeft, setTimeLeft] = useState('')
 
   const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [attentionQueue, setAttentionQueue] = useState<any[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
@@ -320,6 +330,16 @@ export default function GMDashboard() {
     })
     return () => unsub()
   }, [gameId])
+
+  // Attention queue: unread flagged (team_to_gm) messages for THIS game,
+  // oldest first. Scoped per-game so two concurrent games don't mix.
+  useEffect(() => {
+    if (!gameId || !user) return
+    const unsub = subscribeToGMAttentionQueue(gameId, user.uid, (msgs) => {
+      setAttentionQueue(msgs)
+    })
+    return () => unsub()
+  }, [gameId, user?.uid])
 
   useEffect(() => {
     if (!gameId || !user || !selectedTeamId) return
@@ -605,7 +625,8 @@ const handleApprove = async (sub: SubmissionData) => {
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId)
   const filteredSubmissions = filter === 'all' ? submissions : submissions.filter((s) => s.status === filter)
   const pendingCount = submissions.filter((s) => s.status === 'pending').length
-  const totalUnread = chatMessages.filter((m) => m.channel_type === 'team_to_gm' && !m.read_by?.includes(user?.uid)).length
+  // Chat badge = unread flagged messages (the attention queue size).
+  const totalUnread = attentionQueue.length
 
   const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number }>()
   // Track ALL zone scores (not just claimed) so the map can show partial progress shading
@@ -1088,6 +1109,68 @@ const handleApprove = async (sub: SubmissionData) => {
         {/* CHAT TAB */}
         {activeTab === 'chat' && (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
+
+            {/* ── NEEDS YOUR ATTENTION queue ── */}
+            <div style={{ marginBottom: 28 }}>
+              <p style={{ fontSize: '0.72rem', color: attentionQueue.length > 0 ? '#EF476F' : '#555', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                🔔 Needs Your Attention
+                {attentionQueue.length > 0 && (
+                  <span style={{ background: '#EF476F', color: '#000', fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10 }}>
+                    {attentionQueue.length}
+                  </span>
+                )}
+              </p>
+
+              {attentionQueue.length === 0 ? (
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 12, padding: '16px 18px', textAlign: 'center' }}>
+                  <p style={{ color: '#555', fontSize: '0.85rem', margin: 0 }}>
+                    No messages need your attention. Player “Message GM” pings show up here.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {attentionQueue.map((msg) => {
+                    const team = teams.find((t) => t.id === msg.team_id)
+                    const teamColor = team?.color || '#888'
+                    return (
+                      <button
+                        key={msg.id}
+                        onClick={() => setSelectedTeamId(msg.team_id)}
+                        style={{
+                          textAlign: 'left', width: '100%',
+                          background: `${teamColor}0d`,
+                          border: `1px solid ${teamColor}40`,
+                          borderLeft: `3px solid ${teamColor}`,
+                          borderRadius: 10, padding: '12px 14px',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          display: 'flex', flexDirection: 'column', gap: 5,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ width: 9, height: 9, borderRadius: 2, background: teamColor, flexShrink: 0 }} />
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: teamColor }}>
+                            {team?.name ?? msg.team_id}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: '#777' }}>
+                            · {msg.from_name || 'Player'}
+                          </span>
+                          <span style={{ fontSize: '0.66rem', color: '#444', marginLeft: 'auto', fontFamily: "'JetBrains Mono', monospace" }}>
+                            {msg.sent_at?.toDate ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                        <p style={{ color: '#ddd', fontSize: '0.86rem', lineHeight: 1.45, margin: 0 }}>
+                          {msg.text}
+                        </p>
+                        <span style={{ fontSize: '0.68rem', color: teamColor, fontWeight: 600 }}>
+                          Tap to reply →
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             <p style={sectionLabel}>Broadcast to All Teams</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
               <input type="text" value={broadcastInput} onChange={(e) => setBroadcastInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }} placeholder="📢 Message all teams at once..." style={{ flex: 1, background: '#111', border: '1px solid #2a2a2a', borderRadius: 10, padding: '12px 14px', color: '#fff', fontSize: '0.88rem', fontFamily: 'inherit', outline: 'none' }} />
@@ -1124,7 +1207,9 @@ const handleApprove = async (sub: SubmissionData) => {
             <p style={sectionLabel}>Team Messages</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {teams.map((t) => {
-                const unread = chatMessages.filter((m) => m.channel_type === 'team_to_gm' && m.team_id === t.id && !m.read_by?.includes(user?.uid)).length
+                // Per-team unread count = flagged (team_to_gm) messages still in the
+                // attention queue for this team.
+                const unread = attentionQueue.filter((m) => m.team_id === t.id).length
                 return (
                   <button key={t.id} onClick={() => setSelectedTeamId(selectedTeamId === t.id ? null : t.id)} style={{ background: selectedTeamId === t.id ? `${t.color}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${selectedTeamId === t.id ? `${t.color}40` : '#222'}`, color: selectedTeamId === t.id ? t.color : '#666', padding: '8px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative' }}>
                     {t.name}
@@ -1138,13 +1223,16 @@ const handleApprove = async (sub: SubmissionData) => {
               <div style={{ background: '#0d0d0d', border: '1px solid #1a1a1a', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ maxHeight: 380, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {chatMessages
-                    .filter((m) => m.team_id === selectedTeamId && (m.channel_type === 'team_to_gm' || m.channel_type === 'gm_to_team'))
+                    .filter((m) => m.team_id === selectedTeamId && (m.channel_type === 'team_internal' || m.channel_type === 'team_to_gm' || m.channel_type === 'gm_to_team'))
                     .map((msg) => {
                       const isFromGM = msg.channel_type === 'gm_to_team'
+                      const isFlagged = msg.channel_type === 'team_to_gm'
                       return (
                         <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isFromGM ? 'flex-end' : 'flex-start' }}>
-                          <p style={{ fontSize: '0.65rem', color: '#444', marginBottom: 4 }}>{isFromGM ? '🎮 You (GM)' : msg.from_name || 'Player'}</p>
-                          <div style={{ maxWidth: '80%', background: isFromGM ? 'rgba(255,209,102,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isFromGM ? 'rgba(255,209,102,0.2)' : '#222'}`, borderRadius: 10, padding: '10px 14px' }}>
+                          <p style={{ fontSize: '0.65rem', color: isFlagged ? '#FFD166' : '#444', marginBottom: 4, fontWeight: isFlagged ? 700 : 400 }}>
+                            {isFromGM ? '🎮 You (GM)' : isFlagged ? `🔔 ${msg.from_name || 'Player'} → GM` : (msg.from_name || 'Player')}
+                          </p>
+                          <div style={{ maxWidth: '80%', background: isFromGM ? 'rgba(255,209,102,0.08)' : isFlagged ? 'rgba(255,209,102,0.06)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isFromGM ? 'rgba(255,209,102,0.2)' : isFlagged ? 'rgba(255,209,102,0.3)' : '#222'}`, borderRadius: 10, padding: '10px 14px' }}>
                             <p style={{ color: '#ddd', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>{msg.text}</p>
                           </div>
                         </div>
