@@ -3,9 +3,16 @@
 // GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
 //
-// CHANGES in this version:
-//   - handleStartGame now also writes dealt_challenges (immutable record of
-//     initial hand) and logs a card_drawn event per dealt card with
+// CHANGES (Sprint 2 — name pick):
+//   - Players now pick a display name when joining a team (inline input on the
+//     team card). Pre-fills from their account name, editable before joining.
+//   - Within-team duplicate names are blocked (case-insensitive).
+//   - Switch-team and GM move-player paths re-check for name collisions
+//     defensively so a duplicate can't sneak in the back door.
+//
+// CHANGES (prior version):
+//   - handleStartGame writes dealt_challenges (immutable record of initial
+//     hand) and logs a card_drawn event per dealt card with
 //     reason: 'initial_deal' so the full card history is preserved.
 // =============================================================================
 
@@ -92,10 +99,36 @@ export default function LobbyPage() {
   const [joining, setJoining] = useState(false)
   const [playerTeamId, setPlayerTeamId] = useState<string | null>(null)
 
+  // Name-pick state for the join flow.
+  // When a player taps "Join", we show an inline name input on that team's
+  // card instead of joining immediately. `nameEntryTeamId` is the team they're
+  // joining; `nameInput` is the name they're typing; `nameError` is the
+  // duplicate-block message.
+  const [nameEntryTeamId, setNameEntryTeamId] = useState<string | null>(null)
+  const [nameInput, setNameInput] = useState('')
+  const [nameError, setNameError] = useState('')
+
   // GM roster manager state
   const [rosterOpen, setRosterOpen] = useState(false)
   const [editingTeamName, setEditingTeamName] = useState<Record<string, string>>({})
   const [savingRoster, setSavingRoster] = useState(false)
+
+  // Case-insensitive, trimmed check: is this name already taken by someone
+  // ELSE on the target team? (Excludes the current user so re-picking your
+  // own name on your own team isn't blocked.) Returns true if taken.
+  const isNameTakenOnTeam = (
+    name: string,
+    targetTeamId: string,
+    excludeUid?: string
+  ): boolean => {
+    const team = teams.find((t) => t.id === targetTeamId)
+    if (!team) return false
+    const wanted = name.trim().toLowerCase()
+    return team.members.some((uid, i) => {
+      if (excludeUid && uid === excludeUid) return false
+      return (team.member_names[i] || '').trim().toLowerCase() === wanted
+    })
+  }
 
   const isGM = game?.created_by === user?.uid
 
@@ -148,61 +181,117 @@ export default function LobbyPage() {
   }, [game?.status])
 
   // -----------------------------------------------------------------------
-  // Player: join or switch teams
+  // Player: join a SPECIFIC team — two-step so we can capture a display name.
+  // Step 1: beginJoin opens the inline name input on that team's card,
+  //         pre-filled with their account name.
+  // Step 2: confirmJoin validates the name (within-team duplicate block)
+  //         and writes membership.
   // -----------------------------------------------------------------------
 
-  const handleJoinTeam = async (targetTeamId?: string) => {
+  const beginJoin = async (teamId: string) => {
+    if (!user) return
+    // Pre-fill with their account display name as a starting point.
+    let suggested = user.displayName || 'Player'
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid))
+      if (userDoc.exists() && userDoc.data().display_name) {
+        suggested = userDoc.data().display_name
+      }
+    } catch {
+      // Non-critical — fall back to auth display name
+    }
+    setNameInput(suggested)
+    setNameError('')
+    setNameEntryTeamId(teamId)
+  }
+
+  const cancelJoin = () => {
+    setNameEntryTeamId(null)
+    setNameInput('')
+    setNameError('')
+  }
+
+  const confirmJoin = async () => {
+    if (!user || !game || !gameId || !nameEntryTeamId) return
+
+    const name = nameInput.trim()
+    if (!name) {
+      setNameError('Please enter a name.')
+      return
+    }
+    if (isNameTakenOnTeam(name, nameEntryTeamId)) {
+      setNameError('That name is taken on this team. Pick another.')
+      return
+    }
+
+    setJoining(true)
+    setNameError('')
+
+    try {
+      const teamRef = doc(db, 'games', gameId, 'teams', nameEntryTeamId)
+      await updateDoc(teamRef, {
+        members: arrayUnion(user.uid),
+        member_names: arrayUnion(name),
+      })
+      // Persist their chosen name back to their account so it pre-fills
+      // next time too. Non-critical if it fails.
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { display_name: name })
+      } catch { /* ignore */ }
+
+      cancelJoin()
+    } catch (err: any) {
+      setNameError('Failed to join: ' + err.message)
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Player: auto-join the smallest open team (or create one). Also prompts
+  // for a name first by routing through beginJoin once a target is known.
+  // -----------------------------------------------------------------------
+
+  const handleAutoJoin = async () => {
     if (!user || !game || !gameId) return
     setJoining(true)
     setError('')
 
     try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid))
-      const displayName = userDoc.exists()
-        ? userDoc.data().display_name || user.displayName || 'Player'
-        : user.displayName || 'Player'
+      const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
+      const currentTeams: TeamData[] = []
+      teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
 
-      if (targetTeamId) {
-        const teamRef = doc(db, 'games', gameId, 'teams', targetTeamId)
-        await updateDoc(teamRef, {
-          members: arrayUnion(user.uid),
-          member_names: arrayUnion(displayName),
+      const smallest = currentTeams
+        .filter((t) => t.members.length < game.settings.team_size)
+        .sort((a, b) => a.members.length - b.members.length)[0]
+
+      if (currentTeams.length < game.max_teams && (!smallest || smallest.members.length > 0)) {
+        // Create a fresh team, then open the name input on it.
+        const teamIndex = currentTeams.length
+        const teamId = 'team_' + (teamIndex + 1)
+        const teamRef = doc(db, 'games', gameId, 'teams', teamId)
+        await setDoc(teamRef, {
+          id: teamId,
+          name: TEAM_NAMES[teamIndex] || 'Team ' + (teamIndex + 1),
+          members: [],
+          member_names: [],
+          color: TEAM_COLORS[teamIndex]?.hex || '#888',
+          total_points: 0,
+          zones_claimed: 0,
+          zones_locked: 0,
+          taxi_used: false,
+          hand: [],
         })
+        setJoining(false)
+        await beginJoin(teamId)
+        return
+      } else if (smallest) {
+        setJoining(false)
+        await beginJoin(smallest.id)
+        return
       } else {
-        // Auto-assign: find smallest team with space, or create new team
-        const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
-        const currentTeams: TeamData[] = []
-        teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
-
-        const smallest = currentTeams
-          .filter((t) => t.members.length < game.settings.team_size)
-          .sort((a, b) => a.members.length - b.members.length)[0]
-
-        if (currentTeams.length < game.max_teams && (!smallest || smallest.members.length > 0)) {
-          const teamIndex = currentTeams.length
-          const teamId = 'team_' + (teamIndex + 1)
-          const teamRef = doc(db, 'games', gameId, 'teams', teamId)
-          await setDoc(teamRef, {
-            id: teamId,
-            name: TEAM_NAMES[teamIndex] || 'Team ' + (teamIndex + 1),
-            members: [user.uid],
-            member_names: [displayName],
-            color: TEAM_COLORS[teamIndex]?.hex || '#888',
-            total_points: 0,
-            zones_claimed: 0,
-            zones_locked: 0,
-            taxi_used: false,
-            hand: [],
-          })
-        } else if (smallest) {
-          const teamRef = doc(db, 'games', gameId, 'teams', smallest.id)
-          await updateDoc(teamRef, {
-            members: arrayUnion(user.uid),
-            member_names: arrayUnion(displayName),
-          })
-        } else {
-          setError('All teams are full')
-        }
+        setError('All teams are full')
       }
     } catch (err: any) {
       setError('Failed to join: ' + err.message)
@@ -222,6 +311,14 @@ export default function LobbyPage() {
       const displayName = userDoc.exists()
         ? userDoc.data().display_name || user.displayName || 'Player'
         : user.displayName || 'Player'
+
+      // Defensive: block the switch if the player's name collides with
+      // someone already on the destination team.
+      if (isNameTakenOnTeam(displayName, toTeamId, user.uid)) {
+        setError(`Your name "${displayName}" is taken on that team. Change it before switching.`)
+        setJoining(false)
+        return
+      }
 
       // Remove from current team
       const currentTeam = teams.find((t) => t.id === playerTeamId)
@@ -292,6 +389,14 @@ export default function LobbyPage() {
       if (memberIndex === -1) throw new Error('Player not found in source team')
 
       const playerName = fromTeam.member_names[memberIndex] || 'Player'
+
+      // Defensive: don't move a player onto a team where their name already
+      // exists. The GM gets a clear message and can rename first.
+      if (isNameTakenOnTeam(playerName, toTeamId)) {
+        setError(`"${playerName}" already exists on ${teams.find(t => t.id === toTeamId)?.name ?? 'that team'}. Rename one first.`)
+        setSavingRoster(false)
+        return
+      }
 
       // Remove from source team (filter by index to keep names array in sync)
       const updatedMembers = fromTeam.members.filter((_, i) => i !== memberIndex)
@@ -656,10 +761,10 @@ export default function LobbyPage() {
                   )}
                 </div>
 
-                {/* Join this team */}
-                {canJoin && (
+                {/* Join this team — opens an inline name input first */}
+                {canJoin && nameEntryTeamId !== team.id && (
                   <button
-                    onClick={() => handleJoinTeam(team.id)}
+                    onClick={() => beginJoin(team.id)}
                     disabled={joining}
                     style={{
                       width: '100%',
@@ -672,8 +777,65 @@ export default function LobbyPage() {
                       fontFamily: 'inherit',
                     }}
                   >
-                    {joining ? 'Joining...' : `Join ${team.name}`}
+                    {`Join ${team.name}`}
                   </button>
+                )}
+
+                {/* Inline name picker for this team */}
+                {canJoin && nameEntryTeamId === team.id && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <input
+                      autoFocus
+                      value={nameInput}
+                      onChange={(e) => { setNameInput(e.target.value); setNameError('') }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') confirmJoin()
+                        if (e.key === 'Escape') cancelJoin()
+                      }}
+                      placeholder="Your name (shown in chat)"
+                      maxLength={20}
+                      style={{
+                        width: '100%', background: '#111',
+                        border: `1px solid ${nameError ? '#EF476F' : team.color + '50'}`,
+                        borderRadius: 7, padding: '9px 12px', color: '#fff',
+                        fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    {nameError && (
+                      <p style={{ color: '#EF476F', fontSize: '0.72rem', margin: 0 }}>
+                        {nameError}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={confirmJoin}
+                        disabled={joining}
+                        style={{
+                          flex: 2, background: `${team.color}20`,
+                          border: `1px solid ${team.color}50`, color: team.color,
+                          padding: '9px 14px', borderRadius: 7,
+                          fontSize: '0.82rem', fontWeight: 700,
+                          cursor: joining ? 'wait' : 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        {joining ? 'Joining...' : `Confirm & Join`}
+                      </button>
+                      <button
+                        onClick={cancelJoin}
+                        disabled={joining}
+                        style={{
+                          flex: 1, background: 'transparent',
+                          border: '1px solid #333', color: '#666',
+                          padding: '9px 14px', borderRadius: 7,
+                          fontSize: '0.82rem', fontWeight: 600,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Switch to this team */}
@@ -703,7 +865,7 @@ export default function LobbyPage() {
         {/* ── Auto-join button (player not yet on a team) ── */}
         {!isGM && !playerTeamId && (
           <button
-            onClick={() => handleJoinTeam()}
+            onClick={handleAutoJoin}
             disabled={joining}
             style={{
               width: '100%',

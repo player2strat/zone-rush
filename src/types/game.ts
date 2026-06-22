@@ -177,8 +177,12 @@ export interface Submission {
 
 export interface Message {
   id: string
-  game_id: string
-  channel_type: 'team_to_gm' | 'gm_to_team' | 'gm_broadcast'
+  game_id?: string                // Optional — messages live under /games/{gameId}/messages
+  channel_type:
+    | 'team_internal'  // Player → their team room. Teammates + GM can see. GM NOT pinged.
+    | 'team_to_gm'     // Player → GM (flagged). Shows in team room AND GM attention queue.
+    | 'gm_to_team'     // GM → one team
+    | 'gm_broadcast'   // GM → all teams
   from_uid: string
   from_name: string
   team_id: string | null          // Which team this is to/from. null = broadcast to all

@@ -1,10 +1,13 @@
 // =============================================================================
-// Zone Rush — Chat System (Sprint 1)
+// Zone Rush — Chat System (Sprint 2)
 //
-// Three channel types:
-//  - team_to_gm:   Player sends a message to the GM
-//  - gm_to_team:   GM replies to a specific team (only that team sees it)
-//  - gm_broadcast: GM sends to ALL teams simultaneously
+// Channel types:
+//  - team_internal: Player → their team room. Teammates + GM can see.
+//                   GM is NOT pinged. This is normal team chatter.
+//  - team_to_gm:    Player → GM (flagged). Appears in the team room AND
+//                   in the GM's attention queue. This is the "Message GM" path.
+//  - gm_to_team:    GM replies to a specific team (only that team sees it)
+//  - gm_broadcast:  GM sends to ALL teams simultaneously
 //
 // Messages live at: /games/{gameId}/messages/{messageId}
 // =============================================================================
@@ -20,18 +23,24 @@ import type { Message } from '../types/game'
 // ─── Send Messages ────────────────────────────────────────────────────────────
 
 /**
- * Player sends a message to the GM.
+ * Player sends a message to their team room.
+ *
+ * @param toGM - When true, the message is flagged for the GM:
+ *               channel_type 'team_to_gm', which surfaces in the GM's
+ *               attention queue. When false (default), it's 'team_internal'
+ *               — normal team chatter the GM can see but isn't pinged about.
  */
 export async function sendTeamMessage(
   gameId: string,
   fromUid: string,
   fromName: string,
   teamId: string,
-  text: string
+  text: string,
+  toGM: boolean = false
 ): Promise<void> {
   const messagesRef = collection(db, 'games', gameId, 'messages')
   await addDoc(messagesRef, {
-    channel_type: 'team_to_gm',
+    channel_type: toGM ? 'team_to_gm' : 'team_internal',
     from_uid: fromUid,
     from_name: fromName,
     team_id: teamId,
@@ -91,7 +100,8 @@ export async function sendGMBroadcast(
 /**
  * Subscribe to messages for a PLAYER (team member).
  * They see:
- *  - Messages their team sent to the GM (team_to_gm, their team_id)
+ *  - Their team's internal chatter (team_internal, their team_id)
+ *  - Messages their team flagged to the GM (team_to_gm, their team_id)
  *  - GM replies to their team (gm_to_team, their team_id)
  *  - All GM broadcasts (gm_broadcast)
  *
@@ -104,22 +114,19 @@ export function subscribeToPlayerMessages(
 ): () => void {
   const messagesRef = collection(db, 'games', gameId, 'messages')
 
-  // Query for messages relevant to this team
-  // (Firestore doesn't support OR queries directly, so we fetch all and filter client-side)
-  const q = query(
-    messagesRef,
-    orderBy('sent_at', 'asc')
-  )
+  // Firestore can't OR across fields, so we fetch ordered and filter client-side.
+  const q = query(messagesRef, orderBy('sent_at', 'asc'))
 
   return onSnapshot(q, (snap) => {
     const messages: Message[] = []
     snap.forEach((d) => {
       const msg = { id: d.id, ...d.data() } as Message
-      // Include if: broadcast, OR this team's conversation with GM
       if (
         msg.channel_type === 'gm_broadcast' ||
-        (msg.channel_type === 'team_to_gm' && msg.team_id === teamId) ||
-        (msg.channel_type === 'gm_to_team' && msg.team_id === teamId)
+        ((msg.channel_type === 'team_internal' ||
+          msg.channel_type === 'team_to_gm' ||
+          msg.channel_type === 'gm_to_team') &&
+          msg.team_id === teamId)
       ) {
         messages.push(msg)
       }
@@ -148,15 +155,10 @@ export function subscribeToGMMessages(
     snap.forEach((d) => {
       const msg = { id: d.id, ...d.data() } as Message
       if (teamFilter) {
-        // Filtered view: show this team's messages + broadcasts
-        if (
-          msg.channel_type === 'gm_broadcast' ||
-          msg.team_id === teamFilter
-        ) {
+        if (msg.channel_type === 'gm_broadcast' || msg.team_id === teamFilter) {
           messages.push(msg)
         }
       } else {
-        // All messages view (GM overview)
         messages.push(msg)
       }
     })
@@ -164,11 +166,40 @@ export function subscribeToGMMessages(
   })
 }
 
+/**
+ * Subscribe to the GM's ATTENTION QUEUE for this game.
+ * Returns only flagged player messages (team_to_gm) that the GM
+ * hasn't read yet, oldest first — the running list of "someone needs me."
+ * Each message carries team_id so the UI can label which team sent it.
+ *
+ * @returns Unsubscribe function
+ */
+export function subscribeToGMAttentionQueue(
+  gameId: string,
+  gmUid: string,
+  onQueue: (messages: Message[]) => void
+): () => void {
+  const messagesRef = collection(db, 'games', gameId, 'messages')
+  const q = query(
+    messagesRef,
+    where('channel_type', '==', 'team_to_gm'),
+    orderBy('sent_at', 'asc')
+  )
+
+  return onSnapshot(q, (snap) => {
+    const queue: Message[] = []
+    snap.forEach((d) => {
+      const msg = { id: d.id, ...d.data() } as Message
+      if (!msg.read_by?.includes(gmUid)) queue.push(msg)
+    })
+    onQueue(queue)
+  })
+}
+
 // ─── Mark Messages as Read ────────────────────────────────────────────────────
 
 /**
- * Mark all unread messages in a conversation as read by this user.
- * Updates the read_by array on each unread message.
+ * Mark all messages relevant to this user in a team's conversation as read.
  */
 export async function markMessagesRead(
   gameId: string,
@@ -176,25 +207,21 @@ export async function markMessagesRead(
   teamId?: string
 ): Promise<void> {
   const messagesRef = collection(db, 'games', gameId, 'messages')
-  const q = query(messagesRef, orderBy('sent_at', 'asc'))
-  const snap = await getDocs(q)
+  const snap = await getDocs(query(messagesRef, orderBy('sent_at', 'asc')))
 
   const updatePromises: Promise<void>[] = []
 
   snap.forEach((d) => {
     const msg = { id: d.id, ...d.data() } as Message
 
-    // Only mark messages relevant to this user
     const isRelevant =
       msg.channel_type === 'gm_broadcast' ||
-      (teamId && msg.team_id === teamId)
+      (!!teamId && msg.team_id === teamId)
 
     if (isRelevant && !msg.read_by?.includes(uid)) {
       const msgRef = doc(db, 'games', gameId, 'messages', d.id)
       updatePromises.push(
-        updateDoc(msgRef, {
-          read_by: [...(msg.read_by ?? []), uid],
-        })
+        updateDoc(msgRef, { read_by: [...(msg.read_by ?? []), uid] })
       )
     }
   })
@@ -206,7 +233,7 @@ export async function markMessagesRead(
 
 /**
  * Count unread messages for a player — used for the Chat tab badge.
- * Returns a real-time subscription (returns unsubscribe function).
+ * Counts GM replies to their team and broadcasts (not their own chatter).
  */
 export function subscribeToUnreadCount(
   gameId: string,
@@ -221,21 +248,20 @@ export function subscribeToUnreadCount(
     let count = 0
     snap.forEach((d) => {
       const msg = { id: d.id, ...d.data() } as Message
-
       const isRelevant =
         msg.channel_type === 'gm_broadcast' ||
-        (msg.channel_type === 'gm_to_team' && msg.team_id === teamId)
-
-      if (isRelevant && !msg.read_by?.includes(uid)) {
-        count++
-      }
+        (msg.channel_type === 'gm_to_team' && msg.team_id === teamId) ||
+        // a teammate's message the player hasn't seen
+        (msg.channel_type === 'team_internal' && msg.team_id === teamId)
+      if (isRelevant && !msg.read_by?.includes(uid)) count++
     })
     onCount(count)
   })
 }
 
 /**
- * Count unread messages for the GM — total unread from all teams.
+ * Count unread FLAGGED messages for the GM — the attention-queue badge.
+ * Only counts team_to_gm (flagged), never normal team_internal chatter.
  */
 export function subscribeToGMUnreadCount(
   gameId: string,
@@ -243,10 +269,7 @@ export function subscribeToGMUnreadCount(
   onCount: (count: number) => void
 ): () => void {
   const messagesRef = collection(db, 'games', gameId, 'messages')
-  const q = query(
-    messagesRef,
-    where('channel_type', '==', 'team_to_gm')
-  )
+  const q = query(messagesRef, where('channel_type', '==', 'team_to_gm'))
 
   return onSnapshot(q, (snap) => {
     let count = 0
