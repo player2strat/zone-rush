@@ -1,7 +1,7 @@
 // =============================================================================
 // Seed Manhattan Zones + Map Sets
 // Admin page: /admin/seed-maps
-// Seeds ALL 28 Manhattan neighborhood zones and 2 map_sets.
+// Seeds ALL 29 Manhattan zones (28 neighborhoods + Central Park) and 2 map_sets.
 // Safe to re-run — uses merge: true.
 // =============================================================================
 
@@ -10,7 +10,10 @@ import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firesto
 import { db } from '../lib/firebase'
 
 // ---------------------------------------------------------------------------
-// All 28 Manhattan zones (NTA boundaries from NYC Dept of City Planning)
+// All 29 Manhattan zones (28 NTA neighborhoods + Central Park)
+// NTA boundaries from NYC Dept of City Planning; Central Park is a hand-built
+// polygon (the park is a clean rectangle bounded by 59th St, 110th St,
+// Fifth Ave, and Central Park West).
 // ---------------------------------------------------------------------------
 const MANHATTAN_ZONES = [
   {
@@ -432,10 +435,25 @@ const MANHATTAN_ZONES = [
     landmarks: ["Inwood Hill Park", "The Cloisters", "Fort Tryon Park", "Dyckman Street"],
     difficulty_rating: 4,
     boundary: JSON.stringify({"type": "MultiPolygon", "coordinates": [[[[-73.922046, 40.856862], [-73.919504, 40.858799], [-73.917053, 40.861901], [-73.91392, 40.864754], [-73.911032, 40.869164], [-73.91065, 40.872305], [-73.911579, 40.87328], [-73.914011, 40.871169], [-73.918461, 40.87303], [-73.919256, 40.871016], [-73.921533, 40.869458], [-73.9262, 40.868522], [-73.928728, 40.86675], [-73.927271, 40.865543], [-73.924743, 40.861602], [-73.922046, 40.856862]]], [[[-73.907466, 40.873556], [-73.90683, 40.87664], [-73.9095, 40.878785], [-73.91206, 40.878128], [-73.915787, 40.875725], [-73.911673, 40.874496], [-73.908934, 40.872166], [-73.907466, 40.873556]]]]}),
+  },
+  {
+    id: 'zone_mn_centralpark',
+    nta_code: 'MN99',
+    name: 'Central Park',
+    full_name: 'Central Park',
+    borough: 'Manhattan',
+    city: 'nyc',
+    center_lat: 40.782272,
+    center_lng: -73.965432,
+    culture_tags: ["park", "nature", "recreation", "tourist", "iconic"],
+    transit_lines: ["A", "B", "C", "D", "1", "2", "3", "N", "Q", "R", "W", "4", "5", "6"],
+    landmarks: ["Bethesda Fountain", "Bow Bridge", "Sheep Meadow", "The Reservoir", "Belvedere Castle", "The Mall", "Strawberry Fields", "Central Park Zoo"],
+    difficulty_rating: 3,
+    boundary: JSON.stringify({"type": "Polygon", "coordinates": [[[-73.981773, 40.768094], [-73.958209, 40.800621], [-73.949227, 40.796875], [-73.972802, 40.764354], [-73.981773, 40.768094]]]}),
   }
 ]
 
-const ALL_MANHATTAN_ZONE_IDS = ["zone_mn_mn25", "zone_mn_mn28", "zone_mn_mn27", "zone_mn_mn24", "zone_mn_mn22", "zone_mn_mn23", "zone_mn_mn50", "zone_mn_mn21", "zone_mn_mn20", "zone_mn_mn13", "zone_mn_mn19", "zone_mn_mn17", "zone_mn_mn31", "zone_mn_mn15", "zone_mn_mn40", "zone_mn_mn14", "zone_mn_mn32", "zone_mn_mn12", "zone_mn_mn33", "zone_mn_mn34", "zone_mn_mn11", "zone_mn_mn09", "zone_mn_mn06", "zone_mn_mn03", "zone_mn_mn04", "zone_mn_mn36", "zone_mn_mn35", "zone_mn_mn01"]
+const ALL_MANHATTAN_ZONE_IDS = ["zone_mn_mn25", "zone_mn_mn28", "zone_mn_mn27", "zone_mn_mn24", "zone_mn_mn22", "zone_mn_mn23", "zone_mn_mn50", "zone_mn_mn21", "zone_mn_mn20", "zone_mn_mn13", "zone_mn_mn19", "zone_mn_mn17", "zone_mn_mn31", "zone_mn_mn15", "zone_mn_mn40", "zone_mn_mn14", "zone_mn_mn32", "zone_mn_mn12", "zone_mn_mn33", "zone_mn_mn34", "zone_mn_mn11", "zone_mn_mn09", "zone_mn_mn06", "zone_mn_mn03", "zone_mn_mn04", "zone_mn_mn36", "zone_mn_mn35", "zone_mn_mn01", "zone_mn_centralpark"]
 
 export default function SeedMaps() {
   const [status, setStatus] = useState<string[]>([])
@@ -444,7 +462,7 @@ export default function SeedMaps() {
   const log = (msg: string) => setStatus((prev) => [...prev, msg])
 
   const seedManhattanZones = async () => {
-    log('--- Seeding Manhattan zones (28 total) ---')
+    log('--- Seeding Manhattan zones (29 total) ---')
     let created = 0
     for (const zone of MANHATTAN_ZONES) {
       try {
@@ -512,7 +530,7 @@ export default function SeedMaps() {
       await setDoc(doc(db, 'map_sets', 'manhattan_neighborhoods'), {
         id: 'manhattan_neighborhoods',
         name: 'Manhattan (Full Borough)',
-        description: '28 neighborhoods covering all of Manhattan \u2014 Lower Manhattan to Inwood.',
+        description: '29 zones covering all of Manhattan \u2014 Lower Manhattan to Inwood, plus Central Park.',
         city: 'nyc',
         borough: 'Manhattan',
         zone_ids: ALL_MANHATTAN_ZONE_IDS,
@@ -558,7 +576,7 @@ export default function SeedMaps() {
     await seedManhattanZones()
     await seedMapSets()
     log('')
-    log('\u2705 All done! 28 Manhattan zones and map_sets are live.')
+    log('\u2705 All done! 29 Manhattan zones and map_sets are live.')
     setRunning(false)
   }
 
@@ -575,7 +593,7 @@ export default function SeedMaps() {
           Seed Maps & Zones
         </h1>
         <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 24 }}>
-          Seeds 28 Manhattan zones + 2 map_sets (Brooklyn Alpha, Manhattan Full Borough)
+          Seeds 29 Manhattan zones (28 neighborhoods + Central Park) + 2 map_sets
         </p>
 
         <div style={{
@@ -590,9 +608,9 @@ export default function SeedMaps() {
           </p>
           {[
             'Add borough: "Brooklyn" to existing zone docs (if missing)',
-            'Create/update 28 Manhattan neighborhood zones in Firestore',
+            'Create/update 29 Manhattan zones in Firestore (28 neighborhoods + Central Park)',
             'Create/update "Brooklyn Alpha" map_set (auto-detects existing Brooklyn zones)',
-            'Create/update "Manhattan (Full Borough)" map_set (28 zones)',
+            'Create/update "Manhattan (Full Borough)" map_set (29 zones)',
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
               <span style={{ color: '#FFD166' }}>{i + 1}.</span>
