@@ -2,12 +2,21 @@
 // Zone Rush — Game Page
 // Player's 5-tab view: Home, Hand, Map, Chat, History
 //
-// CHANGES:
-// - Discard logic now tracks discarded_challenges on team doc
-//   so completed/discarded cards never recycle back into hand
+// CHANGES (Sprint 2 — chat):
+// - Players can now message their TEAM (team_internal) as well as flag a
+//   message for the GM ("Message GM" button → team_to_gm).
+// - Chat rendering distinguishes four cases: you, a teammate (shows their
+//   name), the GM, and broadcasts. Previously every non-GM message showed
+//   as "You", which broke once teammates can talk to each other.
+// - Chat messages now use the player's TEAM display name (from member_names),
+//   not their auth profile name.
+// - Fixed: messages sort/label by sent_at (was reading a non-existent
+//   created_at field).
+//
+// CHANGES (prior):
+// - Discard logic tracks discarded_challenges on team doc
 // - Player profile badge removed from hand cards
 // - Home tab rules updated with new copy + Side Quests info
-// - Phone-free bonus removed from quick rules
 // =============================================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -159,6 +168,14 @@ export default function GamePage() {
   const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
   const [broadcastDismissed, setBroadcastDismissed] = useState<string | null>(null)
 
+  // The player's display name for THIS game comes from their team's
+  // member_names (the name they picked at join), not the auth profile.
+  const myDisplayName = (() => {
+    if (!myTeam || !user) return user?.displayName || 'Player'
+    const idx = myTeam.members.indexOf(user.uid)
+    return (idx !== -1 && myTeam.member_names[idx]) || user.displayName || 'Player'
+  })()
+
   // Load zones from Firestore
   useEffect(() => {
     async function loadZones() {
@@ -196,13 +213,13 @@ export default function GamePage() {
         lat: location.lat,
         lng: location.lng,
         accuracy: location.accuracy,
-        name: user.displayName?.split(' ')[0] || 'Player',
+        name: myDisplayName.split(' ')[0] || 'Player',
         updated_at: now,
       },
     }).catch(() => {
       // Silent fail — location write is non-critical
     })
-  }, [gameId, user?.uid, myTeam?.id, location.lat, location.lng, location.accuracy, user?.displayName])
+  }, [gameId, user?.uid, myTeam?.id, location.lat, location.lng, location.accuracy, myDisplayName])
 
   // Listen to game document
   useEffect(() => {
@@ -325,7 +342,7 @@ export default function GamePage() {
             !m.read_by?.includes(user?.uid)
         )
         .sort((a: any, b: any) =>
-          (b.created_at?.toMillis?.() ?? 0) - (a.created_at?.toMillis?.() ?? 0)
+          (b.sent_at?.toMillis?.() ?? 0) - (a.sent_at?.toMillis?.() ?? 0)
         )[0]
 
       if (latestUnreadBroadcast) {
@@ -354,12 +371,14 @@ export default function GamePage() {
     }
   }, [activeTab, gameId, user?.uid, myTeam?.id])
 
-  // Chat send handler
-  const handleSendMessage = async () => {
+  // Chat send handler.
+  // toGM=false → team_internal (teammates see it, GM not pinged)
+  // toGM=true  → team_to_gm   (flagged; lands in GM attention queue)
+  const handleSendMessage = async (toGM: boolean = false) => {
     if (!chatInput.trim() || !gameId || !user || !myTeam || chatSending) return
     setChatSending(true)
     try {
-      await sendTeamMessage(gameId, user.uid, user.displayName || 'Player', myTeam.id, chatInput.trim())
+      await sendTeamMessage(gameId, user.uid, myDisplayName, myTeam.id, chatInput.trim(), toGM)
       setChatInput('')
     } catch (err) {
       console.error('Failed to send message:', err)
@@ -1021,30 +1040,63 @@ export default function GamePage() {
                 <div style={{ textAlign: 'center', marginTop: 60, color: '#555' }}>
                   <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
                   <p style={{ fontWeight: 600, color: '#666' }}>No messages yet</p>
-                  <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>Message the GM with questions or disputes.</p>
+                  <p style={{ fontSize: '0.82rem', color: '#444', marginTop: 6, lineHeight: 1.6 }}>
+                    Chat with your team here. Use “Message GM” to send the GM a question.
+                  </p>
                 </div>
               ) : (
                 chatMessages.map((msg: any) => {
-                  const isFromGM = msg.channel_type === 'gm_to_team' || msg.channel_type === 'gm_broadcast'
+                  // Four cases: broadcast, GM-to-team, your own message, teammate's message.
                   const isBroadcast = msg.channel_type === 'gm_broadcast'
+                  const isFromGM = msg.channel_type === 'gm_to_team' || isBroadcast
+                  const isMine = !isFromGM && msg.from_uid === user?.uid
+                  const isFlaggedToGM = msg.channel_type === 'team_to_gm'
+
+                  // Layout: GM messages on the left, your own on the right,
+                  // teammates' on the left (with their name shown).
+                  const alignRight = isMine
+
+                  // Label above the bubble
+                  const label = isBroadcast
+                    ? '📢 GM → All Teams'
+                    : isFromGM
+                      ? '🎮 GM'
+                      : isMine
+                        ? (isFlaggedToGM ? 'You → GM' : 'You')
+                        : (msg.from_name || 'Teammate')
+
                   return (
-                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isFromGM ? 'flex-start' : 'flex-end' }}>
-                      <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 3, paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4 }}>
-                        {isBroadcast ? '📢 GM → All Teams' : isFromGM ? '🎮 GM' : msg.from_name || 'You'}
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
+                      <p style={{ fontSize: '0.68rem', color: isFlaggedToGM ? '#FFD166' : '#444', marginBottom: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0, fontWeight: isFlaggedToGM ? 700 : 400 }}>
+                        {label}
                       </p>
                       <div style={{
                         maxWidth: '80%',
-                        background: isBroadcast ? 'rgba(255,209,102,0.1)' : isFromGM ? 'rgba(255,255,255,0.05)' : `${myTeam.color}18`,
-                        border: `1px solid ${isBroadcast ? 'rgba(255,209,102,0.25)' : isFromGM ? '#222' : myTeam.color + '35'}`,
-                        borderRadius: isFromGM ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+                        background: isBroadcast
+                          ? 'rgba(255,209,102,0.1)'
+                          : isFromGM
+                            ? 'rgba(255,255,255,0.05)'
+                            : isFlaggedToGM
+                              ? 'rgba(255,209,102,0.08)'
+                              : `${myTeam.color}18`,
+                        border: `1px solid ${
+                          isBroadcast
+                            ? 'rgba(255,209,102,0.25)'
+                            : isFromGM
+                              ? '#222'
+                              : isFlaggedToGM
+                                ? 'rgba(255,209,102,0.35)'
+                                : myTeam.color + '35'
+                        }`,
+                        borderRadius: alignRight ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
                         padding: '10px 14px',
                       }}>
                         <p style={{ color: isBroadcast ? '#FFD166' : '#e0e0e0', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
                           {msg.text}
                         </p>
                       </div>
-                      <p style={{ fontSize: '0.65rem', color: '#333', marginTop: 3, paddingLeft: isFromGM ? 4 : 0, paddingRight: isFromGM ? 0 : 4 }}>
-                        {msg.created_at?.toDate ? msg.created_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      <p style={{ fontSize: '0.65rem', color: '#333', marginTop: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0 }}>
+                        {msg.sent_at?.toDate ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </p>
                     </div>
                   )
@@ -1053,33 +1105,60 @@ export default function GamePage() {
               <div ref={chatBottomRef} />
             </div>
 
-            <div style={{ padding: '12px 16px 100px', borderTop: '1px solid #1a1a1a', background: '#0d0d0d', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-              <textarea
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage() } }}
-                placeholder="Message the GM..."
-                rows={1}
-                style={{
-                  flex: 1, background: '#141414', border: '1px solid #222',
-                  borderRadius: 10, padding: '10px 14px', color: '#fff',
-                  fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none', outline: 'none', lineHeight: 1.5,
-                }}
-              />
+            {/* Composer: team message (default) + Message GM (flagged) */}
+            <div style={{ padding: '12px 16px 100px', borderTop: '1px solid #1a1a1a', background: '#0d0d0d' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 8 }}>
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(false) } }}
+                  placeholder="Message your team..."
+                  rows={1}
+                  style={{
+                    flex: 1, background: '#141414', border: '1px solid #222',
+                    borderRadius: 10, padding: '10px 14px', color: '#fff',
+                    fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none', outline: 'none', lineHeight: 1.5,
+                  }}
+                />
+                <button
+                  onClick={() => handleSendMessage(false)}
+                  disabled={!chatInput.trim() || chatSending}
+                  title="Send to your team"
+                  style={{
+                    background: chatInput.trim() ? myTeam.color : '#1a1a1a',
+                    border: 'none', borderRadius: 10, width: 42, height: 42,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: chatInput.trim() ? 'pointer' : 'default',
+                    fontSize: '1rem', flexShrink: 0, transition: 'background 0.15s',
+                    opacity: chatSending ? 0.5 : 1,
+                  }}
+                >
+                  {chatSending ? '⏳' : '↑'}
+                </button>
+              </div>
+
+              {/* Message GM — flags the typed message for the GM's attention queue */}
               <button
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage(true)}
                 disabled={!chatInput.trim() || chatSending}
+                title="Send this message directly to the GM"
                 style={{
-                  background: chatInput.trim() ? myTeam.color : '#1a1a1a',
-                  border: 'none', borderRadius: 10, width: 42, height: 42,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: chatInput.trim() ? 'pointer' : 'default',
-                  fontSize: '1rem', flexShrink: 0, transition: 'background 0.15s',
+                  width: '100%',
+                  background: chatInput.trim() ? 'rgba(255,209,102,0.12)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${chatInput.trim() ? 'rgba(255,209,102,0.35)' : '#1a1a1a'}`,
+                  color: chatInput.trim() ? '#FFD166' : '#444',
+                  padding: '9px 14px', borderRadius: 10,
+                  fontSize: '0.82rem', fontWeight: 700,
+                  cursor: chatInput.trim() && !chatSending ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
                   opacity: chatSending ? 0.5 : 1,
                 }}
               >
-                {chatSending ? '⏳' : '↑'}
+                🎮 Message GM
               </button>
+              <p style={{ fontSize: '0.66rem', color: '#444', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
+                Normal messages go to your team (the GM can see them). “Message GM” pings the GM directly.
+              </p>
             </div>
           </div>
         )}
@@ -1143,8 +1222,14 @@ export default function GamePage() {
           { id: 'chat' as const, icon: '💬', label: 'Chat' },
           { id: 'history' as const, icon: '📋', label: 'History' },
         ]).map((tab) => {
+          // Unread chat badge: GM replies, broadcasts, and unseen teammate
+          // messages all count (not your own messages).
           const unreadChatCount = chatMessages.filter(
-            (m: any) => (m.channel_type === 'gm_to_team' || m.channel_type === 'gm_broadcast') && !m.read_by?.includes(user?.uid)
+            (m: any) =>
+              (m.channel_type === 'gm_to_team' ||
+                m.channel_type === 'gm_broadcast' ||
+                (m.channel_type === 'team_internal' && m.from_uid !== user?.uid)) &&
+              !m.read_by?.includes(user?.uid)
           ).length
           const showDot =
             (tab.id === 'history' && pendingCount > 0 && activeTab !== 'history') ||
