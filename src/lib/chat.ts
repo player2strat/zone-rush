@@ -170,7 +170,9 @@ export function subscribeToGMMessages(
  * Subscribe to the GM's ATTENTION QUEUE for this game.
  * Returns only flagged player messages (team_to_gm) that the GM
  * hasn't read yet, oldest first — the running list of "someone needs me."
- * Each message carries team_id so the UI can label which team sent it.
+ *
+ * Note: we intentionally do NOT use orderBy in the Firestore query, so this
+ * needs no composite index. We sort by sent_at in code instead.
  *
  * @returns Unsubscribe function
  */
@@ -182,8 +184,7 @@ export function subscribeToGMAttentionQueue(
   const messagesRef = collection(db, 'games', gameId, 'messages')
   const q = query(
     messagesRef,
-    where('channel_type', '==', 'team_to_gm'),
-    orderBy('sent_at', 'asc')
+    where('channel_type', '==', 'team_to_gm')
   )
 
   return onSnapshot(q, (snap) => {
@@ -191,6 +192,12 @@ export function subscribeToGMAttentionQueue(
     snap.forEach((d) => {
       const msg = { id: d.id, ...d.data() } as Message
       if (!msg.read_by?.includes(gmUid)) queue.push(msg)
+    })
+    // Sort oldest-first in code (no Firestore index needed).
+    queue.sort((a, b) => {
+      const ta = (a.sent_at as any)?.toMillis?.() ?? 0
+      const tb = (b.sent_at as any)?.toMillis?.() ?? 0
+      return ta - tb
     })
     onQueue(queue)
   })
@@ -233,7 +240,8 @@ export async function markMessagesRead(
 
 /**
  * Count unread messages for a player — used for the Chat tab badge.
- * Counts GM replies to their team and broadcasts (not their own chatter).
+ * Counts GM replies to their team, broadcasts, and unseen teammate chatter
+ * (not their own messages).
  */
 export function subscribeToUnreadCount(
   gameId: string,
