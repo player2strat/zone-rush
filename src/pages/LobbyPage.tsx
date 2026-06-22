@@ -3,9 +3,10 @@
 // GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
 //
-// CHANGES (Sprint 2 — name pick):
-//   - Players now pick a display name when joining a team (inline input on the
-//     team card). Pre-fills from their account name, editable before joining.
+// CHANGES (Sprint 2 — name pick, v2):
+//   - Players pick a display name BEFORE being placed on a team. Both
+//     "Join [team]" and "Auto-Join" open the same name prompt at the top of
+//     the screen (not an easy-to-miss inline input on a card).
 //   - Within-team duplicate names are blocked (case-insensitive).
 //   - Switch-team and GM move-player paths re-check for name collisions
 //     defensively so a duplicate can't sneak in the back door.
@@ -99,12 +100,16 @@ export default function LobbyPage() {
   const [joining, setJoining] = useState(false)
   const [playerTeamId, setPlayerTeamId] = useState<string | null>(null)
 
-  // Name-pick state for the join flow.
-  // When a player taps "Join", we show an inline name input on that team's
-  // card instead of joining immediately. `nameEntryTeamId` is the team they're
-  // joining; `nameInput` is the name they're typing; `nameError` is the
-  // duplicate-block message.
-  const [nameEntryTeamId, setNameEntryTeamId] = useState<string | null>(null)
+  // Name-pick state. When a player taps "Join [team]" or "Auto-Join", we open
+  // a single name prompt at the top of the screen FIRST. They confirm a name,
+  // then we place them on the team.
+  //   - pendingJoin describes what they're joining: either a specific team,
+  //     or 'auto' to let us pick/create the team on confirm.
+  //   - nameInput is the name they're typing.
+  //   - nameError is the validation / duplicate-block message.
+  const [pendingJoin, setPendingJoin] = useState<
+    { kind: 'team'; teamId: string } | { kind: 'auto' } | null
+  >(null)
   const [nameInput, setNameInput] = useState('')
   const [nameError, setNameError] = useState('')
 
@@ -181,16 +186,15 @@ export default function LobbyPage() {
   }, [game?.status])
 
   // -----------------------------------------------------------------------
-  // Player: join a SPECIFIC team — two-step so we can capture a display name.
-  // Step 1: beginJoin opens the inline name input on that team's card,
-  //         pre-filled with their account name.
-  // Step 2: confirmJoin validates the name (within-team duplicate block)
-  //         and writes membership.
+  // Player: open the name prompt.
+  // beginJoin is called by BOTH "Join [team]" (kind: 'team') and "Auto-Join"
+  // (kind: 'auto'). It pre-fills the name input with their account name and
+  // shows the prompt at the top of the screen. The actual placement happens
+  // in confirmJoin.
   // -----------------------------------------------------------------------
 
-  const beginJoin = async (teamId: string) => {
+  const beginJoin = async (target: { kind: 'team'; teamId: string } | { kind: 'auto' }) => {
     if (!user) return
-    // Pre-fill with their account display name as a starting point.
     let suggested = user.displayName || 'Player'
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid))
@@ -202,25 +206,64 @@ export default function LobbyPage() {
     }
     setNameInput(suggested)
     setNameError('')
-    setNameEntryTeamId(teamId)
+    setPendingJoin(target)
   }
 
   const cancelJoin = () => {
-    setNameEntryTeamId(null)
+    setPendingJoin(null)
     setNameInput('')
     setNameError('')
   }
 
+  // Resolve which team an auto-join should land on. Mirrors the old logic:
+  // smallest team with space, or create a new team if there's room.
+  // Returns the team ID to join, or null if everything is full.
+  const resolveAutoJoinTeam = async (): Promise<string | null> => {
+    if (!game || !gameId) return null
+    const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
+    const currentTeams: TeamData[] = []
+    teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
+
+    const smallest = currentTeams
+      .filter((t) => t.members.length < game.settings.team_size)
+      .sort((a, b) => a.members.length - b.members.length)[0]
+
+    if (currentTeams.length < game.max_teams && (!smallest || smallest.members.length > 0)) {
+      // Create a fresh team
+      const teamIndex = currentTeams.length
+      const teamId = 'team_' + (teamIndex + 1)
+      const teamRef = doc(db, 'games', gameId, 'teams', teamId)
+      await setDoc(teamRef, {
+        id: teamId,
+        name: TEAM_NAMES[teamIndex] || 'Team ' + (teamIndex + 1),
+        members: [],
+        member_names: [],
+        color: TEAM_COLORS[teamIndex]?.hex || '#888',
+        total_points: 0,
+        zones_claimed: 0,
+        zones_locked: 0,
+        taxi_used: false,
+        hand: [],
+      })
+      return teamId
+    } else if (smallest) {
+      return smallest.id
+    }
+    return null
+  }
+
+  // -----------------------------------------------------------------------
+  // Player: confirm the chosen name, then place them on the team.
+  // For 'auto', we resolve the destination team here (after the name is set)
+  // so the player is never briefly shown on a team under a placeholder name.
+  // -----------------------------------------------------------------------
+
   const confirmJoin = async () => {
-    if (!user || !game || !gameId || !nameEntryTeamId) return
+    if (!user || !game || !gameId || !pendingJoin) return
 
     const name = nameInput.trim()
     if (!name) {
       setNameError('Please enter a name.')
-      return
-    }
-    if (isNameTakenOnTeam(name, nameEntryTeamId)) {
-      setNameError('That name is taken on this team. Pick another.')
       return
     }
 
@@ -228,11 +271,33 @@ export default function LobbyPage() {
     setNameError('')
 
     try {
-      const teamRef = doc(db, 'games', gameId, 'teams', nameEntryTeamId)
+      // Figure out the destination team.
+      let targetTeamId: string | null
+      if (pendingJoin.kind === 'team') {
+        targetTeamId = pendingJoin.teamId
+      } else {
+        targetTeamId = await resolveAutoJoinTeam()
+        if (!targetTeamId) {
+          setNameError('All teams are full.')
+          setJoining(false)
+          return
+        }
+      }
+
+      // Duplicate-name block (case-insensitive, within the destination team).
+      // For a freshly created auto-join team this is always clear.
+      if (isNameTakenOnTeam(name, targetTeamId)) {
+        setNameError('That name is taken on this team. Pick another.')
+        setJoining(false)
+        return
+      }
+
+      const teamRef = doc(db, 'games', gameId, 'teams', targetTeamId)
       await updateDoc(teamRef, {
         members: arrayUnion(user.uid),
         member_names: arrayUnion(name),
       })
+
       // Persist their chosen name back to their account so it pre-fills
       // next time too. Non-critical if it fails.
       try {
@@ -245,59 +310,6 @@ export default function LobbyPage() {
     } finally {
       setJoining(false)
     }
-  }
-
-  // -----------------------------------------------------------------------
-  // Player: auto-join the smallest open team (or create one). Also prompts
-  // for a name first by routing through beginJoin once a target is known.
-  // -----------------------------------------------------------------------
-
-  const handleAutoJoin = async () => {
-    if (!user || !game || !gameId) return
-    setJoining(true)
-    setError('')
-
-    try {
-      const teamsSnapshot = await getDocs(collection(db, 'games', gameId, 'teams'))
-      const currentTeams: TeamData[] = []
-      teamsSnapshot.forEach((d) => currentTeams.push({ id: d.id, ...d.data() } as TeamData))
-
-      const smallest = currentTeams
-        .filter((t) => t.members.length < game.settings.team_size)
-        .sort((a, b) => a.members.length - b.members.length)[0]
-
-      if (currentTeams.length < game.max_teams && (!smallest || smallest.members.length > 0)) {
-        // Create a fresh team, then open the name input on it.
-        const teamIndex = currentTeams.length
-        const teamId = 'team_' + (teamIndex + 1)
-        const teamRef = doc(db, 'games', gameId, 'teams', teamId)
-        await setDoc(teamRef, {
-          id: teamId,
-          name: TEAM_NAMES[teamIndex] || 'Team ' + (teamIndex + 1),
-          members: [],
-          member_names: [],
-          color: TEAM_COLORS[teamIndex]?.hex || '#888',
-          total_points: 0,
-          zones_claimed: 0,
-          zones_locked: 0,
-          taxi_used: false,
-          hand: [],
-        })
-        setJoining(false)
-        await beginJoin(teamId)
-        return
-      } else if (smallest) {
-        setJoining(false)
-        await beginJoin(smallest.id)
-        return
-      } else {
-        setError('All teams are full')
-      }
-    } catch (err: any) {
-      setError('Failed to join: ' + err.message)
-    }
-
-    setJoining(false)
   }
 
   // Switch from current team to a different one
@@ -647,6 +659,82 @@ export default function LobbyPage() {
           </p>
         </div>
 
+        {/* ── NAME PROMPT (shown at top once a player taps Join / Auto-Join) ── */}
+        {!isGM && !playerTeamId && pendingJoin && (
+          <div style={{
+            background: 'rgba(6,214,160,0.06)',
+            border: '1px solid rgba(6,214,160,0.25)',
+            borderRadius: 12,
+            padding: '18px 18px',
+            marginBottom: 20,
+          }}>
+            <p style={{
+              fontSize: '0.72rem', color: '#06D6A0',
+              textTransform: 'uppercase', letterSpacing: 1,
+              fontWeight: 700, marginBottom: 4,
+            }}>
+              {pendingJoin.kind === 'team'
+                ? `Joining ${teams.find(t => t.id === (pendingJoin as any).teamId)?.name ?? 'team'}`
+                : 'Joining a team'}
+            </p>
+            <p style={{ color: '#888', fontSize: '0.8rem', marginBottom: 12 }}>
+              Pick the name your teammates and the GM will see in chat.
+            </p>
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={(e) => { setNameInput(e.target.value); setNameError('') }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmJoin()
+                if (e.key === 'Escape') cancelJoin()
+              }}
+              placeholder="Your name (shown in chat)"
+              maxLength={20}
+              style={{
+                width: '100%', background: '#111',
+                border: `1px solid ${nameError ? '#EF476F' : 'rgba(6,214,160,0.4)'}`,
+                borderRadius: 8, padding: '11px 14px', color: '#fff',
+                fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none',
+                boxSizing: 'border-box', marginBottom: nameError ? 6 : 12,
+              }}
+            />
+            {nameError && (
+              <p style={{ color: '#EF476F', fontSize: '0.78rem', margin: '0 0 12px' }}>
+                {nameError}
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={confirmJoin}
+                disabled={joining}
+                style={{
+                  flex: 2, background: 'rgba(6,214,160,0.15)',
+                  border: '1px solid rgba(6,214,160,0.4)', color: '#06D6A0',
+                  padding: '12px 16px', borderRadius: 8,
+                  fontSize: '0.9rem', fontWeight: 700,
+                  cursor: joining ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  opacity: joining ? 0.6 : 1,
+                }}
+              >
+                {joining ? 'Joining...' : 'Confirm & Join'}
+              </button>
+              <button
+                onClick={cancelJoin}
+                disabled={joining}
+                style={{
+                  flex: 1, background: 'transparent',
+                  border: '1px solid #333', color: '#666',
+                  padding: '12px 16px', borderRadius: 8,
+                  fontSize: '0.9rem', fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── "You're on a team" confirmation banner (player only) ── */}
         {!isGM && myTeam && (
           <div style={{
@@ -674,8 +762,8 @@ export default function LobbyPage() {
           </div>
         )}
 
-        {/* ── "Pick a team" prompt banner (player only, not yet on a team) ── */}
-        {!isGM && !playerTeamId && teams.length > 0 && (
+        {/* ── "Pick a team" prompt banner (player only, not yet on a team, no name prompt open) ── */}
+        {!isGM && !playerTeamId && !pendingJoin && teams.length > 0 && (
           <div style={{
             background: 'rgba(6,214,160,0.06)',
             border: '1px solid rgba(6,214,160,0.2)',
@@ -703,7 +791,8 @@ export default function LobbyPage() {
           {teams.map((team) => {
             const isMyTeam = team.id === playerTeamId
             const isFull = team.members.length >= game.settings.team_size
-            const canJoin = !isGM && !playerTeamId && !isFull
+            // Only allow opening a join prompt when no prompt is already open.
+            const canJoin = !isGM && !playerTeamId && !isFull && !pendingJoin
             const canSwitch = !isGM && playerTeamId && playerTeamId !== team.id && !isFull
 
             return (
@@ -761,10 +850,10 @@ export default function LobbyPage() {
                   )}
                 </div>
 
-                {/* Join this team — opens an inline name input first */}
-                {canJoin && nameEntryTeamId !== team.id && (
+                {/* Join this team — opens the name prompt at the top */}
+                {canJoin && (
                   <button
-                    onClick={() => beginJoin(team.id)}
+                    onClick={() => beginJoin({ kind: 'team', teamId: team.id })}
                     disabled={joining}
                     style={{
                       width: '100%',
@@ -779,63 +868,6 @@ export default function LobbyPage() {
                   >
                     {`Join ${team.name}`}
                   </button>
-                )}
-
-                {/* Inline name picker for this team */}
-                {canJoin && nameEntryTeamId === team.id && (
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    <input
-                      autoFocus
-                      value={nameInput}
-                      onChange={(e) => { setNameInput(e.target.value); setNameError('') }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') confirmJoin()
-                        if (e.key === 'Escape') cancelJoin()
-                      }}
-                      placeholder="Your name (shown in chat)"
-                      maxLength={20}
-                      style={{
-                        width: '100%', background: '#111',
-                        border: `1px solid ${nameError ? '#EF476F' : team.color + '50'}`,
-                        borderRadius: 7, padding: '9px 12px', color: '#fff',
-                        fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                    {nameError && (
-                      <p style={{ color: '#EF476F', fontSize: '0.72rem', margin: 0 }}>
-                        {nameError}
-                      </p>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={confirmJoin}
-                        disabled={joining}
-                        style={{
-                          flex: 2, background: `${team.color}20`,
-                          border: `1px solid ${team.color}50`, color: team.color,
-                          padding: '9px 14px', borderRadius: 7,
-                          fontSize: '0.82rem', fontWeight: 700,
-                          cursor: joining ? 'wait' : 'pointer', fontFamily: 'inherit',
-                        }}
-                      >
-                        {joining ? 'Joining...' : `Confirm & Join`}
-                      </button>
-                      <button
-                        onClick={cancelJoin}
-                        disabled={joining}
-                        style={{
-                          flex: 1, background: 'transparent',
-                          border: '1px solid #333', color: '#666',
-                          padding: '9px 14px', borderRadius: 7,
-                          fontSize: '0.82rem', fontWeight: 600,
-                          cursor: 'pointer', fontFamily: 'inherit',
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
                 )}
 
                 {/* Switch to this team */}
@@ -862,10 +894,10 @@ export default function LobbyPage() {
           })}
         </div>
 
-        {/* ── Auto-join button (player not yet on a team) ── */}
-        {!isGM && !playerTeamId && (
+        {/* ── Auto-join button (player not yet on a team, no name prompt open) ── */}
+        {!isGM && !playerTeamId && !pendingJoin && (
           <button
-            onClick={handleAutoJoin}
+            onClick={() => beginJoin({ kind: 'auto' })}
             disabled={joining}
             style={{
               width: '100%',
