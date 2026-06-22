@@ -1112,7 +1112,7 @@ export default function GamePage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(false) } }}
-                  placeholder="Message your team..."
+                  placeholder="Message ..."
                   rows={1}
                   style={{
                     flex: 1, background: '#141414', border: '1px solid #222',
