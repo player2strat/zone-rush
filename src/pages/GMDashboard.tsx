@@ -1,6 +1,15 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (v4)
-// CHANGES (Sprint 2 — chat / attention queue):
+// Zone Rush — GM Dashboard (v5)
+// CHANGES (v5 — media highlights):
+// - "Highlight" star toggle on APPROVED video submissions. Writes a `highlight`
+//   boolean to the submission doc; the live listener re-renders the card.
+// - Post-game "Pull All Highlights" panel (shown when game ended): bundles every
+//   flagged video into ONE zip, organized into a folder per team. Files named
+//   teamname_challengetitle_timestamp. Flagged-only.
+// - ZIP_MEDIA_TYPES constant is the single expansion point for including
+//   photos/audio later — drives BOTH the star visibility and the zip contents.
+//
+// CHANGES (v4 — chat / attention queue):
 // - New "Needs your attention" queue at the top of the Chat tab: every unread
 //   flagged (team_to_gm) message across all teams in THIS game, oldest first,
 //   labeled by team. Tapping one jumps to that team's thread.
@@ -48,6 +57,7 @@ import {
   activityLogToCSV,
   type MergedActivityRow,
 } from '../lib/activityLog'
+import JSZip from 'jszip'
 
 // --------------- Types ---------------
 
@@ -103,6 +113,7 @@ interface SubmissionData {
   attempted_tier2: boolean
   tier2_approved: boolean
   phone_free_claimed: boolean
+  highlight?: boolean
   submitted_at: any
 }
 
@@ -131,6 +142,11 @@ interface ZoneScoreData {
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: '#06D6A0', medium: '#FFD166', hard: '#EF476F',
 }
+
+// Which media types get included in the post-game highlight zip.
+// Expansion point: add 'photo' and/or 'audio' here to include them later.
+// This constant drives BOTH the star visibility and the zip contents.
+const ZIP_MEDIA_TYPES: Array<'photo' | 'video' | 'audio'> = ['video']
 
 // --------------- Component ---------------
 
@@ -179,6 +195,10 @@ export default function GMDashboard() {
   const [activityRows, setActivityRows] = useState<MergedActivityRow[]>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityTeamFilter, setActivityTeamFilter] = useState<string | 'all'>('all')
+
+  // Highlight zip-pull state
+  const [zipBusy, setZipBusy] = useState(false)
+  const [zipProgress, setZipProgress] = useState('')
 
   // Load zones
   useEffect(() => {
@@ -391,6 +411,116 @@ export default function GMDashboard() {
     a.download = `zone-rush-activity-${game?.name?.replace(/\s+/g, '-') ?? gameId}-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Toggle the highlight star on an approved submission.
+  // Writes to Firestore; the live submissions listener updates the UI.
+  const handleToggleHighlight = async (sub: SubmissionData) => {
+    if (sub.status !== 'approved') return
+    try {
+      await updateDoc(doc(db, 'submissions', sub.id), {
+        highlight: !sub.highlight,
+      })
+    } catch (err: any) {
+      alert('Could not update highlight: ' + (err.message || 'Unknown error'))
+    }
+  }
+
+  // Build one zip containing every flagged highlight, organized into a
+  // folder per team. Files named teamname_challengetitle_timestamp.
+  const handlePullHighlights = async () => {
+    if (zipBusy) return
+
+    // Gather flagged + approved submissions of an includable media type.
+    const flagged = submissions.filter(
+      (s) =>
+        s.highlight === true &&
+        s.status === 'approved' &&
+        ZIP_MEDIA_TYPES.includes(s.media_type)
+    )
+
+    if (flagged.length === 0) {
+      alert('No flagged videos to pull. Star some approved videos first.')
+      return
+    }
+
+    setZipBusy(true)
+    setZipProgress(`Starting… (0/${flagged.length})`)
+
+    try {
+      const zip = new JSZip()
+      const usedNames = new Set<string>()
+      let done = 0
+      let failed = 0
+
+      for (const sub of flagged) {
+        const team = getTeam(sub.team_id)
+        const challenge = challenges.get(sub.challenge_id)
+
+        // Build safe, readable names.
+        const teamFolder = safeName(team?.name || sub.team_id)
+        const challengeName = safeName(challenge?.title || sub.challenge_id)
+        const stamp = sub.submitted_at?.toDate
+          ? sub.submitted_at.toDate().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19)
+          : String(done)
+        const ext = extensionFor(sub.media_type)
+
+        let fileName = `${teamFolder}_${challengeName}_${stamp}.${ext}`
+        // Guard against two files resolving to the same name.
+        let dedupe = 2
+        while (usedNames.has(`${teamFolder}/${fileName}`)) {
+          fileName = `${teamFolder}_${challengeName}_${stamp}-${dedupe}.${ext}`
+          dedupe++
+        }
+        usedNames.add(`${teamFolder}/${fileName}`)
+
+        setZipProgress(`Downloading ${done + 1}/${flagged.length}…`)
+
+        try {
+          const res = await fetch(sub.media_url)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const blob = await res.blob()
+          zip.folder(teamFolder)!.file(fileName, blob)
+        } catch (fetchErr) {
+          console.error('Failed to fetch a video for zip:', sub.id, fetchErr)
+          failed++
+        }
+        done++
+      }
+
+      if (Object.keys(zip.files).length === 0) {
+        // Everything failed to fetch — almost always a CORS issue on Storage.
+        alert(
+          'Could not download any videos. This is usually a Firebase Storage CORS setting. ' +
+          'Tell me if you see this and I will walk you through the one-time fix.'
+        )
+        return
+      }
+
+      setZipProgress('Building zip…')
+      const content = await zip.generateAsync({ type: 'blob' }, (meta) => {
+        setZipProgress(`Building zip… ${Math.round(meta.percent)}%`)
+      })
+
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      const gameSlug = safeName(game?.name || gameId || 'game')
+      const dateSlug = new Date().toISOString().split('T')[0]
+      a.download = `${gameSlug}_highlights_${dateSlug}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      if (failed > 0) {
+        alert(`Done — but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`)
+      }
+    } catch (err: any) {
+      console.error('Highlight zip failed:', err)
+      alert('Failed to build highlights zip: ' + (err.message || 'Unknown error'))
+    } finally {
+      setZipBusy(false)
+      setZipProgress('')
+    }
   }
 
   // Chat handlers
@@ -858,6 +988,41 @@ const handleApprove = async (sub: SubmissionData) => {
         </div>
       )}
 
+      {/* HIGHLIGHTS PULL PANEL (shown when game ended) */}
+      {game.status === 'ended' && (() => {
+        const flaggedCount = submissions.filter(
+          (s) => s.highlight === true && s.status === 'approved' && ZIP_MEDIA_TYPES.includes(s.media_type)
+        ).length
+        return (
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a1a', background: 'rgba(255,255,255,0.01)', flexShrink: 0 }}>
+            <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ fontSize: '0.7rem', color: '#FFD166', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>
+                  ⭐ Highlight Reel
+                </p>
+                <p style={{ fontSize: '0.82rem', color: '#888', margin: 0 }}>
+                  {flaggedCount > 0
+                    ? `${flaggedCount} flagged video${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
+                    : 'No videos flagged yet. Star approved videos to include them.'}
+                </p>
+                {zipProgress && (
+                  <p style={{ fontSize: '0.74rem', color: '#06D6A0', marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {zipProgress}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handlePullHighlights}
+                disabled={zipBusy || flaggedCount === 0}
+                style={{ background: zipBusy || flaggedCount === 0 ? '#1a1a1a' : 'rgba(255,209,102,0.15)', border: '1px solid rgba(255,209,102,0.3)', color: zipBusy || flaggedCount === 0 ? '#444' : '#FFD166', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: zipBusy ? 'wait' : flaggedCount === 0 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+              >
+                {zipBusy ? 'Working…' : '⬇ Pull All Highlights'}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* TAB CONTENT */}
       <div style={{ flex: 1, overflow: 'auto' }}>
 
@@ -905,9 +1070,20 @@ const handleApprove = async (sub: SubmissionData) => {
                           </span>
                         </div>
                         {sub.status !== 'pending' && (
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: sub.status === 'approved' ? 'rgba(6,214,160,0.12)' : 'rgba(239,71,111,0.12)', color: sub.status === 'approved' ? '#06D6A0' : '#EF476F' }}>
-                            {sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {sub.status === 'approved' && ZIP_MEDIA_TYPES.includes(sub.media_type) && (
+                              <button
+                                onClick={() => handleToggleHighlight(sub)}
+                                title={sub.highlight ? 'Unstar this highlight' : 'Star as a highlight (included in the post-game pull)'}
+                                style={{ background: sub.highlight ? 'rgba(255,209,102,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${sub.highlight ? 'rgba(255,209,102,0.4)' : '#222'}`, color: sub.highlight ? '#FFD166' : '#555', padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                              >
+                                {sub.highlight ? '★ Highlight' : '☆ Highlight'}
+                              </button>
+                            )}
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: sub.status === 'approved' ? 'rgba(6,214,160,0.12)' : 'rgba(239,71,111,0.12)', color: sub.status === 'approved' ? '#06D6A0' : '#EF476F' }}>
+                              {sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+                            </span>
+                          </div>
                         )}
                       </div>
 
@@ -1397,4 +1573,19 @@ const smallBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   fontFamily: 'inherit',
+}
+
+// Make a string safe for use as a filename / folder name.
+function safeName(raw: string): string {
+  return raw
+    .replace(/[^a-zA-Z0-9-_ ]/g, '')  // strip anything not filename-safe
+    .trim()
+    .replace(/\s+/g, '_')              // spaces → underscores
+    .slice(0, 60) || 'untitled'        // cap length, never empty
+}
+
+function extensionFor(mediaType: 'photo' | 'video' | 'audio'): string {
+  if (mediaType === 'video') return 'mp4'
+  if (mediaType === 'audio') return 'm4a'
+  return 'jpg'
 }

@@ -171,6 +171,8 @@ export interface Submission {
   phone_free_approved: boolean    // GM confirms phone-free bonus
   submitted_at: any               // Firestore Timestamp
   points_awarded: number          // Set by scoring logic on approval (0 if pending/rejected)
+  highlight?: boolean             // GM-starred as a highlight (approved subs only). Optional — absent = not flagged. Drives the post-game video zip pull.
+
 }
 
 // ─── Message ──────────────────────────────────────────────────────────────────
