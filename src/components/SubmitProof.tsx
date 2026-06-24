@@ -3,6 +3,12 @@
 // Full-screen overlay for photo/video submission with GPS capture.
 //
 // CHANGES (this version):
+// - Added optional resolvedTask + stepChoices props for sequential (CYOA) cards.
+//   When present, the challenge.description passed in is already the RESOLVED
+//   task, and these two get stamped onto the submission. Standard cards omit
+//   them entirely (conditional spreads — never write undefined to Firestore).
+//
+// CHANGES (prior):
 // - Uses the shared useLocation hook instead of its own getCurrentPosition.
 // - Hard submission gate: cannot submit unless GPS is good or low_accuracy.
 // - On submit, calls refresh() to grab a FRESH fix at the moment of submit,
@@ -32,12 +38,20 @@ interface SubmitProofProps {
     is_time_based: boolean
   }
   closedZones: string[]
+
+  // --- Sequential cards only (absent for standard cards) ---
+  // When present, the `challenge.description` passed in is already the RESOLVED
+  // task; these two get stamped onto the submission so the GM and exports see
+  // both the resolved task and the locked choices that produced it.
+  resolvedTask?: string
+  stepChoices?: string[]
+
   onClose: () => void
   onSubmitted: () => void
 }
 
 export default function SubmitProof({
-  gameId, teamId, challenge, closedZones, onClose, onSubmitted,
+  gameId, teamId, challenge, closedZones, resolvedTask, stepChoices, onClose, onSubmitted,
 }: SubmitProofProps) {
   const user = auth.currentUser
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -161,6 +175,11 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         challenge_id: challenge.id,
         challenge_description: challenge.description,
         challenge_difficulty: challenge.difficulty,
+        // Sequential-card fields — only present when this came from a CYOA card.
+        // Conditional spreads so standard cards omit the keys entirely
+        // (Firestore rejects `undefined`).
+        ...(resolvedTask ? { resolved_task: resolvedTask } : {}),
+        ...(stepChoices ? { step_choices: stepChoices } : {}),
         zone_id: submitZoneId,
         submitted_by: user.uid,
         media_url: downloadURL,

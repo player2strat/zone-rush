@@ -114,6 +114,9 @@ interface SubmissionData {
   tier2_approved: boolean
   phone_free_claimed: boolean
   highlight?: boolean
+  // Sequential ("Choose Your Own Adventure") submissions only — absent otherwise.
+  resolved_task?: string
+  step_choices?: string[]
   submitted_at: any
 }
 
@@ -1087,9 +1090,28 @@ const handleApprove = async (sub: SubmissionData) => {
                         )}
                       </div>
 
-                      <p style={{ color: '#ccc', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14, background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid #111' }}>
-                        {challenge?.description || `Challenge: ${sub.challenge_id}`}
-                      </p>
+                                          {/* Challenge text — resolved task for CYOA cards, else description */}
+                      {sub.resolved_task ? (
+                        <div style={{ marginBottom: 14 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: 'rgba(155,93,229,0.2)', color: '#9B5DE5', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                              🎲 CYOA
+                            </span>
+                            {sub.step_choices && sub.step_choices.length > 0 && (
+                              <span style={{ fontSize: '0.72rem', color: '#666' }}>
+                                locked: {sub.step_choices.join(' · ')}
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ color: '#fff', fontSize: '0.9rem', lineHeight: 1.6, fontWeight: 600, background: 'rgba(155,93,229,0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(155,93,229,0.2)' }}>
+                            {sub.resolved_task}
+                          </p>
+                        </div>
+                      ) : (
+                        <p style={{ color: '#ccc', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14, background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid #111' }}>
+                          {challenge?.description || `Challenge: ${sub.challenge_id}`}
+                        </p>
+                      )}
 
                       <div style={{ marginBottom: 14 }}>
                         {sub.media_type === 'video' ? (

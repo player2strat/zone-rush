@@ -4,6 +4,10 @@
 // Keep this in sync with the data model — if you add a field in Firestore,
 // add it here too.
 //
+// v3 — Added sequential ("Choose Your Own Adventure") challenge support:
+//       Challenge.challenge_type / steps / final_task,
+//       Submission.resolved_task / step_choices,
+//       new SequentialProgress interface.
 // v2 — Reconciled with CreateGame v4, LobbyPage, SeedMaps, and scoring.ts.
 //       Added: hand composition fields, side quest bonuses, strategy period,
 //       tier2_bonus, map_set_id, borough on zones, dealt_challenges on teams.
@@ -46,6 +50,18 @@ export interface Challenge {
   is_active: boolean
   created_by: string
   source: 'official' | 'community' | 'partner'
+
+  // --- Sequential ("Choose Your Own Adventure") cards ---
+  // Absent or 'standard' = a normal single-description card (all flat cards).
+  challenge_type?: 'standard' | 'sequential'
+  // Ordered blank-prompts the player commits to one at a time, in order.
+  // e.g. ["pick a food", "pick a number"]. Absent on standard cards.
+  steps?: string[]
+  // Template revealed only after every step is locked. Uses {1}, {2}, …
+  // placeholders that reference steps by their position in `steps`.
+  // e.g. "list {2} NY-based stores that sell {1}, ordered by your preference"
+  // Absent on standard cards.
+  final_task?: string
 }
 
 // ─── Game Settings ────────────────────────────────────────────────────────────
@@ -173,6 +189,27 @@ export interface Submission {
   points_awarded: number          // Set by scoring logic on approval (0 if pending/rejected)
   highlight?: boolean             // GM-starred as a highlight (approved subs only). Optional — absent = not flagged. Drives the post-game video zip pull.
 
+  // --- Sequential cards only (absent for standard cards) ---
+  // When present, the submission came from a CYOA card: resolved_task is the
+  // final task with the team's locked choices filled in (what the GM reviews),
+  // and step_choices are those locked answers, parallel to the challenge's steps.
+  resolved_task?: string
+  step_choices?: string[]
+}
+
+// ─── SequentialProgress (sub-collection of Team) ─────────────────────────────
+// Per-team working state for an in-progress sequential card. Lives at:
+//   games/{gameId}/teams/{teamId}/sequential_progress/{challengeId}
+// Persisting this (rather than holding it only in React state) is what makes
+// "locked = locked" survive an app refresh or device switch mid-attempt.
+
+export interface SequentialProgress {
+  challenge_id: string
+  step_choices: string[]        // committed answers so far, in step order
+  locked_count: number          // how many steps are locked (== step_choices.length)
+  resolved_task: string | null  // set once all steps are locked; null until then
+  completed: boolean            // true once proof has been submitted for this card
+  updated_at?: any              // Firestore Timestamp (optional; for debugging/ordering)
 }
 
 // ─── Message ──────────────────────────────────────────────────────────────────

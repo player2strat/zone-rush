@@ -2,6 +2,12 @@
 // Zone Rush — Game Page
 // Player's 5-tab view: Home, Hand, Map, Chat, History
 //
+// CHANGES (sequential cards):
+// - Hand tab now routes sequential ("Choose Your Own Adventure") cards to the
+//   dedicated <SequentialCard/> component (when NOT in discard mode). Standard
+//   cards render exactly as before. In discard mode, sequential cards fall
+//   through to the standard render so the existing tap-to-discard UI applies.
+//
 // CHANGES (Sprint 2 — chat):
 // - Players can now message their TEAM (team_internal) as well as flag a
 //   message for the GM ("Message GM" button → team_to_gm).
@@ -28,6 +34,7 @@ import {
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import SubmitProof from '../components/SubmitProof'
+import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
 import HistoryTab from './HistoryTab'
@@ -89,6 +96,10 @@ interface Challenge {
   phone_free_eligible: boolean
   is_time_based: boolean
   category: string
+  // sequential ("Choose Your Own Adventure") fields — absent on standard cards
+  challenge_type?: 'standard' | 'sequential'
+  steps?: string[]
+  final_task?: string
 }
 
 interface SubmissionStatus {
@@ -802,6 +813,28 @@ export default function GamePage() {
 
             <div style={{ display: 'grid', gap: 12 }}>
               {challenges.map((ch, index) => {
+
+                // --- Sequential ("Choose Your Own Adventure") card branch ---
+                // Renders the dedicated step-by-step component. In discard mode
+                // we skip this so the card falls through to the standard render
+                // and the existing tap-to-discard UI applies uniformly.
+                if (ch.challenge_type === 'sequential' && !discardMode) {
+                  const seqSub = submissions.get(ch.id)
+                  return (
+                    <SequentialCard
+                      key={ch.id}
+                      gameId={gameId!}
+                      teamId={myTeam.id}
+                      challenge={ch as any}
+                      closedZones={game?.closed_zones ?? []}
+                      gameEnded={game?.status === 'ended'}
+                      submissionStatus={seqSub?.status}
+                      gmNotes={seqSub?.gm_notes}
+                    />
+                  )
+                }
+                // --- otherwise: standard card (unchanged) ---
+
                 const diff = DIFFICULTY_STYLES[ch.difficulty] || DIFFICULTY_STYLES.medium
                 const isExpanded = selectedCard === index && !discardMode
                 const sub = submissions.get(ch.id)
