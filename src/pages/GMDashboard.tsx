@@ -58,6 +58,7 @@ import {
   type MergedActivityRow,
 } from '../lib/activityLog'
 import JSZip from 'jszip'
+import { formatZoneLabel } from '../utils/formatZoneLabel'
 
 // --------------- Types ---------------
 
@@ -1207,7 +1208,7 @@ const handleApprove = async (sub: SubmissionData) => {
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {team.zoneBreakdown.map((zs) => (
                           <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: zs.status === 'claimed' ? `${team.color}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'}`, color: zs.status === 'claimed' ? team.color : '#555', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
-                            {zs.zone_id.replace('zone_district_', 'D')} · {zs.points}pt{zs.status === 'claimed' ? ' ★' : ''}
+                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                         ))}
                       </div>
@@ -1267,7 +1268,7 @@ const handleApprove = async (sub: SubmissionData) => {
                     <div key={zoneId} style={{ background: isClosed ? 'rgba(255,255,255,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(255,255,255,0.02)', border: `1px solid ${isClosed ? '#2a2a2a' : owner ? `${owner.teamColor}30` : '#1a1a1a'}`, borderRadius: 10, padding: '10px 12px', opacity: isClosed ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: owner || isClosed ? 6 : 0 }}>
                         <span style={{ fontSize: '0.78rem', color: owner ? '#ccc' : '#444', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {allZoneData.find((z: any) => z.id === zoneId)?.name ?? zoneId.replace('zone_district_', 'D')}
+                          {allZoneData.find((z: any) => z.id === zoneId)?.name ?? formatZoneLabel(zoneId)}
                         </span>
                         {isClosed && (
                           <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid #333', color: '#555', textTransform: 'uppercase', letterSpacing: 1 }}>
