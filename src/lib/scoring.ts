@@ -427,7 +427,14 @@ export function validateSubmissionZone(
   zone: Zone
 ): { inZone: boolean } {
   if (!lat || !lng) return { inZone: false }
-  return { inZone: isPointInPolygon(lat, lng, JSON.parse(zone.boundary).coordinates) }
+
+  // boundary may arrive already-parsed (as it does from SubmitProof's loadZones)
+  // or as a raw JSON string (if a caller passes the Firestore value straight through).
+  // Handle both; never blindly JSON.parse an object.
+  const boundary =
+    typeof zone.boundary === 'string' ? JSON.parse(zone.boundary) : zone.boundary
+
+  return { inZone: isPointInPolygon(lat, lng, boundary.coordinates) }
 }
 
 // ─── Zone Ownership Map ───────────────────────────────────────────────────────
