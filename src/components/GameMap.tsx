@@ -169,21 +169,23 @@ export default function GameMap({
       let borderDash: number[] | null = null
 
       if (isClosed && !owner) {
-        // Closed, unclaimed → black out
+        // Closed, unclaimed → black out (GM closed it with no team holding it)
         fillColor = '#000000'
         fillOpacity = 0.75
         borderColor = '#444444'
         borderWidth = 2
         labelColor = '#6f6e6e'
-        labelText = `${zone.name}\nLOCKED`
+        labelText = `🔒 ${zone.name}\nCLOSED`
       } else if (isClosed && owner) {
-        // Closed but owned → muted team color
+        // Closed + owned = a LOCKED zone (a team secured it). Render it
+        // STRONGER than claimed (claimed is 0.50 / border 4) so the hierarchy
+        // reads in-progress < claimed < locked. 🔒 renders reliably in Mapbox.
         fillColor = owner.teamColor
-        fillOpacity = 0.35
+        fillOpacity = 0.68
         borderColor = owner.teamColor
-        borderWidth = 2
+        borderWidth = 5
         labelColor = owner.teamColor
-        labelText = `${zone.name}\nLOCKED`
+        labelText = `🔒 ${zone.name}\nLOCKED`
       } else if (owner) {
         if (owner.claimed) {
           // Fully claimed → solid heavy fill + ★ label

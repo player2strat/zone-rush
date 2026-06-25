@@ -8,13 +8,9 @@
  * GeoJSON coordinates are [lng, lat] — this function expects (lat, lng) as inputs
  * and handles the coordinate flip internally.
  */
-export function isPointInPolygon(
-  lat: number,
-  lng: number,
-  coordinates: number[][][]
-): boolean {
-  // coordinates[0] is the outer ring: [[lng, lat], [lng, lat], ...]
-  const ring = coordinates[0]
+// Ray-cast a point against a SINGLE linear ring: [[lng, lat], [lng, lat], ...].
+// This is the core test; the exported functions below decide which rings to feed it.
+function pointInRing(lat: number, lng: number, ring: number[][]): boolean {
   if (!ring || ring.length < 3) return false
 
   let inside = false
@@ -28,6 +24,43 @@ export function isPointInPolygon(
     if (intersect) inside = !inside
   }
   return inside
+}
+
+/**
+ * Check if a point (lat, lng) is inside a GeoJSON polygon.
+ * GeoJSON coordinates are [lng, lat]; this expects (lat, lng) and flips internally.
+ *
+ * Handles BOTH geometry shapes, inferred from nesting depth, because callers
+ * pass `boundary.coordinates` without the geometry `type`:
+ *   - Polygon:      coordinates = [ ring ][ point ][ lng, lat ]   → coordinates[0] is a ring
+ *   - MultiPolygon: coordinates = [ polygon ][ ring ][ point ][ lng, lat ] → coordinates[0] is a polygon
+ *
+ * A point counts as inside if it falls in the OUTER RING of ANY polygon.
+ * (Inner rings / holes are ignored — none of our zone data uses them, and
+ * treating holes as solid is the safe, permissive choice for GPS proximity.)
+ */
+export function isPointInPolygon(
+  lat: number,
+  lng: number,
+  coordinates: any
+): boolean {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return false
+
+  // Distinguish Polygon from MultiPolygon by how deep the nesting goes.
+  // For a Polygon,      coordinates[0][0] is a [lng, lat] pair → a number.
+  // For a MultiPolygon, coordinates[0][0] is a ring (array of pairs) → an array.
+  const isMultiPolygon = Array.isArray(coordinates[0]?.[0]?.[0])
+
+  if (isMultiPolygon) {
+    // Test the outer ring of each polygon; inside ANY = inside the zone.
+    for (const polygon of coordinates as number[][][][]) {
+      if (pointInRing(lat, lng, polygon[0])) return true
+    }
+    return false
+  }
+
+  // Polygon: outer ring is coordinates[0].
+  return pointInRing(lat, lng, (coordinates as number[][][])[0])
 }
 
 /**
