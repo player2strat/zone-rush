@@ -39,6 +39,13 @@ interface SubmitProofProps {
   }
   closedZones: string[]
 
+  // The zone IDs the GM made live for THIS game (game.zones). Detection is
+  // scoped to these so a submission can only ever tag a zone that's actually
+  // in play — critical because Brooklyn (zone_district_*) and Manhattan
+  // (zone_mn_*) zones share coordinates in the `zones` collection, and an
+  // unscoped detectZone would match whichever overlapping polygon comes first.
+  activeZoneIds: string[]
+
   // --- Sequential cards only (absent for standard cards) ---
   // When present, the `challenge.description` passed in is already the RESOLVED
   // task; these two get stamped onto the submission so the GM and exports see
@@ -51,7 +58,7 @@ interface SubmitProofProps {
 }
 
 export default function SubmitProof({
-  gameId, teamId, challenge, closedZones, resolvedTask, stepChoices, onClose, onSubmitted,
+  gameId, teamId, challenge, closedZones, activeZoneIds, resolvedTask, stepChoices, onClose, onSubmitted,
 }: SubmitProofProps) {
   const user = auth.currentUser
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -77,10 +84,15 @@ export default function SubmitProof({
     async function loadZones() {
       try {
         const snapshot = await getDocs(collection(db, 'zones'))
-        const loaded = snapshot.docs.map((d) => {
-          const data = d.data()
-          return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
-        })
+        const loaded = snapshot.docs
+          .map((d) => {
+            const data = d.data()
+            return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
+          })
+          // Only detect against zones the GM selected for this game. Both
+          // boroughs' polygons live in the same collection and overlap, so an
+          // unscoped list would tag submissions to the wrong (out-of-game) zone.
+          .filter((z) => activeZoneIds.includes(z.id))
         setZones(loaded)
         setZonesLoaded(true)
       } catch (err) {

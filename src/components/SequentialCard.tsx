@@ -44,6 +44,7 @@ interface Props {
   teamId: string
   challenge: SequentialChallenge
   closedZones: string[]
+  activeZoneIds: string[]   // game.zones — forwarded to SubmitProof for in-game zone detection
   gameEnded: boolean
   // submission status for THIS card, lifted from GamePage's submissions map
   submissionStatus?: 'pending' | 'approved' | 'rejected'
@@ -51,7 +52,7 @@ interface Props {
 }
 
 export default function SequentialCard({
-  gameId, teamId, challenge, closedZones, gameEnded, submissionStatus, gmNotes,
+  gameId, teamId, challenge, closedZones, activeZoneIds, gameEnded, submissionStatus, gmNotes,
 }: Props) {
   const steps = challenge.steps ?? []
   const finalTask = challenge.final_task ?? ''
@@ -291,6 +292,7 @@ export default function SequentialCard({
             is_time_based: challenge.is_time_based,
           }}
           closedZones={closedZones}
+          activeZoneIds={activeZoneIds}
           // NEW passthrough props (see SubmitProof additions):
           resolvedTask={resolvedTask}
           stepChoices={choices}

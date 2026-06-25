@@ -827,6 +827,7 @@ export default function GamePage() {
                       teamId={myTeam.id}
                       challenge={ch as any}
                       closedZones={game?.closed_zones ?? []}
+                      activeZoneIds={game?.zones ?? []}
                       gameEnded={game?.status === 'ended'}
                       submissionStatus={seqSub?.status}
                       gmNotes={seqSub?.gm_notes}
@@ -1209,6 +1210,7 @@ export default function GamePage() {
           teamId={myTeam.id}
           challenge={challenges[submittingChallenge]}
           closedZones={game?.closed_zones ?? []}
+          activeZoneIds={game?.zones ?? []}
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {}}
         />
