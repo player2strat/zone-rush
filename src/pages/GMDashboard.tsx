@@ -417,10 +417,12 @@ export default function GMDashboard() {
     URL.revokeObjectURL(url)
   }
 
-  // Toggle the highlight star on an approved submission.
-  // Writes to Firestore; the live submissions listener updates the UI.
+  // Toggle the highlight star. Allowed on pending OR approved submissions —
+  // a star set during review rides along through approval. Rejecting clears it
+  // (see handleReject), and the zip pull filters on status === 'approved', so a
+  // rejected submission can never end up in the highlight reel.
   const handleToggleHighlight = async (sub: SubmissionData) => {
-    if (sub.status !== 'approved') return
+    if (sub.status === 'rejected') return
     try {
       await updateDoc(doc(db, 'submissions', sub.id), {
         highlight: !sub.highlight,
@@ -706,6 +708,7 @@ const handleApprove = async (sub: SubmissionData) => {
       await updateDoc(doc(db, 'submissions', sub.id), {
         status: 'rejected', gm_notes: review.notes.trim(),
         reviewed_by: user?.uid || null, reviewed_at: serverTimestamp(),
+        highlight: false, // a rejected submission can't be a highlight
       })
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
     } catch (err: any) { alert('Error rejecting: ' + (err.message || 'Unknown error')) }
@@ -1149,6 +1152,11 @@ const handleApprove = async (sub: SubmissionData) => {
                             {sub.attempted_tier2 && challenge?.tier2 && (
                               <button onClick={() => updateReviewState(sub.id, { tier2Approved: !review.tier2Approved })} style={{ background: review.tier2Approved ? 'rgba(155,93,229,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${review.tier2Approved ? 'rgba(155,93,229,0.3)' : '#222'}`, color: review.tier2Approved ? '#9B5DE5' : '#666', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 {review.tier2Approved ? '✓' : '○'} Tier 2 (+{challenge.tier2.bonus_points}pt)
+                              </button>
+                            )}
+                            {ZIP_MEDIA_TYPES.includes(sub.media_type) && (
+                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(255,209,102,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${sub.highlight ? 'rgba(255,209,102,0.4)' : '#222'}`, color: sub.highlight ? '#FFD166' : '#666', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
                             )}
                           </div>
