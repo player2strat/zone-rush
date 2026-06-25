@@ -181,9 +181,7 @@ function DetailsBody({
         <Para>
           {location.status === 'good'
             ? 'GPS is working. Submissions will record your location automatically.'
-            : `Your location is being picked up but accuracy is low (±${Math.round(
-                location.accuracy ?? 0
-              )}m). Walk a few steps or move away from tall buildings for a better fix.`}
+            : 'Your location is being picked up but accuracy is low. Walk a few steps or move away from tall buildings for a better fix.'}
         </Para>
         {ageSeconds != null && (
           <p style={{ color: '#555', fontSize: '0.75rem' }}>

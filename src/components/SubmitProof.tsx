@@ -314,11 +314,6 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             />
             <p style={{ color: canSubmitWithLocation ? '#06D6A0' : '#EF476F', fontWeight: 700, fontSize: '0.85rem', margin: 0 }}>
               {locationStatusLabel(location.status)}
-              {location.accuracy != null && canSubmitWithLocation && (
-                <span style={{ color: '#666', fontFamily: "'JetBrains Mono', monospace", fontWeight: 400, marginLeft: 8 }}>
-                  ±{Math.round(location.accuracy)}m
-                </span>
-              )}
             </p>
           </div>
           {!canSubmitWithLocation && (
