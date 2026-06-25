@@ -1159,11 +1159,12 @@ export default function GamePage() {
                   disabled={!chatInput.trim() || chatSending}
                   title="Send to your team"
                   style={{
-                    background: chatInput.trim() ? myTeam.color : '#1a1a1a',
+                    background: chatInput.trim() ? '#FFD166' : '#1a1a1a',
+                    color: chatInput.trim() ? '#0a0a0a' : '#444',
                     border: 'none', borderRadius: 10, width: 42, height: 42,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: chatInput.trim() ? 'pointer' : 'default',
-                    fontSize: '1rem', flexShrink: 0, transition: 'background 0.15s',
+                    fontSize: '1.1rem', fontWeight: 800, flexShrink: 0, transition: 'background 0.15s',
                     opacity: chatSending ? 0.5 : 1,
                   }}
                 >
