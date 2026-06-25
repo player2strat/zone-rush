@@ -726,7 +726,7 @@ export default function GamePage() {
                 {[
                   {
                     icon: '👋',
-                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hours you'll compete against another team in a series of challenges across Brooklyn that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
+                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hours you'll compete against another team in a series of challenges across Manhattan that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
                   },
                   {
                     icon: '🃏',
@@ -734,11 +734,11 @@ export default function GamePage() {
                   },
                   {
                     icon: '⭐',
-                    text: 'Challenges are worth 1 (easy), 3 (medium) or 5 (hard) points. Brooklyn is broken up into zones, which you can access on your map. Complete a challenge and those points count in the zone you\'re currently located.',
+                    text: 'Challenges are worth 1 (easy), 2 (medium) or 3 (hard) points. Manhattan is broken up into zones, which you can access on your map. Complete a challenge and those points count in the zone you\'re currently located.',
                   },
                   {
                     icon: '📍',
-                    text: `Once you've reached ${game?.settings.claim_threshold ?? 6} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.`,
+                    text: `Once you've reached ${game?.settings.claim_threshold ?? 4} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.`,
                   },
                   {
                     icon: '📸',
@@ -750,7 +750,7 @@ export default function GamePage() {
                   },
                   {
                     icon: '🏆',
-                    text: 'Side Quests: At the end of the game, bonus points are awarded — most zones claimed (+5 pts), most transport modes used (+4 pts), most challenges completed (+3 pts).',
+                    text: 'Side Quests: At the end of the game, bonus points are awarded — most zones claimed (+8 pts) most zones with a challenge completed (+8 pts).',
                   },
                 ].map((rule, i) => (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>

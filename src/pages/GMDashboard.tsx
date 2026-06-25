@@ -150,7 +150,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 // Which media types get included in the post-game highlight zip.
 // Expansion point: add 'photo' and/or 'audio' here to include them later.
 // This constant drives BOTH the star visibility and the zip contents.
-const ZIP_MEDIA_TYPES: Array<'photo' | 'video' | 'audio'> = ['video']
+const ZIP_MEDIA_TYPES: Array<'photo' | 'video' | 'audio'> = ['photo', 'video']
 
 // --------------- Component ---------------
 
