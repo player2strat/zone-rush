@@ -1,17 +1,32 @@
 // =============================================================================
 // Zone Rush — Results Page
 // Shown to all players and GM when game.status === 'ended'.
-// Features: confetti burst on load, final standings, zone breakdown,
+//
+// CHANGES (endgame v17 work):
+// - Identity-aware: resolves the viewer's auth uid and finds their team
+//   (mirrors GamePage's pattern — the team whose `members` includes uid).
+//   A viewer in NO team is treated as the GM/spectator.
+// - PLAYER view: stripped down to ONLY the player's own team total — no
+//   standings, no other teams, no map, no bonus breakdown. Winners and
+//   bonus points are announced IN PERSON, not on screen.
+// - PLAYER view also surfaces the latest GM broadcast (e.g. "Meet at the
+//   corner of X and Y") as a prominent banner, reusing the existing
+//   subscribeToPlayerMessages plumbing. Banner is player-only.
+// - GM/spectator view: unchanged — full standings, zone map, bonus breakdown.
+//
+// Features (GM view): confetti burst on load, final standings, zone breakdown,
 // bonus point attribution, and final zone map state.
 // =============================================================================
 
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import { db, auth } from '../lib/firebase'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
+import { subscribeToPlayerMessages } from '../lib/chat'
 
 // --------------- Types ---------------
 
@@ -39,6 +54,8 @@ interface TeamData {
   total_points: number
   zones_claimed: number
   member_names: string[]
+  // members is needed to resolve which team the current viewer belongs to.
+  members: string[]
 }
 
 interface ZoneScoreData {
@@ -153,11 +170,20 @@ export default function ResultsPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const navigate = useNavigate()
 
+  // Current auth user — drives the player-vs-GM branch.
+  const [user, setUser] = useState<typeof auth.currentUser>(auth.currentUser)
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser)
+  }, [])
+
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
   const [allZoneData, setAllZoneData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Latest GM broadcast (player view only) — meetup message after game end.
+  const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
 
   // Confetti
   const [showConfetti, setShowConfetti] = useState(true)
@@ -218,9 +244,39 @@ export default function ResultsPage() {
     return () => unsub()
   }, [gameId])
 
+  // ---------- Identity / role resolution ----------
+
+  // The viewer's own team = the team whose members array includes their uid.
+  // Mirrors GamePage's resolution exactly.
+  const myTeam = useMemo(() => {
+    if (!user) return null
+    return teams.find((t) => t.members?.includes(user.uid)) ?? null
+  }, [teams, user])
+
+  // GM / spectator = authenticated, teams have loaded, but the viewer is on
+  // no team. We only trust this once teams are present, to avoid flashing the
+  // GM view before the teams snapshot arrives.
+  const isGM = !!user && teams.length > 0 && !myTeam
+
+  // Subscribe to the player's broadcast feed (player view only) and keep the
+  // latest gm_broadcast for the meetup banner. Reuses the same plumbing as
+  // GamePage; no new query path.
+  useEffect(() => {
+    if (!gameId || !myTeam) return
+    const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs: any[]) => {
+      const latest = msgs
+        .filter((m: any) => m.channel_type === 'gm_broadcast')
+        .sort((a: any, b: any) =>
+          (b.sent_at?.toMillis?.() ?? 0) - (a.sent_at?.toMillis?.() ?? 0)
+        )[0]
+      setLatestBroadcast(latest?.text ?? null)
+    })
+    return () => unsub()
+  }, [gameId, myTeam?.id])
+
   // ---------- Computed ----------
 
-  // Final scoreboard — sort by total_points descending
+  // Final scoreboard — sort by total_points descending (GM view)
   const scoreboard = useMemo(() => {
     return teams
       .map((t) => {
@@ -284,9 +340,212 @@ export default function ResultsPage() {
     return `${Math.floor(diff / 60)}h ${diff % 60}m`
   }, [game?.started_at, game?.ends_at])
 
-  // ---------- Render ----------
+  // ---------- Render: loading ----------
 
   if (loading || !game) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0a0a0a', color: '#555',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 32, height: 32, border: '3px solid #222',
+            borderTopColor: '#FFD166', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+          }} />
+          <p>Loading results...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    )
+  }
+
+  // =========================================================================
+  // PLAYER VIEW — only the player's own team total. No standings, no other
+  // teams, no map, no bonus breakdown. Plus the latest GM meetup broadcast.
+  // =========================================================================
+  if (myTeam) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#0a0a0a',
+        color: '#fff',
+        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+        paddingBottom: 60,
+      }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+        <style>{`
+          @keyframes slideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes winnerPop {
+            0%   { opacity: 0; transform: scale(0.85); }
+            60%  { transform: scale(1.04); }
+            100% { opacity: 1; transform: scale(1); }
+          }
+          .results-section { animation: slideUp 0.5s ease both; }
+        `}</style>
+
+        {/* Confetti overlay */}
+        {showConfetti && (
+          <ConfettiOverlay onDone={() => setShowConfetti(false)} />
+        )}
+
+        {/* Header */}
+        <div style={{
+          background: 'linear-gradient(160deg, #0a0a0a 0%, #1a0a2e 60%, #0a1628 100%)',
+          padding: '40px 24px 32px',
+          borderBottom: '1px solid #1a1a1a',
+          textAlign: 'center',
+        }}>
+          <p style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '0.72rem', color: '#FFD166',
+            textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
+          }}>
+            Zone Rush · Game Over
+          </p>
+          <h1 style={{
+            fontSize: '1.8rem', fontWeight: 800,
+            letterSpacing: -0.5, margin: '0 0 6px',
+          }}>
+            {game.name}
+          </h1>
+          {duration && (
+            <p style={{ color: '#444', fontSize: '0.82rem' }}>
+              Duration: {duration}
+            </p>
+          )}
+        </div>
+
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 20px 0' }}>
+
+          {/* ====== GM MEETUP BROADCAST BANNER ====== */}
+          {latestBroadcast && (
+            <div
+              className="results-section"
+              style={{
+                animationDelay: '0.05s',
+                marginBottom: 24,
+                background: 'rgba(255,209,102,0.10)',
+                border: '1px solid rgba(255,209,102,0.35)',
+                borderRadius: 14,
+                padding: '16px 18px',
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+              }}
+            >
+              <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>📢</span>
+              <div style={{ minWidth: 0 }}>
+                <p style={{
+                  fontSize: '0.66rem', color: '#FFD166',
+                  textTransform: 'uppercase', letterSpacing: 1.5,
+                  fontWeight: 700, marginBottom: 5,
+                }}>
+                  Message from the GM
+                </p>
+                <p style={{
+                  color: '#FFD166', fontSize: '0.95rem', fontWeight: 600,
+                  lineHeight: 1.5, margin: 0,
+                }}>
+                  {latestBroadcast}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ====== YOUR TEAM TOTAL ====== */}
+          <div
+            className="results-section"
+            style={{
+              animationDelay: '0.1s',
+              marginBottom: 28,
+              background: `linear-gradient(135deg, ${myTeam.color}18 0%, ${myTeam.color}08 100%)`,
+              border: `1px solid ${myTeam.color}50`,
+              borderRadius: 16,
+              padding: '32px 24px',
+              textAlign: 'center',
+              animation: 'winnerPop 0.6s 0.3s ease both',
+            }}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 10, marginBottom: 18,
+            }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
+              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#fff' }}>
+                {myTeam.name}
+              </span>
+            </div>
+
+            <p style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '4rem', fontWeight: 800,
+              color: myTeam.color, lineHeight: 1, marginBottom: 8,
+            }}>
+              {myTeam.total_points}
+            </p>
+            <p style={{
+              fontSize: '0.72rem', color: '#888',
+              textTransform: 'uppercase', letterSpacing: 2, fontWeight: 600,
+            }}>
+              Total Points
+            </p>
+
+            {myTeam.member_names?.length > 0 && (
+              <p style={{ color: '#666', fontSize: '0.82rem', marginTop: 16 }}>
+                {myTeam.member_names.join(' · ')}
+              </p>
+            )}
+          </div>
+
+          {/* Gentle note: final results announced in person */}
+          <div
+            className="results-section"
+            style={{
+              animationDelay: '0.2s',
+              marginBottom: 28,
+              textAlign: 'center',
+              color: '#555', fontSize: '0.85rem', lineHeight: 1.6,
+              padding: '0 12px',
+            }}
+          >
+            🏁 Great game! Final standings and bonus points will be announced
+            in person — head back and meet up with the group.
+          </div>
+
+          {/* ====== FOOTER ACTIONS ====== */}
+          <div className="results-section" style={{ animationDelay: '0.3s' }}>
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid #222',
+                color: '#888',
+                padding: '14px 24px', borderRadius: 10,
+                fontSize: '0.9rem', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Back to Home
+            </button>
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // =========================================================================
+  // GM / SPECTATOR VIEW — full results (unchanged from original).
+  // Only render once we're confident the viewer is on no team (teams loaded).
+  // =========================================================================
+
+  if (!isGM) {
     return (
       <div style={{
         minHeight: '100vh', background: '#0a0a0a', color: '#555',
