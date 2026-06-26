@@ -608,6 +608,18 @@ export default function GMDashboard() {
   }
 const handleApprove = async (sub: SubmissionData) => {
     if (!gameId || !game || processing) return
+
+    // HARD BLOCK: a submission in a LOCKED zone can never be approved.
+    // Reads lock status from zone_scores (same source as the map).
+    const lockedZoneIds = zoneScores.filter((zs) => zs.status === 'locked').map((zs) => zs.zone_id)
+    if (sub.zone_id && lockedZoneIds.includes(sub.zone_id)) {
+      alert(
+        `${sub.zone_id.replace('zone_district_', 'District ').replace('zone_mn_', '')} is LOCKED. ` +
+        `Submissions in a locked zone can't be approved — reject this one instead.`
+      )
+      return
+    }
+
     const closedZones = game.closed_zones ?? []
     if (closedZones.includes(sub.zone_id)) {
       const confirmed = window.confirm(`⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — approve anyway?`)

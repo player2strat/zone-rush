@@ -209,6 +209,19 @@ export async function approveSubmission(
   if (zoneLocked) newStatus = 'locked'
   else if (zoneClaimed) newStatus = 'claimed'
 
+  // Locking a zone also CLOSES it — no team can submit there anymore.
+  // We add the zone to game.closed_zones in this same batch so the close
+  // commits atomically with the lock. Guard against duplicates and only
+  // write if it isn't already closed (avoids a redundant game-doc write).
+  if (zoneLocked && zone_id) {
+    const existingClosed: string[] = gameSnap.data().closed_zones ?? []
+    if (!existingClosed.includes(zone_id)) {
+      batch.update(doc(db, 'games', game_id), {
+        closed_zones: [...existingClosed, zone_id],
+      })
+    }
+  }
+
   // Update zone_score
   batch.set(zoneScoreRef, {
     ...prevScore,
