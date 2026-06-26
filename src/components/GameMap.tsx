@@ -173,12 +173,13 @@ export default function GameMap({
         // LOCKED — a team reached lock_threshold and now owns this zone.
         // Locked beats closed: even though locking also closes the zone,
         // it renders in the OWNING TEAM's color with 🔒 LOCKED, never gray.
-        // Stronger than claimed (claimed is 0.50 / border 4) so the hierarchy
-        // reads in-progress < claimed < locked. 🔒 renders reliably in Mapbox.
+        // Rendered notably STRONGER than claimed (0.50 / border 4) so locked
+        // pops on the map — the 🔒 glyph doesn't render in the label font, so
+        // the heavier fill + border carries the visual distinction instead.
         fillColor = owner.teamColor
-        fillOpacity = 0.68
+        fillOpacity = 0.82
         borderColor = owner.teamColor
-        borderWidth = 5
+        borderWidth = 6
         labelColor = owner.teamColor
         labelText = `🔒 ${zone.name}\nLOCKED`
       } else if (isClosed) {
