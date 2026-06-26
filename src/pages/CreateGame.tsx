@@ -1,8 +1,20 @@
 // =============================================================================
-// Zone Rush — Create Game Page (v4)
+// Zone Rush — Create Game Page (v5)
 // 3-step flow: Basics → Pick Map → Settings & Create
 // Step 2 is two-stage: pick a map set first, THEN see zones with toggles.
 // All settings stored in Firestore — never hardcoded.
+//
+// CHANGES (v5 — pre-named teams, Option A):
+//   - Step 1 now shows one editable team-name input per team. Inputs are
+//     pre-filled with flavorful defaults from TEAM_NAMES and sync as the GM
+//     changes the team count (names the GM already typed are preserved).
+//   - handleCreateGame now seeds one team doc per name into
+//     games/{gameId}/teams/team_N AFTER writing the game doc. The seeded doc
+//     shape is IDENTICAL to what LobbyPage's resolveAutoJoinTeam writes, so a
+//     pre-seeded team is indistinguishable from a lobby-created one.
+//   - TEAM_NAMES and TEAM_COLORS are duplicated here to match LobbyPage
+//     exactly so team_N's seeded name/color agrees with the lobby's notion of
+//     team_N. (Longer term these should live in one shared module both import.)
 // =============================================================================
 
 import { useState, useEffect } from 'react'
@@ -32,6 +44,39 @@ interface MapSetDoc {
   is_active: boolean
   recommended_teams?: number
   recommended_duration?: number
+}
+
+// ---------------------------------------------------------------------------
+// Team name + color pools
+// IMPORTANT: these MUST stay in sync with the same arrays in LobbyPage so that
+// team_N's seeded name/color matches what the lobby assumes for team_N.
+// ---------------------------------------------------------------------------
+const TEAM_NAMES = [
+  'The Bodega Cats',
+  'Subway Surfers',
+  'Pigeon Squad',
+  'The Jaywalkers',
+  'Borough Bosses',
+  'Street Legends',
+  'The Wanderers',
+  'Zone Runners',
+]
+
+const TEAM_COLORS = [
+  { name: 'Red', hex: '#EF476F' },
+  { name: 'Blue', hex: '#118AB2' },
+  { name: 'Green', hex: '#06D6A0' },
+  { name: 'Purple', hex: '#9B5DE5' },
+  { name: 'Orange', hex: '#F77F00' },
+  { name: 'Yellow', hex: '#FFD166' },
+  { name: 'Pink', hex: '#FF6B8A' },
+  { name: 'Teal', hex: '#2EC4B6' },
+]
+
+// Default name for team at index i (0-based). Falls back to "Team N" if the
+// pool runs out (more teams than named entries).
+function defaultTeamName(index: number): string {
+  return TEAM_NAMES[index] || 'Team ' + (index + 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +132,13 @@ export default function CreateGame() {
   const [teamSize, setTeamSize] = useState(3)
   const [durationMinutes, setDurationMinutes] = useState(180)
 
+  // Step 1: Team names — one entry per team, pre-filled with flavorful defaults.
+  // Kept in sync with maxTeams by the effect below; names the GM has already
+  // typed are preserved when the count grows or shrinks.
+  const [teamNames, setTeamNames] = useState<string[]>(() =>
+    Array.from({ length: 3 }, (_, i) => defaultTeamName(i))
+  )
+
   // Step 3: Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [claimThreshold, setClaimThreshold] = useState(6)
@@ -102,6 +154,35 @@ export default function CreateGame() {
 
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+
+  // ---------------------------------------------------------------------------
+  // Keep the teamNames array length in sync with maxTeams.
+  // - Growing: append default names for the new slots.
+  // - Shrinking: drop the trailing slots.
+  // Existing entries (including GM edits) are preserved by index.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    setTeamNames((prev) => {
+      if (prev.length === maxTeams) return prev
+      if (maxTeams < prev.length) {
+        return prev.slice(0, maxTeams)
+      }
+      // maxTeams > prev.length — append defaults for the new indices
+      const next = [...prev]
+      for (let i = prev.length; i < maxTeams; i++) {
+        next.push(defaultTeamName(i))
+      }
+      return next
+    })
+  }, [maxTeams])
+
+  const handleTeamNameChange = (index: number, value: string) => {
+    setTeamNames((prev) => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
+  }
 
   // ---------------------------------------------------------------------------
   // Load map_sets on mount
@@ -237,6 +318,11 @@ export default function CreateGame() {
 
   // ---------------------------------------------------------------------------
   // Create Game
+  //
+  // After the game doc is written, seed one team doc per team into
+  // games/{gameId}/teams/team_N. The shape mirrors LobbyPage's
+  // resolveAutoJoinTeam exactly so a pre-seeded team is identical to a
+  // lobby-created one. Any blank name falls back to its default.
   // ---------------------------------------------------------------------------
   const handleCreateGame = async () => {
     if (!user) return
@@ -281,6 +367,25 @@ export default function CreateGame() {
           zone_close_schedule: buildCloseSchedule(),
         },
       })
+
+      // Seed pre-named team docs — one per team, team_1 .. team_{maxTeams}.
+      // Shape matches LobbyPage.resolveAutoJoinTeam exactly.
+      for (let i = 0; i < maxTeams; i++) {
+        const teamId = 'team_' + (i + 1)
+        const name = (teamNames[i] || '').trim() || defaultTeamName(i)
+        await setDoc(doc(db, 'games', gameId, 'teams', teamId), {
+          id: teamId,
+          name,
+          members: [],
+          member_names: [],
+          color: TEAM_COLORS[i]?.hex || '#888',
+          total_points: 0,
+          zones_claimed: 0,
+          zones_locked: 0,
+          taxi_used: false,
+          hand: [],
+        })
+      }
 
       navigate('/lobby/' + gameId)
     } catch (err: any) {
@@ -379,8 +484,58 @@ export default function CreateGame() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <SettingInput label="Teams" value={maxTeams} onChange={setMaxTeams} min={1} max={10} />
+              <SettingInput label="Teams" value={maxTeams} onChange={setMaxTeams} min={1} max={8} />
               <SettingInput label="Players / Team" value={teamSize} onChange={setTeamSize} min={1} max={8} />
+            </div>
+
+            {/* Team names — one editable input per team, pre-filled with defaults */}
+            <div style={{ marginBottom: 28 }}>
+              <label style={labelStyle}>Team Names</label>
+              <p style={{ color: '#666', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+                Pre-filled with fun defaults — leave them as-is or rename any team. You can also rename teams later in the lobby.
+              </p>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {teamNames.map((name, i) => {
+                  const color = TEAM_COLORS[i]?.hex || '#888'
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid #1a1a1a',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                      }}
+                    >
+                      <div style={{
+                        width: 12, height: 12, borderRadius: 3,
+                        background: color, flexShrink: 0,
+                      }} />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => handleTeamNameChange(i, e.target.value)}
+                        placeholder={defaultTeamName(i)}
+                        maxLength={28}
+                        style={{
+                          flex: 1,
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#fff',
+                          fontSize: '0.9rem',
+                          fontFamily: 'inherit',
+                          fontWeight: 600,
+                          outline: 'none',
+                          padding: '4px 0',
+                        }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             <div style={{ marginBottom: 28 }}>
