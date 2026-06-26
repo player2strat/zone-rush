@@ -113,7 +113,7 @@ interface ZoneScoreData {
   team_id: string
   zone_id: string
   points: number
-  status: 'none' | 'claimed'
+  status: 'none' | 'claimed' | 'locked' | 'locked_out'
   challenges_completed: string[]
 }
 
@@ -543,7 +543,11 @@ export default function GamePage() {
       teamColor: team.color,
       teamName: team.name,
       points: leading.points,
-      claimed: leading.points >= claimThreshold,
+      // Read the resolved status that scoring.ts wrote — don't recompute from
+      // points. A locked zone is also "claimed" (owned); lock is its stronger
+      // form. Reading status keeps the map in lockstep with the GM broadcast.
+      claimed: leading.status === 'claimed' || leading.status === 'locked',
+      locked: leading.status === 'locked',
     })
   }
 
@@ -1057,7 +1061,7 @@ export default function GamePage() {
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor, opacity: owner.claimed ? 1 : 0.4 }} />
                     <span style={{ fontSize: '0.72rem', color: '#aaa' }}>
                       {zoneId.replace('zone_district_', 'D')} — {owner.teamName}
-                      {!owner.claimed && ' (contesting)'}
+                      {owner.locked ? ' (locked)' : !owner.claimed ? ' (contesting)' : ''}
                     </span>
                   </div>
                 ))}

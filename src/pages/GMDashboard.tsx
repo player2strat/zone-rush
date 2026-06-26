@@ -137,7 +137,7 @@ interface ZoneScoreData {
   team_id: string
   zone_id: string
   points: number
-  status: 'none' | 'claimed'
+  status: 'none' | 'claimed' | 'locked' | 'locked_out'
   challenges_completed: string[]
 }
 
@@ -765,7 +765,7 @@ const handleApprove = async (sub: SubmissionData) => {
   // Chat badge = unread flagged messages (the attention queue size).
   const totalUnread = attentionQueue.length
 
-  const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number }>()
+  const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number; status: ZoneScoreData['status'] }>()
   // Track ALL zone scores (not just claimed) so the map can show partial progress shading
   for (const zs of zoneScores) {
     if (zs.points > 0) {
@@ -774,18 +774,24 @@ const handleApprove = async (sub: SubmissionData) => {
       // If multiple teams have points in the same zone, show the leading team
       const existing = zoneOwnership.get(zs.zone_id)
       if (!existing || zs.points > existing.points) {
-        zoneOwnership.set(zs.zone_id, { teamId: zs.team_id, teamColor: team.color, teamName: team.name, points: zs.points })
+        zoneOwnership.set(zs.zone_id, { teamId: zs.team_id, teamColor: team.color, teamName: team.name, points: zs.points, status: zs.status })
       }
     }
   }
   const mapZoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
-    const claimThreshold = game?.settings.claim_threshold ?? 6
     for (const [zoneId, owner] of zoneOwnership) {
-      m.set(zoneId, { teamColor: owner.teamColor, teamName: owner.teamName, points: owner.points, claimed: owner.points >= claimThreshold })
+      // Read the resolved status scoring.ts wrote, not a points recompute.
+      m.set(zoneId, {
+        teamColor: owner.teamColor,
+        teamName: owner.teamName,
+        points: owner.points,
+        claimed: owner.status === 'claimed' || owner.status === 'locked',
+        locked: owner.status === 'locked',
+      })
     }
     return m
-  }, [zoneScores, teams, game?.settings.claim_threshold])
+  }, [zoneScores, teams])
 
   // Build player location list from team member_locations for the GM map
     const playerLocations = useMemo<PlayerLocation[]>(() => {
@@ -1009,7 +1015,7 @@ const handleApprove = async (sub: SubmissionData) => {
                 </p>
                 <p style={{ fontSize: '0.82rem', color: '#888', margin: 0 }}>
                   {flaggedCount > 0
-                    ? `${flaggedCount} flagged video${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
+                    ? `${flaggedCount} flagged assets${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
                     : 'No assets flagged yet. Star approved assets to include them.'}
                 </p>
                 {zipProgress && (
@@ -1214,11 +1220,14 @@ const handleApprove = async (sub: SubmissionData) => {
                     </div>
                     {team.zoneBreakdown.length > 0 ? (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {team.zoneBreakdown.map((zs) => (
-                          <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: zs.status === 'claimed' ? `${team.color}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${zs.status === 'claimed' ? `${team.color}40` : '#1a1a1a'}`, color: zs.status === 'claimed' ? team.color : '#555', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
-                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'claimed' ? ' ★' : ''}
+                        {team.zoneBreakdown.map((zs) => {
+                          const owned = zs.status === 'claimed' || zs.status === 'locked'
+                          return (
+                          <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: owned ? `${team.color}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${owned ? `${team.color}40` : '#1a1a1a'}`, color: owned ? team.color : '#555', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'locked' ? ' 🔒' : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : <p style={{ fontSize: '0.75rem', color: '#333', fontStyle: 'italic' }}>No points yet</p>}
                   </div>

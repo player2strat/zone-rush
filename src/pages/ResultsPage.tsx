@@ -62,7 +62,7 @@ interface ZoneScoreData {
   team_id: string
   zone_id: string
   points: number
-  status: 'none' | 'claimed'
+  status: 'none' | 'claimed' | 'locked' | 'locked_out'
   challenges_completed: string[]
 }
 
@@ -305,7 +305,10 @@ export default function ResultsPage() {
   const zoneOwnership = useMemo(() => {
     const m = new Map<string, ZoneOwner>()
     for (const zs of zoneScores) {
-      if (zs.status !== 'claimed') continue
+      // Include both claimed AND locked zones — a locked zone is owned and
+      // must appear on the final map. (Previously filtered to 'claimed' only,
+      // which dropped locked zones entirely.)
+      if (zs.status !== 'claimed' && zs.status !== 'locked') continue
       const team = teams.find((t) => t.id === zs.team_id)
       if (!team) continue
       const existing = m.get(zs.zone_id)
@@ -315,6 +318,7 @@ export default function ResultsPage() {
           teamName: team.name,
           points: zs.points,
           claimed: true,
+          locked: zs.status === 'locked',
         })
       }
     }
@@ -740,7 +744,7 @@ export default function ResultsPage() {
                   }}>
                     <span>
                       <span style={{ color: '#888' }}>
-                        {team.zoneBreakdown.filter(z => z.status === 'claimed').length}
+                        {team.zoneBreakdown.filter(z => z.status === 'claimed' || z.status === 'locked').length}
                       </span> zones claimed
                     </span>
                     <span>
@@ -762,15 +766,15 @@ export default function ResultsPage() {
                           <span key={zs.zone_id} style={{
                             fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4,
                             fontFamily: "'JetBrains Mono', monospace",
-                            background: zs.status === 'claimed'
+                            background: (zs.status === 'claimed' || zs.status === 'locked')
                               ? `${team.color}20` : 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${zs.status === 'claimed'
+                            border: `1px solid ${(zs.status === 'claimed' || zs.status === 'locked')
                               ? team.color + '40' : '#1a1a1a'}`,
-                            color: zs.status === 'claimed' ? team.color : '#444',
+                            color: (zs.status === 'claimed' || zs.status === 'locked') ? team.color : '#444',
                             fontWeight: 600,
                           }}>
                             {formatZoneLabel(zs.zone_id)} · {zs.points}pt
-                            {zs.status === 'claimed' ? ' ★' : ''}
+                            {zs.status === 'locked' ? ' 🔒' : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                         ))}
                     </div>

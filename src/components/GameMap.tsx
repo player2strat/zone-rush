@@ -34,6 +34,7 @@ export interface ZoneOwner {
   teamName: string
   points: number
   claimed: boolean
+  locked: boolean
 }
 
 export interface PlayerLocation {
@@ -168,17 +169,11 @@ export default function GameMap({
       // dashed border for "in progress" zones — clearly different from claimed
       let borderDash: number[] | null = null
 
-      if (isClosed && !owner) {
-        // Closed, unclaimed → black out (GM closed it with no team holding it)
-        fillColor = '#000000'
-        fillOpacity = 0.75
-        borderColor = '#444444'
-        borderWidth = 2
-        labelColor = '#6f6e6e'
-        labelText = `🔒 ${zone.name}\nCLOSED`
-      } else if (isClosed && owner) {
-        // Closed + owned = a LOCKED zone (a team secured it). Render it
-        // STRONGER than claimed (claimed is 0.50 / border 4) so the hierarchy
+      if (owner?.locked) {
+        // LOCKED — a team reached lock_threshold and now owns this zone.
+        // Locked beats closed: even though locking also closes the zone,
+        // it renders in the OWNING TEAM's color with 🔒 LOCKED, never gray.
+        // Stronger than claimed (claimed is 0.50 / border 4) so the hierarchy
         // reads in-progress < claimed < locked. 🔒 renders reliably in Mapbox.
         fillColor = owner.teamColor
         fillOpacity = 0.68
@@ -186,6 +181,15 @@ export default function GameMap({
         borderWidth = 5
         labelColor = owner.teamColor
         labelText = `🔒 ${zone.name}\nLOCKED`
+      } else if (isClosed) {
+        // GM-closed but NOT locked → black out. (A locked zone is also closed,
+        // but the owner?.locked branch above already handled it.)
+        fillColor = '#000000'
+        fillOpacity = 0.75
+        borderColor = '#444444'
+        borderWidth = 2
+        labelColor = '#6f6e6e'
+        labelText = `🔒 ${zone.name}\nCLOSED`
       } else if (owner) {
         if (owner.claimed) {
           // Fully claimed → solid heavy fill + ★ label
