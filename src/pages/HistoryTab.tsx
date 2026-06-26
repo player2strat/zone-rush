@@ -181,13 +181,9 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
           <span style={{ ...summaryValue, color: '#FFD166' }}>{totalPoints}</span>
           <span style={summaryLabel}>Total pts</span>
         </div>
-        <div style={divider} />
-        <div style={summaryItem}>
-          <span style={{ ...summaryValue, color: '#9B5DE5' }}>
-            {submissions.filter((s) => s.tier2_approved).length}
-          </span>
-          <span style={summaryLabel}>Tier 2 hits</span>
-        </div>
+        {/* Tier 2 hits summary item removed — re-enable when the tier 2 mechanic
+            is in use. To restore: add a <div style={divider} /> here followed by a
+            summaryItem counting submissions.filter((s) => s.tier2_approved).length */}
       </div>
 
       {/* ── Submission list ── */}
