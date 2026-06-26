@@ -25,7 +25,7 @@ const DIFF_COLORS: Record<string, { bg: string; text: string }> = {
 interface Submission {
   id: string
   challenge_id: string
-  zone_id: string
+  zone_id: string | null
   points_awarded: number
   attempted_tier2: boolean
   tier2_approved: boolean
@@ -34,10 +34,11 @@ interface Submission {
   media_type: 'photo' | 'video' | 'audio'
   media_url: string
   submitted_at: { toDate: () => Date } | null
-  // Joined from challenges collection (fetched separately below)
-  challenge_title?: string
+  // Stored directly on the submission (CYOA + standard)
   challenge_description?: string
   challenge_difficulty?: string
+  resolved_task?: string | null
+  step_choices?: string[]
 }
 
 interface HistoryTabProps {
@@ -234,7 +235,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                     WebkitBoxOrient: 'vertical' as any,
                     overflow: isExpanded ? 'visible' : 'hidden',
                   }}>
-                    {ch?.description ?? sub.challenge_id}
+                    {sub.resolved_task || sub.challenge_description || ch?.description || sub.challenge_id}
                   </p>
 
                   {/* Badges row */}
@@ -251,10 +252,10 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                       </span>
                     )}
 
-                    {/* Tier 2 */}
-                    {sub.tier2_approved && (
+                    {/* CYOA locked choices */}
+                    {sub.step_choices && sub.step_choices.length > 0 && (
                       <span style={badge('#9B5DE5', 'rgba(155,93,229,0.12)')}>
-                        ✦ Tier 2
+                        🎲 {sub.step_choices.join(' · ')}
                       </span>
                     )}
 
