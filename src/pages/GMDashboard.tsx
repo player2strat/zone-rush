@@ -1,10 +1,10 @@
 // =============================================================================
 // Zone Rush — GM Dashboard (v5)
 // CHANGES (v5 — media highlights):
-// - "Highlight" star toggle on APPROVED video submissions. Writes a `highlight`
+// - "Highlight" star toggle on APPROVED asset submissions. Writes a `highlight`
 //   boolean to the submission doc; the live listener re-renders the card.
 // - Post-game "Pull All Highlights" panel (shown when game ended): bundles every
-//   flagged video into ONE zip, organized into a folder per team. Files named
+//   flagged asset into ONE zip, organized into a folder per team. Files named
 //   teamname_challengetitle_timestamp. Flagged-only.
 // - ZIP_MEDIA_TYPES constant is the single expansion point for including
 //   photos/audio later — drives BOTH the star visibility and the zip contents.
@@ -635,7 +635,7 @@ const handleApprove = async (sub: SubmissionData) => {
       if (result.zoneLocked) {
         // Zone locked — broadcast to all teams
         await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
-          `🔒 ${zoneName} has been LOCKED by ${approvedTeam?.name ?? 'a team'}! (+${game.settings.zone_bonus_points ?? 3} bonus pts)`)
+          `🔒 ${zoneName || 'A zone'} has been LOCKED by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,
           event_type: 'zone_locked',

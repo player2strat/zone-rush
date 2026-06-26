@@ -726,7 +726,7 @@ export default function GamePage() {
                 {[
                   {
                     icon: '👋',
-                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hours you'll compete against another team in a series of challenges across Manhattan that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
+                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hour(s) you'll compete against another team in a series of challenges across Manhattan that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
                   },
                   {
                     icon: '🃏',
@@ -734,7 +734,7 @@ export default function GamePage() {
                   },
                   {
                     icon: '⭐',
-                    text: 'Challenges are worth 1 (easy), 2 (medium) or 3 (hard) points. Manhattan is broken up into zones, which you can access on your map. Complete a challenge and those points count in the zone you\'re currently located.',
+                    text: 'Challenges are worth 1 (easy), 2 (medium) or 3 (hard) points. The game map is broken up into zones, which you can access on your map tab. Complete a challenge and those points count in the zone you\'re currently located.',
                   },
                   {
                     icon: '📍',
@@ -750,7 +750,7 @@ export default function GamePage() {
                   },
                   {
                     icon: '🏆',
-                    text: 'Side Quests: At the end of the game, bonus points are awarded — most zones claimed (+8 pts) most zones with a challenge completed (+8 pts).',
+                    text: 'Side Quests: At the end of the game, bonus points are awarded: most zones claimed (+8 pts) most zones with a challenge completed (+8 pts).',
                   },
                 ].map((rule, i) => (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -966,7 +966,7 @@ export default function GamePage() {
 
                         {sub?.status === 'approved' ? (
                           <div style={{
-                            width: '100%', background: 'rgba(6,214,160,0.08)',
+                            width: '100%', boxSizing: 'border-box', background: 'rgba(6,214,160,0.08)',
                             border: '1px solid rgba(6,214,160,0.2)',
                             padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: '#06D6A0', fontSize: '0.88rem', fontWeight: 600,
@@ -975,7 +975,7 @@ export default function GamePage() {
                           </div>
                         ) : sub?.status === 'pending' ? (
                           <div style={{
-                            width: '100%', background: 'rgba(255,209,102,0.08)',
+                            width: '100%', boxSizing: 'border-box', background: 'rgba(255,209,102,0.08)',
                             border: '1px solid rgba(255,209,102,0.2)',
                             padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: '#FFD166', fontSize: '0.88rem', fontWeight: 600,
@@ -985,7 +985,7 @@ export default function GamePage() {
                           </div>
                         ) : game?.status === 'ended' ? (
                           <div style={{
-                            width: '100%', background: 'rgba(255,255,255,0.03)',
+                            width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.03)',
                             border: '1px solid #222', padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: '#555', fontSize: '0.88rem',
                           }}>
