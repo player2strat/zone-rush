@@ -38,6 +38,7 @@ interface SubmitProofProps {
     is_time_based: boolean
   }
   closedZones: string[]
+  lockedZones: string[]
 
   // The zone IDs the GM made live for THIS game (game.zones). Detection is
   // scoped to these so a submission can only ever tag a zone that's actually
@@ -58,7 +59,7 @@ interface SubmitProofProps {
 }
 
 export default function SubmitProof({
-  gameId, teamId, challenge, closedZones, activeZoneIds, resolvedTask, stepChoices, onClose, onSubmitted,
+  gameId, teamId, challenge, closedZones, lockedZones, activeZoneIds, resolvedTask, stepChoices, onClose, onSubmitted,
 }: SubmitProofProps) {
   const user = auth.currentUser
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -104,7 +105,8 @@ export default function SubmitProof({
   }, [])
 
 const detectedZoneId = detectZone(location.lat, location.lng, zones)
-  const isZoneClosed = !!detectedZoneId && closedZones.includes(detectedZoneId)
+  const isZoneLocked = !!detectedZoneId && lockedZones.includes(detectedZoneId)
+  const isZoneClosedOrLocked = (!!detectedZoneId && closedZones.includes(detectedZoneId)) || isZoneLocked
   const canSubmitWithLocation = isLocationSubmittable(location)
 
   // Single source of truth for whether the Submit button is live.
@@ -526,16 +528,16 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         )}
 
         {/* Submit button — DISABLED if no GPS */}
-        {isZoneClosed ? (
+        {isZoneClosedOrLocked ? (
           <div style={{
             background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
             borderRadius: 10, padding: '16px 20px', textAlign: 'center',
           }}>
             <p style={{ color: '#EF476F', fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>
-              🔒 Zone Closed
+              🔒 Zone {isZoneLocked ? 'Locked' : 'Closed'}
             </p>
             <p style={{ color: '#888', fontSize: '0.82rem' }}>
-              {detectedZoneId?.replace('zone_district_', 'District ')} is no longer accepting submissions.
+              {detectedZoneId?.replace('zone_district_', 'District ').replace('zone_mn_', '')} is no longer accepting submissions.
               Points and claims already earned here are kept.
             </p>
           </div>

@@ -551,6 +551,11 @@ export default function GamePage() {
     })
   }
 
+  // Zones that are locked → closed to all submissions. Same source as the map.
+  const lockedZoneIds = Array.from(
+    new Set(zoneScores.filter((zs) => zs.status === 'locked').map((zs) => zs.zone_id))
+  )
+
   // ---- Render ----
 
   if (loading) {
@@ -831,6 +836,7 @@ export default function GamePage() {
                       teamId={myTeam.id}
                       challenge={ch as any}
                       closedZones={game?.closed_zones ?? []}
+                      lockedZones={lockedZoneIds}
                       activeZoneIds={game?.zones ?? []}
                       gameEnded={game?.status === 'ended'}
                       submissionStatus={seqSub?.status}
@@ -1215,6 +1221,7 @@ export default function GamePage() {
           teamId={myTeam.id}
           challenge={challenges[submittingChallenge]}
           closedZones={game?.closed_zones ?? []}
+          lockedZones={lockedZoneIds}
           activeZoneIds={game?.zones ?? []}
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {}}
