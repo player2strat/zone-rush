@@ -121,8 +121,8 @@ interface ZoneScoreData {
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string; label: string; pts: number }> = {
   easy:   { bg: 'rgba(6,214,160,0.15)',  color: '#06D6A0', label: 'Easy',   pts: 1 },
-  medium: { bg: 'rgba(255,209,102,0.15)', color: '#FFD166', label: 'Medium', pts: 3 },
-  hard:   { bg: 'rgba(239,71,111,0.15)',  color: '#EF476F', label: 'Hard',   pts: 5 },
+  medium: { bg: 'rgba(255,209,102,0.15)', color: '#FFD166', label: 'Medium', pts: 2 },
+  hard:   { bg: 'rgba(239,71,111,0.15)',  color: '#EF476F', label: 'Hard',   pts: 3 },
 }
 
 const VERIFICATION_ICONS: Record<string, string> = {
@@ -522,6 +522,11 @@ export default function GamePage() {
   const approvedCount = Array.from(submissions.values()).filter(s => s.status === 'approved').length
 
   const activeZones = localZones.filter((z: any) => game?.zones?.includes(z.id))
+
+  // Zone display names by id, for the legend (falls back to id if missing)
+  const zoneNameById = new Map<string, string>(
+    localZones.map((z: any) => [z.id, z.name])
+  )
 
   // Compute zone ownership for GameMap
   const claimThreshold = game?.settings.claim_threshold ?? 6
@@ -1066,7 +1071,7 @@ export default function GamePage() {
                   <div key={zoneId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor, opacity: owner.claimed ? 1 : 0.4 }} />
                     <span style={{ fontSize: '0.72rem', color: '#aaa' }}>
-                      {zoneId.replace('zone_district_', 'D')} — {owner.teamName}
+                      {zoneNameById.get(zoneId) ?? zoneId} — {owner.teamName}
                       {owner.locked ? ' (locked)' : !owner.claimed ? ' (contesting)' : ''}
                     </span>
                   </div>
