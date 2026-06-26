@@ -752,7 +752,7 @@ export default function GamePage() {
                   },
                   {
                     icon: '📍',
-                    text: `Once you've reached ${game?.settings.claim_threshold ?? 4} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.`,
+                    text: `Once you've reached ${game?.settings.claim_threshold ?? 4} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.  7 points locks a zone.`,
                   },
                   {
                     icon: '📸',
