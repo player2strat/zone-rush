@@ -123,8 +123,10 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const zoneName = (zoneId: string) =>
-    zoneId.replace('zone_district_', 'District ').replace(/_/g, ' ')
+  const zoneName = (zoneId: string | null | undefined) => {
+  if (!zoneId) return 'Unknown zone'
+  return zoneId.replace('zone_district_', 'District ').replace(/_/g, ' ')
+}
 
   const mediaIcon = (type: string) =>
     type === 'video' ? '🎥' : type === 'audio' ? '🎙️' : '📷'

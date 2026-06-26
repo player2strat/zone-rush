@@ -59,6 +59,7 @@ export default function SequentialCard({
 
   const [progress, setProgress] = useState<SequentialProgress | null>(null)
   const [loadingProgress, setLoadingProgress] = useState(true)
+  const [progressError, setProgressError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')          // current step's text input
   const [locking, setLocking] = useState(false)
   const [lockError, setLockError] = useState<string | null>(null)
@@ -67,11 +68,18 @@ export default function SequentialCard({
   // Live progress — survives refresh, and stays in sync if a teammate locks a
   // step on their own device.
   useEffect(() => {
-    const unsub = subscribeProgress(gameId, teamId, challenge.id, (p) => {
-      setProgress(p)
-      setLoadingProgress(false)
-      setDraft('') // clear the box whenever the locked count changes underneath us
-    })
+    const unsub = subscribeProgress(
+      gameId, teamId, challenge.id,
+      (p) => {
+        setProgress(p)
+        setLoadingProgress(false)
+        setDraft('')
+      },
+      (err) => {
+        setProgressError(err.message || 'Could not load progress.')
+        setLoadingProgress(false)
+      },
+    )
     return () => unsub()
   }, [gameId, teamId, challenge.id])
 
@@ -140,6 +148,8 @@ export default function SequentialCard({
 
       {loadingProgress ? (
         <p style={{ color: '#555', fontSize: '0.82rem' }}>Loading your progress…</p>
+      ) : progressError ? (
+        <p style={{ color: '#EF476F', fontSize: '0.82rem' }}>⚠️ {progressError}</p>
       ) : (
         <>
           {/* Step rail — one row per step */}

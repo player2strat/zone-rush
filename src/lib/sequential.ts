@@ -99,10 +99,19 @@ export function subscribeProgress(
   teamId: string,
   challengeId: string,
   cb: (progress: SequentialProgress | null) => void,
+  onError?: (err: Error) => void,
 ): () => void {
-  return onSnapshot(progressRef(gameId, teamId, challengeId), (snap) => {
-    cb(snap.exists() ? (snap.data() as SequentialProgress) : null)
-  })
+  const path = `games/${gameId}/teams/${teamId}/sequential_progress/${challengeId}`
+  return onSnapshot(
+    progressRef(gameId, teamId, challengeId),
+    (snap) => {
+      cb(snap.exists() ? (snap.data() as SequentialProgress) : null)
+    },
+    (err) => {
+      console.error('[sequential] listener denied/failed on path:', path, err)
+      onError?.(err)
+    },
+  )
 }
 
 // ─── Lock one step ───────────────────────────────────────────────────────────

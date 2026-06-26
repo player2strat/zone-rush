@@ -446,7 +446,7 @@ export default function GMDashboard() {
     )
 
     if (flagged.length === 0) {
-      alert('No flagged videos to pull. Star some approved videos first.')
+      alert('No flagged assets to pull. Star some approved assets first.')
       return
     }
 
@@ -497,7 +497,7 @@ export default function GMDashboard() {
       if (Object.keys(zip.files).length === 0) {
         // Everything failed to fetch — almost always a CORS issue on Storage.
         alert(
-          'Could not download any videos. This is usually a Firebase Storage CORS setting. ' +
+          'Could not download any assets. This is usually a Firebase Storage CORS setting. ' +
           'Tell me if you see this and I will walk you through the one-time fix.'
         )
         return
@@ -1010,7 +1010,7 @@ const handleApprove = async (sub: SubmissionData) => {
                 <p style={{ fontSize: '0.82rem', color: '#888', margin: 0 }}>
                   {flaggedCount > 0
                     ? `${flaggedCount} flagged video${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
-                    : 'No videos flagged yet. Star approved videos to include them.'}
+                    : 'No assets flagged yet. Star approved assets to include them.'}
                 </p>
                 {zipProgress && (
                   <p style={{ fontSize: '0.74rem', color: '#06D6A0', marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
