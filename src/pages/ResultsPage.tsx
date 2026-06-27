@@ -871,7 +871,7 @@ export default function ResultsPage() {
                 )
               })}
               <p style={{ fontSize: '0.72rem', color: '#444', marginTop: 4 }}>
-                Bonuses include: Most zones claimed (+5) · Most transit modes (+4) · Most challenges completed (+3)
+                Bonuses include: Most zones claimed (+8) · Most zones with a challenge (+8)
               </p>
             </div>
           </div>
