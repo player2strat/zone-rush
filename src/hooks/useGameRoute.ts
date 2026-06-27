@@ -30,6 +30,7 @@ export function useGameRoute(gameId: string | undefined): GameRoute {
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null)
   const [gameStatus, setGameStatus] = useState<GameStatus | null>(null)
   const [createdBy, setCreatedBy] = useState<string | null>(null)
+  const [gmUids, setGmUids] = useState<string[]>([])
   const [gameLoading, setGameLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -55,10 +56,12 @@ export function useGameRoute(gameId: string | undefined): GameRoute {
           setNotFound(true)
           setGameStatus(null)
           setCreatedBy(null)
+          setGmUids([])
         } else {
           const data = snap.data()
           setGameStatus((data.status ?? null) as GameStatus | null)
           setCreatedBy(data.created_by ?? null)
+          setGmUids(Array.isArray(data.gm_uids) ? data.gm_uids : [])
           setNotFound(false)
         }
         setGameLoading(false)
@@ -73,7 +76,7 @@ export function useGameRoute(gameId: string | undefined): GameRoute {
   }, [gameId])
 
   const loading = !authReady || gameLoading
-  const isGM = !!uid && !!createdBy && uid === createdBy
+  const isGM = !!uid && (uid === createdBy || gmUids.includes(uid))
 
   let expectedPath: string | null = null
   if (!loading && gameId && gameStatus) {
