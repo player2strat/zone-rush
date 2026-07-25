@@ -86,8 +86,9 @@ export default function ZoneBuilder() {
   const pendingBoundaryDrawId = useRef<string | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
 
-  // New-map creation + publishing.
-  const [creatingOpen, setCreatingOpen] = useState(false);
+  // Panel mode: work on an existing map, or create a new one. These are
+  // alternatives — only one shows at a time so they don't read as one flow.
+  const [mode, setMode] = useState<"open" | "create">("open");
   const [newMapName, setNewMapName] = useState("");
   const [newMapBorough, setNewMapBorough] = useState("");
   const [newMapDesc, setNewMapDesc] = useState("");
@@ -482,7 +483,7 @@ export default function ZoneBuilder() {
         )
       );
       setSelectedMapId(id);
-      setCreatingOpen(false);
+      setMode("open");
       setNewMapName("");
       setNewMapBorough("");
       setNewMapDesc("");
@@ -606,7 +607,7 @@ export default function ZoneBuilder() {
           Zone Builder
         </h1>
         <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 20 }}>
-          Open a map to see its zones and boundary. Drawing comes next.
+          Open a map to draw its boundary and zones, or create a new one.
         </p>
 
         <label style={labelStyle}>City</label>
@@ -616,47 +617,32 @@ export default function ZoneBuilder() {
           style={inputStyle}
         />
 
-        <label style={{ ...labelStyle, marginTop: 16 }}>Map</label>
-        <select
-          value={selectedMapId}
-          onChange={(e) => setSelectedMapId(e.target.value)}
-          style={{ ...inputStyle, color: selectedMapId ? "#fff" : "#888" }}
+        {/* Mode toggle: open existing vs. create new (alternatives) */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            marginTop: 18,
+            padding: 4,
+            background: "#111",
+            border: "1px solid #222",
+            borderRadius: 10,
+          }}
         >
-          <option value="">
-            {loadingMaps
-              ? "Loading maps…"
-              : maps.length === 0
-              ? "No maps for this city"
-              : "Select a map…"}
-          </option>
-          {maps.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-              {m.is_active ? " • published" : ""}
-            </option>
-          ))}
-        </select>
-
-        {/* New map */}
-        {!creatingOpen && (
-          <button
-            onClick={() => setCreatingOpen(true)}
-            style={{ ...secondaryFullBtnStyle, marginTop: 10 }}
-          >
-            + New map
+          <button onClick={() => setMode("open")} style={segBtnStyle(mode === "open")}>
+            Open existing
           </button>
-        )}
-        {creatingOpen && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 14,
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid #1a1a1a",
-              borderRadius: 10,
-            }}
+          <button
+            onClick={() => setMode("create")}
+            style={segBtnStyle(mode === "create")}
           >
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>New map</div>
+            Create new
+          </button>
+        </div>
+
+        {/* Create new map */}
+        {mode === "create" && (
+          <div style={{ marginTop: 16 }}>
             <label style={labelStyle}>Name</label>
             <input
               value={newMapName}
@@ -683,35 +669,53 @@ export default function ZoneBuilder() {
               placeholder="Short blurb for the map picker"
               style={inputStyle}
             />
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button
-                onClick={createMap}
-                disabled={creatingBusy}
-                style={{
-                  ...primaryBtnStyle,
-                  marginTop: 0,
-                  flex: 1,
-                  opacity: creatingBusy ? 0.6 : 1,
-                  cursor: creatingBusy ? "not-allowed" : "pointer",
-                }}
-              >
-                {creatingBusy ? "Creating…" : "Create map"}
-              </button>
-              <button
-                onClick={() => {
-                  setCreatingOpen(false);
-                  setNewMapName("");
-                  setNewMapBorough("");
-                  setNewMapDesc("");
-                }}
-                disabled={creatingBusy}
-                style={secondaryBtnStyle}
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={createMap}
+              disabled={creatingBusy}
+              style={{
+                ...primaryBtnStyle,
+                opacity: creatingBusy ? 0.6 : 1,
+                cursor: creatingBusy ? "not-allowed" : "pointer",
+              }}
+            >
+              {creatingBusy ? "Creating…" : "Create map"}
+            </button>
+            <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 10 }}>
+              Creates a draft map, then opens it so you can draw its boundary and
+              zones.
+            </p>
           </div>
         )}
+
+        {/* Open existing map */}
+        {mode === "open" && (
+          <>
+            <label style={{ ...labelStyle, marginTop: 16 }}>Map</label>
+            <select
+              value={selectedMapId}
+              onChange={(e) => setSelectedMapId(e.target.value)}
+              style={{ ...inputStyle, color: selectedMapId ? "#fff" : "#888" }}
+            >
+              <option value="">
+                {loadingMaps
+                  ? "Loading maps…"
+                  : maps.length === 0
+                  ? "No maps for this city"
+                  : "Select a map…"}
+              </option>
+              {maps.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.is_active ? " • published" : ""}
+                </option>
+              ))}
+            </select>
+
+            {!selectedMap && maps.length > 0 && (
+              <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 10 }}>
+                Pick a map to edit its zones and boundary.
+              </p>
+            )}
 
         {selectedMap && (
           <div
@@ -994,6 +998,8 @@ export default function ZoneBuilder() {
             </div>
           </div>
         )}
+          </>
+        )}
 
         {message && (
           <div
@@ -1209,3 +1215,19 @@ const secondaryFullBtnStyle: React.CSSProperties = {
   width: "100%",
   marginTop: 10,
 };
+
+// Segmented-control button (Open existing / Create new). Active tab is filled.
+function segBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    background: active ? "#222" : "transparent",
+    color: active ? "#fff" : "#888",
+    border: "none",
+    borderRadius: 7,
+    padding: "8px 12px",
+    fontWeight: 700,
+    fontSize: "0.82rem",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  };
+}
