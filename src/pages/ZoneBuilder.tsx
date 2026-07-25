@@ -85,6 +85,10 @@ export default function ZoneBuilder() {
   const [pendingBoundary, setPendingBoundary] = useState<GeoJSON.Geometry | null>(null);
   const pendingBoundaryDrawId = useRef<string | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
+  // True from the moment a boundary redraw starts until it's saved or cancelled.
+  // While true we hide the previously-saved boundary (and its gap) so you draw
+  // the new frame on a clean canvas, not on top of the old one.
+  const [redrawingBoundary, setRedrawingBoundary] = useState(false);
 
   // Panel mode: work on an existing map, or create a new one. These are
   // alternatives — only one shows at a time so they don't read as one flow.
@@ -104,14 +108,17 @@ export default function ZoneBuilder() {
   );
 
   // Coverage gap: the part of the map boundary not yet covered by any zone.
+  // Suppressed while redrawing the boundary — the reference frame is hidden then.
   const gapFeature = useMemo(() => {
+    if (redrawingBoundary) return null;
     const b = selectedMap?.boundary ? parseGeometry(selectedMap.boundary) : null;
     if (!b) return null;
     return computeGap(b, zones);
-  }, [selectedMap?.boundary, zones]);
+  }, [selectedMap?.boundary, zones, redrawingBoundary]);
 
-  // Percent of the boundary still uncovered (null when no boundary).
+  // Percent of the boundary still uncovered (null when no boundary / redrawing).
   const gapPercent = useMemo(() => {
+    if (redrawingBoundary) return null;
     const b = selectedMap?.boundary ? parseGeometry(selectedMap.boundary) : null;
     const bf = b ? toPolyFeature(b) : null;
     if (!bf) return null;
@@ -119,7 +126,7 @@ export default function ZoneBuilder() {
     if (total <= 0) return null;
     const gapArea = gapFeature ? area(gapFeature) : 0;
     return Math.max(0, Math.min(100, Math.round((gapArea / total) * 100)));
-  }, [selectedMap?.boundary, gapFeature]);
+  }, [selectedMap?.boundary, gapFeature, redrawingBoundary]);
 
   // ---- Load maps for the current city ----
   useEffect(() => {
@@ -181,6 +188,17 @@ export default function ZoneBuilder() {
     return () => {
       cancelled = true;
     };
+  }, [selectedMapId]);
+
+  // ---- Drop any in-progress drawing when the selected map changes ----
+  useEffect(() => {
+    draw.current?.deleteAll();
+    pendingDrawId.current = null;
+    pendingBoundaryDrawId.current = null;
+    setPendingGeometry(null);
+    setPendingBoundary(null);
+    setRedrawingBoundary(false);
+    setOverrideOverlap(false);
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -340,10 +358,12 @@ export default function ZoneBuilder() {
       features: labelFeatures,
     });
 
-    // Boundary.
-    const boundaryGeom = selectedMap?.boundary
-      ? parseGeometry(selectedMap.boundary)
-      : null;
+    // Boundary — hidden while redrawing, so the old frame doesn't sit under the
+    // new one being drawn.
+    const boundaryGeom =
+      selectedMap?.boundary && !redrawingBoundary
+        ? parseGeometry(selectedMap.boundary)
+        : null;
     (map.current.getSource(SRC_BOUNDARY) as mapboxgl.GeoJSONSource)?.setData(
       boundaryGeom
         ? {
@@ -381,7 +401,7 @@ export default function ZoneBuilder() {
         /* ignore malformed geometry */
       }
     }
-  }, [zones, selectedMap, selectedMapId, mapReady]);
+  }, [zones, selectedMap, selectedMapId, mapReady, redrawingBoundary]);
 
   // ---- Push the coverage gap onto the map whenever it changes ----
   useEffect(() => {
@@ -413,6 +433,7 @@ export default function ZoneBuilder() {
     cancelPending();
     cancelPendingBoundary();
     drawTarget.current = "boundary";
+    setRedrawingBoundary(true); // hide the old frame while drawing the new one
     draw.current?.changeMode("draw_polygon");
     setMessage("Draw the map's outer frame; double-click (or Enter) to finish.");
   }
@@ -427,6 +448,7 @@ export default function ZoneBuilder() {
     }
     pendingBoundaryDrawId.current = null;
     setPendingBoundary(null);
+    setRedrawingBoundary(false); // restore the saved frame (cancel) or show new (save)
   }
 
   async function saveBoundary() {
