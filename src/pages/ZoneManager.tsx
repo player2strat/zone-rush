@@ -7,6 +7,7 @@ interface ZoneDraft {
   district_number: number;
   name: string;
   city: string;
+  map_id?: string;              // the one map this zone belongs to (preserved on save)
   boundary: any;
   center_lat: number;
   center_lng: number;
@@ -173,8 +174,13 @@ export default function ZoneManager() {
     setMessage("Saving...");
     try {
       for (const zone of zones) {
+        // Only include map_id in the write if the zone already has one, so an
+        // undefined value never reaches Firestore. merge:true preserves map_id
+        // (and any other fields not written here) rather than stripping them.
+        const mapIdField = zone.map_id ? { map_id: zone.map_id } : {};
         await setDoc(doc(db, "zones", zone.id), {
           id: zone.id,
+          ...mapIdField,
           district_number: zone.district_number,
           name: zone.name,
           city: zone.city,
@@ -194,7 +200,7 @@ export default function ZoneManager() {
             .map((t: string) => t.trim())
             .filter(Boolean),
           difficulty_rating: zone.difficulty_rating,
-        });
+        }, { merge: true });
       }
 
       // Update city document with all zone IDs
