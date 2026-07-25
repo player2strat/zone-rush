@@ -19,6 +19,9 @@ export interface Zone {
   id: string
   name: string
   city: string
+  map_id: string                  // REQUIRED — the one map this zone belongs to. Zones are
+                                  // NEVER shared across maps; a neighborhood needed in two
+                                  // maps is two separate zone docs with different ids. (v11)
   borough?: string                // "Brooklyn" | "Manhattan" — added in v10
   district_number?: number        // Brooklyn zones (Council Districts). Optional for Manhattan.
   nta_code?: string               // Manhattan zones (NTA code, e.g. "MN27"). Optional for Brooklyn.
@@ -30,6 +33,27 @@ export interface Zone {
   transit_lines: string[]
   landmarks: string[]
   difficulty_rating: number
+}
+
+// ─── Map (top-level `maps` collection) ───────────────────────────────────────
+// One doc per named, selectable map (e.g. "Brooklyn Alpha", "Manhattan Full
+// Borough"). A map OWNS its zones via the zone's `map_id` — there is no
+// `zone_ids` array here. Replaces the legacy `map_sets` collection. (v11)
+
+export interface GameMap {
+  id: string
+  name: string
+  city: string                    // e.g. "nyc"
+  is_active: boolean
+  created_at: any                 // Firestore Timestamp
+
+  // Optional display/metadata — carried over from legacy map_sets. Used by the
+  // CreateGame map-picker cards and for centering the map on this area.
+  description?: string
+  borough?: string
+  map_center?: { lat: number; lng: number; zoom: number }
+  recommended_teams?: number
+  recommended_duration?: number
 }
 
 // ─── Challenge ───────────────────────────────────────────────────────────────
@@ -123,7 +147,7 @@ export interface Game {
   max_teams: number               // Maximum number of teams allowed
   zones: string[]                 // Active zone IDs for this game
   closed_zones?: string[]         // Zone IDs that have been closed during gameplay
-  map_set_id?: string | null      // Which map_set was used (null for custom)
+  map_id?: string | null          // Which map this game was created from (v11; replaces map_set_id)
   started_at: any                 // Firestore Timestamp
   ends_at: any                    // Firestore Timestamp
   created_at?: any                // Firestore Timestamp
