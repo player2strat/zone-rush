@@ -12,7 +12,15 @@
 // =============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
@@ -77,6 +85,14 @@ export default function ZoneBuilder() {
   const [pendingBoundary, setPendingBoundary] = useState<GeoJSON.Geometry | null>(null);
   const pendingBoundaryDrawId = useRef<string | null>(null);
   const [savingBoundary, setSavingBoundary] = useState(false);
+
+  // New-map creation + publishing.
+  const [creatingOpen, setCreatingOpen] = useState(false);
+  const [newMapName, setNewMapName] = useState("");
+  const [newMapBorough, setNewMapBorough] = useState("");
+  const [newMapDesc, setNewMapDesc] = useState("");
+  const [creatingBusy, setCreatingBusy] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
@@ -270,7 +286,6 @@ export default function ZoneBuilder() {
       map.current = null;
       draw.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A polygon was finished — route it to the zone form or the boundary confirm,
@@ -437,6 +452,76 @@ export default function ZoneBuilder() {
     setSavingBoundary(false);
   }
 
+  // ---- New map + publish ----
+
+  async function createMap() {
+    const name = newMapName.trim();
+    if (!name) {
+      setMessage("Error: give the map a name.");
+      return;
+    }
+    setCreatingBusy(true);
+    try {
+      const id = `map_${slugify(name)}_${Date.now().toString(36)}`;
+      const mapDoc: Record<string, unknown> = {
+        id,
+        name,
+        city: cityId,
+        is_active: false,
+        created_at: serverTimestamp(),
+        map_center: defaultCenterFor(cityId),
+      };
+      if (newMapBorough.trim()) mapDoc.borough = newMapBorough.trim();
+      if (newMapDesc.trim()) mapDoc.description = newMapDesc.trim();
+      await setDoc(doc(db, "maps", id), mapDoc);
+
+      // Reflect locally and open the new (empty) map.
+      setMaps((prev) =>
+        [...prev, { id, name, is_active: false, map_center: mapDoc.map_center as MapOption["map_center"] }].sort(
+          (a, b) => a.name.localeCompare(b.name)
+        )
+      );
+      setSelectedMapId(id);
+      setCreatingOpen(false);
+      setNewMapName("");
+      setNewMapBorough("");
+      setNewMapDesc("");
+      setMessage(`Created map "${name}". Draw its boundary and zones.`);
+    } catch (err) {
+      setMessage("Error creating map: " + (err as Error).message);
+    }
+    setCreatingBusy(false);
+  }
+
+  async function togglePublish() {
+    if (!selectedMap) return;
+    const next = !selectedMap.is_active;
+    // Publishing with uncovered gaps is allowed, but worth a heads-up.
+    if (next && gapPercent !== null && gapPercent > 0) {
+      const ok = window.confirm(
+        `This map still has ~${gapPercent}% uncovered space. Publish anyway?`
+      );
+      if (!ok) return;
+    }
+    setPublishing(true);
+    try {
+      await setDoc(
+        doc(db, "maps", selectedMap.id),
+        { is_active: next },
+        { merge: true }
+      );
+      setMaps((prev) =>
+        prev.map((m) =>
+          m.id === selectedMap.id ? { ...m, is_active: next } : m
+        )
+      );
+      setMessage(next ? "Map published — it's now selectable." : "Map unpublished.");
+    } catch (err) {
+      setMessage("Error updating publish state: " + (err as Error).message);
+    }
+    setPublishing(false);
+  }
+
   // Remove the pending drawn feature and reset the form.
   function cancelPending() {
     if (pendingDrawId.current) {
@@ -552,6 +637,82 @@ export default function ZoneBuilder() {
           ))}
         </select>
 
+        {/* New map */}
+        {!creatingOpen && (
+          <button
+            onClick={() => setCreatingOpen(true)}
+            style={{ ...secondaryFullBtnStyle, marginTop: 10 }}
+          >
+            + New map
+          </button>
+        )}
+        {creatingOpen && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid #1a1a1a",
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>New map</div>
+            <label style={labelStyle}>Name</label>
+            <input
+              value={newMapName}
+              onChange={(e) => setNewMapName(e.target.value)}
+              placeholder="e.g. Brooklyn Alpha"
+              style={inputStyle}
+              autoFocus
+            />
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Borough (optional)
+            </label>
+            <input
+              value={newMapBorough}
+              onChange={(e) => setNewMapBorough(e.target.value)}
+              placeholder="Brooklyn"
+              style={inputStyle}
+            />
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Description (optional)
+            </label>
+            <input
+              value={newMapDesc}
+              onChange={(e) => setNewMapDesc(e.target.value)}
+              placeholder="Short blurb for the map picker"
+              style={inputStyle}
+            />
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button
+                onClick={createMap}
+                disabled={creatingBusy}
+                style={{
+                  ...primaryBtnStyle,
+                  marginTop: 0,
+                  flex: 1,
+                  opacity: creatingBusy ? 0.6 : 1,
+                  cursor: creatingBusy ? "not-allowed" : "pointer",
+                }}
+              >
+                {creatingBusy ? "Creating…" : "Create map"}
+              </button>
+              <button
+                onClick={() => {
+                  setCreatingOpen(false);
+                  setNewMapName("");
+                  setNewMapBorough("");
+                  setNewMapDesc("");
+                }}
+                disabled={creatingBusy}
+                style={secondaryBtnStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {selectedMap && (
           <div
             style={{
@@ -583,6 +744,52 @@ export default function ZoneBuilder() {
                   : `~${gapPercent}% uncovered (orange overlay)`}
               </div>
             )}
+            <div
+              style={{
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: "1px solid #1a1a1a",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{
+                  color: selectedMap.is_active ? "#06D6A0" : "#888",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                }}
+              >
+                {selectedMap.is_active ? "● Published" : "○ Draft"}
+              </span>
+              <button
+                onClick={togglePublish}
+                disabled={publishing}
+                style={{
+                  background: selectedMap.is_active
+                    ? "transparent"
+                    : "#06D6A0",
+                  color: selectedMap.is_active ? "#aaa" : "#000",
+                  border: selectedMap.is_active
+                    ? "1px solid #333"
+                    : "none",
+                  borderRadius: 7,
+                  padding: "7px 14px",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: publishing ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                  opacity: publishing ? 0.6 : 1,
+                }}
+              >
+                {publishing
+                  ? "…"
+                  : selectedMap.is_active
+                  ? "Unpublish"
+                  : "Publish map"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -821,6 +1028,27 @@ export default function ZoneBuilder() {
 
 function emptyFC(): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features: [] };
+}
+
+function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "map"
+  );
+}
+
+// Rough default center so a brand-new map is selectable/centered before its
+// boundary is drawn. NYC-only today; extend when more cities exist.
+function defaultCenterFor(cityId: string): {
+  lat: number;
+  lng: number;
+  zoom: number;
+} {
+  if (cityId === "nyc") return { lat: 40.7128, lng: -74.006, zoom: 12 };
+  return { lat: 40.7128, lng: -74.006, zoom: 11 };
 }
 
 function splitTags(s: string): string[] {
