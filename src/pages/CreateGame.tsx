@@ -689,23 +689,37 @@ export default function CreateGame() {
                   </button>
                 </div>
 
-                {/* Zone count */}
-                {selectedZones.length > 0 && (
+                {/* Zone count + bulk select/clear. Shown whenever the map has
+                    zones, so the controls never disappear at zero selected. */}
+                {visibleZones.length > 0 && (
                   <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     marginBottom: 14,
                   }}>
-                    <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600 }}>
-                      {selectedZones.length} zone{selectedZones.length !== 1 ? 's' : ''} selected
+                    <span style={{
+                      color: selectedZones.length > 0 ? '#06D6A0' : '#666',
+                      fontSize: '0.82rem', fontWeight: 600,
+                    }}>
+                      {selectedZones.length} of {visibleZones.length} zone{visibleZones.length !== 1 ? 's' : ''} selected
                     </span>
-                    {selectedZones.length < visibleZones.length && (
-                      <button
-                        onClick={() => setSelectedZones(visibleZones.map((z) => z.id))}
-                        style={ghostBtnStyle}
-                      >
-                        Select all
-                      </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {selectedZones.length < visibleZones.length && (
+                        <button
+                          onClick={() => setSelectedZones(visibleZones.map((z) => z.id))}
+                          style={ghostBtnStyle}
+                        >
+                          Select all
+                        </button>
+                      )}
+                      {selectedZones.length > 0 && (
+                        <button
+                          onClick={() => setSelectedZones([])}
+                          style={ghostBtnStyle}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
