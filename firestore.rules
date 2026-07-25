@@ -1,0 +1,95 @@
+rules_version = '2';
+
+// =============================================================================
+// Zone Rush — Firestore security rules
+//
+// Source of truth for these rules. To deploy: paste into the Firebase console
+// (Firestore Database → Rules → Publish), or `firebase deploy --only
+// firestore:rules` once the Firebase CLI is configured.
+//
+// Model:
+//   - CONTENT collections (cities, zones, maps, map_sets, challenges) are
+//     readable by any signed-in user but writable ONLY by admin/GM. These hold
+//     the game library and are edited from admin tools.
+//   - GAMEPLAY collections (games and their subcollections, submissions) stay
+//     writable by any signed-in user, because players legitimately write them
+//     during a game (joining teams, submitting proof, messaging, etc.).
+//   - users/{uid}: each user manages only their own doc.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // True when the signed-in user's users/{uid} doc has role admin or gm.
+    function isAdminOrGm() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'gm'];
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Each user manages only their own profile/role doc.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ---- Content: read by any signed-in user, write only by admin/GM --------
+    match /cities/{cityId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+    match /zones/{zoneId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+    match /maps/{mapId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+    match /map_sets/{setId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+    match /challenges/{challengeId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+
+    // ---- Gameplay: any signed-in user (players write these mid-game) --------
+    match /games/{gameId} {
+      allow read, write: if signedIn();
+
+      match /teams/{teamId} {
+        allow read, write: if signedIn();
+
+        match /sequential_progress/{progressId} {
+          allow read, write: if signedIn();
+        }
+      }
+
+      match /zone_scores/{scoreId} {
+        allow read, write: if signedIn();
+      }
+
+      match /messages/{messageId} {
+        allow read, write: if signedIn();
+      }
+
+      match /events/{eventId} {
+        allow read, write: if signedIn();
+      }
+    }
+
+    match /submissions/{submissionId} {
+      allow read, write: if signedIn();
+    }
+
+    // Collection-group read for teams (cross-game team lookups).
+    match /{path=**}/teams/{teamId} {
+      allow read: if signedIn();
+    }
+  }
+}

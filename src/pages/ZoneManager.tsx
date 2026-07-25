@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
-import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, deleteDoc, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
+
+interface MapOption {
+  id: string;
+  name: string;
+}
 
 interface ZoneDraft {
   id: string;
@@ -27,6 +32,10 @@ export default function ZoneManager() {
   const [cityId, setCityId] = useState("nyc");
   const [cityName, setCityName] = useState("New York City");
 
+  // Maps for the current city — used to assign newly-imported zones to a map.
+  const [maps, setMaps] = useState<MapOption[]>([]);
+  const [assignMapId, setAssignMapId] = useState(""); // map applied to zones that don't have one yet
+
   // Load existing zones from Firestore
   useEffect(() => {
     async function loadZones() {
@@ -51,6 +60,29 @@ export default function ZoneManager() {
     }
     loadZones();
   }, []);
+
+  // Load the maps available for the current city (for the assign-to-map picker)
+  useEffect(() => {
+    async function loadMaps() {
+      try {
+        const snap = await getDocs(
+          query(collection(db, "maps"), where("city", "==", cityId))
+        );
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          name: (d.data().name as string) || d.id,
+        }));
+        setMaps(list);
+        // Default the picker to the only map, if there's exactly one
+        setAssignMapId((prev) =>
+          prev && list.some((m) => m.id === prev) ? prev : list.length === 1 ? list[0].id : ""
+        );
+      } catch (err) {
+        console.error("Failed to load maps:", err);
+      }
+    }
+    loadMaps();
+  }, [cityId]);
 
   // Handle GeoJSON file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -170,14 +202,24 @@ export default function ZoneManager() {
 
   // Save all zones to Firestore
   const saveAll = async () => {
+    // Every zone must belong to a map. Zones without one get the picked map;
+    // if any zone still has no map, block the save rather than create orphans.
+    const zonesMissingMap = zones.filter((z) => !z.map_id);
+    if (zonesMissingMap.length > 0 && !assignMapId) {
+      setMessage(
+        `Pick a map to assign the ${zonesMissingMap.length} unassigned zone(s) before saving.`
+      );
+      return;
+    }
+
     setSaving(true);
     setMessage("Saving...");
     try {
       for (const zone of zones) {
-        // Only include map_id in the write if the zone already has one, so an
-        // undefined value never reaches Firestore. merge:true preserves map_id
-        // (and any other fields not written here) rather than stripping them.
-        const mapIdField = zone.map_id ? { map_id: zone.map_id } : {};
+        // Keep an existing map_id; otherwise assign the picked map. merge:true
+        // preserves map_id (and other unlisted fields) rather than stripping them.
+        const effectiveMapId = zone.map_id || assignMapId;
+        const mapIdField = effectiveMapId ? { map_id: effectiveMapId } : {};
         await setDoc(doc(db, "zones", zone.id), {
           id: zone.id,
           ...mapIdField,
@@ -221,8 +263,10 @@ export default function ZoneManager() {
       });
 
       setMessage(`Saved ${zones.length} zones + city config to Firestore.`);
-      // Clear the "new" flag
-      setZones((prev) => prev.map((z) => ({ ...z, isNew: false })));
+      // Clear the "new" flag and reflect any just-assigned map_id
+      setZones((prev) =>
+        prev.map((z) => ({ ...z, map_id: z.map_id || assignMapId, isNew: false }))
+      );
     } catch (err) {
       setMessage("Error saving: " + (err as Error).message);
     }
@@ -323,6 +367,43 @@ export default function ZoneManager() {
                 width: 200,
               }}
             />
+          </div>
+          <div>
+            <label
+              style={{
+                fontSize: "0.75rem",
+                color: "#666",
+                display: "block",
+                marginBottom: 4,
+              }}
+            >
+              Assign new zones to map
+            </label>
+            <select
+              value={assignMapId}
+              onChange={(e) => setAssignMapId(e.target.value)}
+              style={{
+                background: "#111",
+                border: "1px solid #333",
+                color: assignMapId ? "#fff" : "#888",
+                padding: "8px 12px",
+                borderRadius: 8,
+                fontSize: "0.9rem",
+                width: 240,
+              }}
+            >
+              <option value="">
+                {maps.length === 0 ? "No maps for this city" : "Select a map…"}
+              </option>
+              {maps.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 4, maxWidth: 240 }}>
+              Applied to zones that don't already belong to a map. Existing zones keep theirs.
+            </p>
           </div>
         </div>
 
@@ -459,6 +540,28 @@ export default function ZoneManager() {
                     NEW
                   </span>
                 )}
+                {(() => {
+                  // Show the zone's map: its own, or the one it'll be assigned on save.
+                  const mid = zone.map_id || (assignMapId || "");
+                  const label = mid
+                    ? maps.find((m) => m.id === mid)?.name || mid
+                    : "no map";
+                  const pending = !zone.map_id && !!assignMapId;
+                  return (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: "0.7rem",
+                        color: mid ? "#06D6A0" : "#EF476F",
+                        background: mid ? "rgba(6,214,160,0.12)" : "rgba(239,71,111,0.12)",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      🗺 {label}{pending ? " (on save)" : ""}
+                    </span>
+                  );
+                })()}
               </div>
               <span
                 style={{
