@@ -28,19 +28,21 @@ import { db, auth } from '../lib/firebase'
 interface ZoneDoc {
   id: string
   name: string
+  map_id: string                  // the one map this zone belongs to
   district_number?: number
   borough?: string
   city: string
 }
 
-interface MapSetDoc {
+// A selectable map from the top-level `maps` collection. A map OWNS its zones
+// via zone.map_id — there is no zone_ids array here.
+interface MapDoc {
   id: string
   name: string
-  description: string
+  description?: string
   city: string
-  borough: string
-  zone_ids: string[]
-  map_center: { lat: number; lng: number; zoom: number }
+  borough?: string
+  map_center?: { lat: number; lng: number; zoom: number }
   is_active: boolean
   recommended_teams?: number
   recommended_duration?: number
@@ -118,10 +120,10 @@ export default function CreateGame() {
   const [loadingZones, setLoadingZones] = useState(true)
   const [cityFilter, setCityFilter] = useState('nyc')
 
-  // Map sets
-  const [mapSets, setMapSets] = useState<MapSetDoc[]>([])
-  const [selectedMapSet, setSelectedMapSet] = useState<string | null>(null) // null = no selection yet, 'custom' = custom mode
-  const [loadingMapSets, setLoadingMapSets] = useState(true)
+  // Maps (one selectable map per game — no cross-map assembly)
+  const [maps, setMaps] = useState<MapDoc[]>([])
+  const [selectedMapId, setSelectedMapId] = useState<string | null>(null) // null = no map picked yet
+  const [loadingMaps, setLoadingMaps] = useState(true)
 
   // Closure schedule
   const [zoneCloseMinutes, setZoneCloseMinutes] = useState<Record<string, string>>({})
@@ -185,29 +187,29 @@ export default function CreateGame() {
   }
 
   // ---------------------------------------------------------------------------
-  // Load map_sets on mount
+  // Load maps on mount / city change
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    async function loadMapSets() {
-      setLoadingMapSets(true)
+    async function loadMaps() {
+      setLoadingMaps(true)
       try {
         const q = query(
-          collection(db, 'map_sets'),
+          collection(db, 'maps'),
           where('city', '==', cityFilter),
           where('is_active', '==', true)
         )
         const snapshot = await getDocs(q)
-        const sets: MapSetDoc[] = []
+        const list: MapDoc[] = []
         snapshot.forEach((d) => {
-          sets.push({ id: d.id, ...d.data() } as MapSetDoc)
+          list.push({ id: d.id, ...d.data() } as MapDoc)
         })
-        setMapSets(sets)
+        setMaps(list)
       } catch (err: any) {
-        console.error('Failed to load map_sets:', err)
+        console.error('Failed to load maps:', err)
       }
-      setLoadingMapSets(false)
+      setLoadingMaps(false)
     }
-    loadMapSets()
+    loadMaps()
   }, [cityFilter])
 
   // ---------------------------------------------------------------------------
@@ -225,6 +227,7 @@ export default function CreateGame() {
           zoneDocs.push({
             id: d.id,
             name: data.name,
+            map_id: data.map_id,
             district_number: data.district_number,
             borough: data.borough,
             city: data.city,
@@ -237,7 +240,7 @@ export default function CreateGame() {
         })
         setZones(zoneDocs)
         setSelectedZones([])
-        setSelectedMapSet(null)
+        setSelectedMapId(null)
       } catch (err: any) {
         setError('Failed to load zones: ' + err.message)
       }
@@ -247,26 +250,19 @@ export default function CreateGame() {
   }, [cityFilter])
 
   // ---------------------------------------------------------------------------
-  // Map set selection — auto-populates zones
+  // Map selection — auto-populates zones from that map's zones ONLY.
+  // Zones come exclusively from zone.map_id === mapId; no cross-map assembly.
   // ---------------------------------------------------------------------------
-  const handleSelectMapSet = (mapSetId: string) => {
-    if (mapSetId === 'custom') {
-      setSelectedMapSet('custom')
-      setSelectedZones([])
-      setZoneCloseMinutes({})
-      return
-    }
-    const ms = mapSets.find((m) => m.id === mapSetId)
-    if (!ms) return
-
-    setSelectedMapSet(mapSetId)
-    setSelectedZones(ms.zone_ids.filter((zid) => zones.some((z) => z.id === zid)))
+  const handleSelectMap = (mapId: string) => {
+    if (!maps.some((m) => m.id === mapId)) return
+    setSelectedMapId(mapId)
+    setSelectedZones(zones.filter((z) => z.map_id === mapId).map((z) => z.id))
     setZoneCloseMinutes({})
   }
 
-  // Go back to map set picker (reset zone selection)
-  const handleChangeMapSet = () => {
-    setSelectedMapSet(null)
+  // Go back to the map picker (reset zone selection)
+  const handleChangeMap = () => {
+    setSelectedMapId(null)
     setSelectedZones([])
     setZoneCloseMinutes({})
   }
@@ -277,13 +273,17 @@ export default function CreateGame() {
     )
   }
 
-  // Zones to show based on current map set selection
-  const visibleZones = (() => {
-    if (selectedMapSet === 'custom') return zones
-    const ms = mapSets.find((m) => m.id === selectedMapSet)
-    if (!ms) return []
-    return zones.filter((z) => ms.zone_ids.includes(z.id))
-  })()
+  // Zone count per map (for the picker cards). Derived from loaded zones —
+  // no zone_ids array on the map anymore.
+  const zoneCountByMap = zones.reduce<Record<string, number>>((acc, z) => {
+    if (z.map_id) acc[z.map_id] = (acc[z.map_id] || 0) + 1
+    return acc
+  }, {})
+
+  // Zones to show for the selected map — that map's zones only.
+  const visibleZones = selectedMapId
+    ? zones.filter((z) => z.map_id === selectedMapId)
+    : []
 
   // Group visible zones by borough
   const visibleZonesByBorough = visibleZones.reduce<Record<string, ZoneDoc[]>>((acc, z) => {
@@ -313,8 +313,8 @@ export default function CreateGame() {
   const step1Valid = gameName.trim().length > 0
   const step2Valid = selectedZones.length > 0
 
-  // Get the active map set (for display)
-  const activeMapSet = mapSets.find((m) => m.id === selectedMapSet) || null
+  // Get the active map (for display)
+  const activeMap = maps.find((m) => m.id === selectedMapId) || null
 
   // ---------------------------------------------------------------------------
   // Create Game
@@ -342,7 +342,7 @@ export default function CreateGame() {
         max_teams: maxTeams,
         zones: selectedZones,
         closed_zones: [],
-        map_set_id: selectedMapSet === 'custom' ? null : selectedMapSet,
+        map_id: selectedMapId,
         started_at: null,
         ends_at: null,
         created_at: new Date(),
@@ -579,8 +579,8 @@ export default function CreateGame() {
         ============================================================== */}
         {step === 2 && (
           <div>
-            {/* ----- STAGE 1: Pick a map set (no map set selected yet) ----- */}
-            {selectedMapSet === null && (
+            {/* ----- STAGE 1: Pick a map (no map selected yet) ----- */}
+            {selectedMapId === null && (
               <div>
                 <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
                   Pick a Map
@@ -589,15 +589,19 @@ export default function CreateGame() {
                   Choose which area to play in
                 </p>
 
-                {loadingMapSets || loadingZones ? (
+                {loadingMaps || loadingZones ? (
                   <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading maps...</p>
+                ) : maps.length === 0 ? (
+                  <p style={{ color: '#555', fontSize: '0.85rem' }}>
+                    No maps available for this city yet.
+                  </p>
                 ) : (
                   <div style={{ display: 'grid', gap: 12 }}>
-                    {/* Map set cards */}
-                    {mapSets.map((ms) => (
+                    {/* Map cards */}
+                    {maps.map((m) => (
                       <button
-                        key={ms.id}
-                        onClick={() => handleSelectMapSet(ms.id)}
+                        key={m.id}
+                        onClick={() => handleSelectMap(m.id)}
                         style={{
                           background: 'rgba(255,255,255,0.02)',
                           border: '1px solid #1e1e1e',
@@ -615,69 +619,42 @@ export default function CreateGame() {
                           fontSize: '1rem',
                           marginBottom: 6,
                         }}>
-                          {ms.name}
+                          {m.name}
                         </p>
-                        <p style={{
-                          color: '#666',
-                          fontSize: '0.82rem',
-                          lineHeight: 1.5,
-                          marginBottom: 10,
-                        }}>
-                          {ms.description}
-                        </p>
+                        {m.description && (
+                          <p style={{
+                            color: '#666',
+                            fontSize: '0.82rem',
+                            lineHeight: 1.5,
+                            marginBottom: 10,
+                          }}>
+                            {m.description}
+                          </p>
+                        )}
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <span style={tagStyle('#9B5DE5')}>
-                            {ms.zone_ids.length} zones
+                            {zoneCountByMap[m.id] || 0} zones
                           </span>
-                          <span style={tagStyle('#9B5DE5')}>
-                            {ms.borough}
-                          </span>
-                          {ms.recommended_teams && (
+                          {m.borough && (
+                            <span style={tagStyle('#9B5DE5')}>
+                              {m.borough}
+                            </span>
+                          )}
+                          {m.recommended_teams && (
                             <span style={tagStyle('#555')}>
-                              ~{ms.recommended_teams} teams rec.
+                              ~{m.recommended_teams} teams rec.
                             </span>
                           )}
                         </div>
                       </button>
                     ))}
-
-                    {/* Custom option */}
-                    <button
-                      onClick={() => handleSelectMapSet('custom')}
-                      style={{
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px dashed #333',
-                        borderRadius: 12,
-                        padding: '18px 18px 14px',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <p style={{
-                        color: '#888',
-                        fontWeight: 700,
-                        fontSize: '1rem',
-                        marginBottom: 6,
-                      }}>
-                        Custom
-                      </p>
-                      <p style={{
-                        color: '#555',
-                        fontSize: '0.82rem',
-                        lineHeight: 1.5,
-                      }}>
-                        Hand-pick zones from all available areas
-                      </p>
-                    </button>
                   </div>
                 )}
               </div>
             )}
 
             {/* ----- STAGE 2: Fine-tune zones within the selected map ----- */}
-            {selectedMapSet !== null && (
+            {selectedMapId !== null && (
               <div>
                 {/* Header with selected map + change button */}
                 <div style={{
@@ -686,17 +663,14 @@ export default function CreateGame() {
                 }}>
                   <div>
                     <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
-                      {selectedMapSet === 'custom' ? 'Select Zones' : activeMapSet?.name || 'Zones'}
+                      {activeMap?.name || 'Zones'}
                     </h1>
                     <p style={{ color: '#555', fontSize: '0.85rem' }}>
-                      {selectedMapSet === 'custom'
-                        ? 'Tap to include zones in this game'
-                        : 'All zones included — toggle any off if needed'
-                      }
+                      All zones included — toggle any off if needed
                     </p>
                   </div>
                   <button
-                    onClick={handleChangeMapSet}
+                    onClick={handleChangeMap}
                     style={{
                       background: 'none',
                       border: '1px solid #333',
@@ -724,7 +698,7 @@ export default function CreateGame() {
                     <span style={{ color: '#06D6A0', fontSize: '0.82rem', fontWeight: 600 }}>
                       {selectedZones.length} zone{selectedZones.length !== 1 ? 's' : ''} selected
                     </span>
-                    {selectedMapSet !== 'custom' && selectedZones.length < visibleZones.length && (
+                    {selectedZones.length < visibleZones.length && (
                       <button
                         onClick={() => setSelectedZones(visibleZones.map((z) => z.id))}
                         style={ghostBtnStyle}
@@ -994,11 +968,7 @@ export default function CreateGame() {
               <div style={{ display: 'grid', gap: 6 }}>
                 {[
                   { label: 'Name', value: gameName },
-                  activeMapSet
-                    ? { label: 'Map', value: activeMapSet.name }
-                    : selectedMapSet === 'custom'
-                    ? { label: 'Map', value: 'Custom' }
-                    : null,
+                  activeMap ? { label: 'Map', value: activeMap.name } : null,
                   { label: 'Zones', value: `${selectedZones.length} selected` },
                   { label: 'Teams', value: `${maxTeams} teams × ${teamSize} players` },
                   { label: 'Duration', value: `${durationMinutes} min` },
