@@ -54,8 +54,10 @@ export async function getTeamBonusSummaries(
     const data = d.data()
     const teamId = data.team_id as string
 
-    // Count claimed zones
-    if (data.status === 'claimed') {
+    // Count claimed zones — a locked zone is still owned, so count both.
+    // Must match ResultsPage's standings filter (claimed || locked) so the
+    // displayed "zones claimed" and the bonus winner never disagree.
+    if (data.status === 'claimed' || data.status === 'locked') {
       claimedCounts.set(teamId, (claimedCounts.get(teamId) ?? 0) + 1)
     }
 
