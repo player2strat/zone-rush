@@ -13,6 +13,7 @@ import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
 import ZoneManager from './pages/ZoneManager'
+import ZoneBuilder from './pages/ZoneBuilder'
 import ResultsPage from './pages/ResultsPage.tsx'
 import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
@@ -152,6 +153,7 @@ export default function App() {
         />
         <Route path="/admin/seed" element={<AdminGuard><AdminSeed /></AdminGuard>} />
         <Route path="/admin/zones" element={<AdminGuard><ZoneManager /></AdminGuard>} />
+        <Route path="/admin/zone-builder" element={<AdminGuard><ZoneBuilder /></AdminGuard>} />
         <Route path="/admin/seed-maps" element={<AdminGuard><SeedMaps /></AdminGuard>} />
         <Route path="/results/:gameId" element={<ResultsPage />} />
         <Route path="*" element={<Navigate to="/" />} />
