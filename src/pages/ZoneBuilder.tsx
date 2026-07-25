@@ -20,6 +20,8 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import bbox from "@turf/bbox";
 import center from "@turf/center";
 import intersect from "@turf/intersect";
+import union from "@turf/union";
+import difference from "@turf/difference";
 import area from "@turf/area";
 import { db } from "../lib/firebase";
 import type { Zone } from "../types/game";
@@ -42,11 +44,13 @@ interface MapOption {
 const SRC_ZONES = "zb-saved-zones";
 const SRC_ZONE_LABELS = "zb-zone-labels";
 const SRC_BOUNDARY = "zb-map-boundary";
+const SRC_GAP = "zb-coverage-gap";
 
 export default function ZoneBuilder() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
+  const drawTarget = useRef<"zone" | "boundary" | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const fittedMapRef = useRef<string>("");
 
@@ -69,6 +73,11 @@ export default function ZoneBuilder() {
   const [saving, setSaving] = useState(false);
   const [overrideOverlap, setOverrideOverlap] = useState(false);
 
+  // Pending map-boundary awaiting confirmation.
+  const [pendingBoundary, setPendingBoundary] = useState<GeoJSON.Geometry | null>(null);
+  const pendingBoundaryDrawId = useRef<string | null>(null);
+  const [savingBoundary, setSavingBoundary] = useState(false);
+
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
   // Real (non-sliver) overlaps between the pending zone and each saved zone.
@@ -76,6 +85,24 @@ export default function ZoneBuilder() {
     () => (pendingGeometry ? computeOverlaps(pendingGeometry, zones) : []),
     [pendingGeometry, zones]
   );
+
+  // Coverage gap: the part of the map boundary not yet covered by any zone.
+  const gapFeature = useMemo(() => {
+    const b = selectedMap?.boundary ? parseGeometry(selectedMap.boundary) : null;
+    if (!b) return null;
+    return computeGap(b, zones);
+  }, [selectedMap?.boundary, zones]);
+
+  // Percent of the boundary still uncovered (null when no boundary).
+  const gapPercent = useMemo(() => {
+    const b = selectedMap?.boundary ? parseGeometry(selectedMap.boundary) : null;
+    const bf = b ? toPolyFeature(b) : null;
+    if (!bf) return null;
+    const total = area(bf);
+    if (total <= 0) return null;
+    const gapArea = gapFeature ? area(gapFeature) : 0;
+    return Math.max(0, Math.min(100, Math.round((gapArea / total) * 100)));
+  }, [selectedMap?.boundary, gapFeature]);
 
   // ---- Load maps for the current city ----
   useEffect(() => {
@@ -187,6 +214,26 @@ export default function ZoneBuilder() {
         paint: { "line-color": "#4C9AFF", "line-width": 1.5 },
       });
 
+      // Coverage gap — uncovered space inside the boundary. Drawn above zone
+      // fills (but below labels) so gaps read clearly while drawing.
+      map.current.addSource(SRC_GAP, { type: "geojson", data: emptyFC() });
+      map.current.addLayer({
+        id: `${SRC_GAP}-fill`,
+        type: "fill",
+        source: SRC_GAP,
+        paint: { "fill-color": "#FF6B35", "fill-opacity": 0.3 },
+      });
+      map.current.addLayer({
+        id: `${SRC_GAP}-line`,
+        type: "line",
+        source: SRC_GAP,
+        paint: {
+          "line-color": "#FF6B35",
+          "line-width": 1,
+          "line-dasharray": [2, 2],
+        },
+      });
+
       // Zone labels at each zone's stored center.
       map.current.addSource(SRC_ZONE_LABELS, {
         type: "geojson",
@@ -226,14 +273,22 @@ export default function ZoneBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A polygon was finished — capture it and open the metadata form. We keep the
-  // feature in the draw layer (so the user sees it) until they save or cancel.
+  // A polygon was finished — route it to the zone form or the boundary confirm,
+  // depending on which "draw" button started it. We keep the feature in the draw
+  // layer (so the user sees it) until they save or cancel.
   function handleDrawCreate(e: { features: GeoJSON.Feature[] }) {
     const f = e.features?.[0];
     if (!f || !f.geometry) return;
-    pendingDrawId.current = f.id != null ? String(f.id) : null;
-    setPendingGeometry(f.geometry);
-    setOverrideOverlap(false);
+    const target = drawTarget.current;
+    drawTarget.current = null;
+    if (target === "boundary") {
+      pendingBoundaryDrawId.current = f.id != null ? String(f.id) : null;
+      setPendingBoundary(f.geometry);
+    } else {
+      pendingDrawId.current = f.id != null ? String(f.id) : null;
+      setPendingGeometry(f.geometry);
+      setOverrideOverlap(false);
+    }
     setMessage("");
   }
 
@@ -312,6 +367,14 @@ export default function ZoneBuilder() {
     }
   }, [zones, selectedMap, selectedMapId, mapReady]);
 
+  // ---- Push the coverage gap onto the map whenever it changes ----
+  useEffect(() => {
+    if (!mapReady || !map.current) return;
+    (map.current.getSource(SRC_GAP) as mapboxgl.GeoJSONSource)?.setData(
+      gapFeature ?? emptyFC()
+    );
+  }, [gapFeature, mapReady]);
+
   // ---- Drawing + saving zones ----
 
   function startDrawZone() {
@@ -319,9 +382,59 @@ export default function ZoneBuilder() {
       setMessage("Error: pick a map first.");
       return;
     }
-    cancelPending(); // clear any half-finished draw
+    cancelPending();
+    cancelPendingBoundary();
+    drawTarget.current = "zone";
     draw.current?.changeMode("draw_polygon");
     setMessage("Click to place points; double-click (or Enter) to finish.");
+  }
+
+  function startDrawBoundary() {
+    if (!selectedMapId) {
+      setMessage("Error: pick a map first.");
+      return;
+    }
+    cancelPending();
+    cancelPendingBoundary();
+    drawTarget.current = "boundary";
+    draw.current?.changeMode("draw_polygon");
+    setMessage("Draw the map's outer frame; double-click (or Enter) to finish.");
+  }
+
+  function cancelPendingBoundary() {
+    if (pendingBoundaryDrawId.current) {
+      try {
+        draw.current?.delete(pendingBoundaryDrawId.current);
+      } catch {
+        /* already gone */
+      }
+    }
+    pendingBoundaryDrawId.current = null;
+    setPendingBoundary(null);
+  }
+
+  async function saveBoundary() {
+    if (!pendingBoundary || !selectedMapId) return;
+    setSavingBoundary(true);
+    try {
+      const boundaryStr = JSON.stringify(pendingBoundary);
+      await setDoc(
+        doc(db, "maps", selectedMapId),
+        { boundary: boundaryStr },
+        { merge: true }
+      );
+      // Reflect locally so the boundary + coverage aid update immediately.
+      setMaps((prev) =>
+        prev.map((m) =>
+          m.id === selectedMapId ? { ...m, boundary: boundaryStr } : m
+        )
+      );
+      cancelPendingBoundary();
+      setMessage("Map boundary saved.");
+    } catch (err) {
+      setMessage("Error saving boundary: " + (err as Error).message);
+    }
+    setSavingBoundary(false);
   }
 
   // Remove the pending drawn feature and reset the form.
@@ -458,14 +571,78 @@ export default function ZoneBuilder() {
                 ? "✓ boundary set"
                 : "no boundary drawn yet"}
             </div>
+            {selectedMap.boundary && gapPercent !== null && (
+              <div
+                style={{
+                  marginTop: 4,
+                  color: gapPercent === 0 ? "#06D6A0" : "#FF6B35",
+                }}
+              >
+                {gapPercent === 0
+                  ? "✓ fully covered"
+                  : `~${gapPercent}% uncovered (orange overlay)`}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Draw a zone / zone metadata form */}
-        {selectedMap && !pendingGeometry && (
-          <button onClick={startDrawZone} style={primaryBtnStyle}>
-            ✏️ Draw a zone
-          </button>
+        {/* Draw actions */}
+        {selectedMap && !pendingGeometry && !pendingBoundary && (
+          <>
+            <button onClick={startDrawZone} style={primaryBtnStyle}>
+              ✏️ Draw a zone
+            </button>
+            <button onClick={startDrawBoundary} style={secondaryFullBtnStyle}>
+              {selectedMap.boundary
+                ? "↺ Redraw map boundary"
+                : "▢ Draw map boundary"}
+            </button>
+          </>
+        )}
+
+        {/* Boundary confirm */}
+        {pendingBoundary && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              background: "rgba(255,209,102,0.06)",
+              border: "1px solid rgba(255,209,102,0.35)",
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>
+              Map boundary
+            </div>
+            <div
+              style={{ color: "#c9b072", fontSize: "0.82rem", marginBottom: 14 }}
+            >
+              Save this shape as the map's outer frame? The coverage overlay
+              measures gaps against it.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={saveBoundary}
+                disabled={savingBoundary}
+                style={{
+                  ...primaryBtnStyle,
+                  marginTop: 0,
+                  flex: 1,
+                  opacity: savingBoundary ? 0.6 : 1,
+                  cursor: savingBoundary ? "not-allowed" : "pointer",
+                }}
+              >
+                {savingBoundary ? "Saving…" : "Save boundary"}
+              </button>
+              <button
+                onClick={cancelPendingBoundary}
+                disabled={savingBoundary}
+                style={secondaryBtnStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
 
         {pendingGeometry && (
@@ -691,6 +868,45 @@ function computeOverlaps(
   return out;
 }
 
+// The uncovered region = boundary minus the union of all zones. Returns null
+// when the boundary is fully covered, or the whole boundary when no zones exist.
+function computeGap(
+  boundaryGeom: GeoJSON.Geometry,
+  zones: Zone[]
+): GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null {
+  const boundary = toPolyFeature(boundaryGeom);
+  if (!boundary) return null;
+
+  const zoneFeatures = zones
+    .map((z) => {
+      const g = parseGeometry(z.boundary);
+      return g ? toPolyFeature(g) : null;
+    })
+    .filter((f): f is GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> => !!f);
+
+  if (zoneFeatures.length === 0) return boundary;
+
+  let merged: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
+  try {
+    merged =
+      zoneFeatures.length === 1
+        ? zoneFeatures[0]
+        : union({ type: "FeatureCollection", features: zoneFeatures });
+  } catch {
+    return boundary;
+  }
+  if (!merged) return boundary;
+
+  try {
+    return difference({
+      type: "FeatureCollection",
+      features: [boundary, merged],
+    });
+  } catch {
+    return boundary;
+  }
+}
+
 // Narrow a geometry to a Polygon/MultiPolygon feature (what the turf ops want).
 function toPolyFeature(
   geom: GeoJSON.Geometry
@@ -758,4 +974,10 @@ const secondaryBtnStyle: React.CSSProperties = {
   fontSize: "0.9rem",
   cursor: "pointer",
   fontFamily: "inherit",
+};
+
+const secondaryFullBtnStyle: React.CSSProperties = {
+  ...secondaryBtnStyle,
+  width: "100%",
+  marginTop: 10,
 };
