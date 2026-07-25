@@ -1,8 +1,10 @@
 // =============================================================================
-// Seed Manhattan Zones + Map Sets
+// Seed Manhattan Zones + Maps (+ map_id migration)
 // Admin page: /admin/seed-maps
-// Seeds ALL 29 Manhattan zones (28 neighborhoods + Central Park) and 2 map_sets.
-// Safe to re-run — uses merge: true.
+// Seeds ALL 29 Manhattan zones (28 neighborhoods + Central Park), seeds the
+// top-level `maps` collection (replaces `map_sets`), and backfills a required
+// `map_id` onto every zone so no zone is shared across maps.
+// Safe to re-run — uses merge: true; map_id backfill is first-wins + idempotent.
 // =============================================================================
 
 import { useState } from 'react'
@@ -455,6 +457,53 @@ const MANHATTAN_ZONES = [
 
 const ALL_MANHATTAN_ZONE_IDS = ["zone_mn_mn25", "zone_mn_mn28", "zone_mn_mn27", "zone_mn_mn24", "zone_mn_mn22", "zone_mn_mn23", "zone_mn_mn50", "zone_mn_mn21", "zone_mn_mn20", "zone_mn_mn13", "zone_mn_mn19", "zone_mn_mn17", "zone_mn_mn31", "zone_mn_mn15", "zone_mn_mn40", "zone_mn_mn14", "zone_mn_mn32", "zone_mn_mn12", "zone_mn_mn33", "zone_mn_mn34", "zone_mn_mn11", "zone_mn_mn09", "zone_mn_mn06", "zone_mn_mn03", "zone_mn_mn04", "zone_mn_mn36", "zone_mn_mn35", "zone_mn_mn01", "zone_mn_centralpark"]
 
+// ---------------------------------------------------------------------------
+// Canonical maps (top-level `maps` collection — replaces `map_sets`).
+//
+// Each map is a named, selectable area. Zones belong to exactly ONE map via
+// their `map_id`; there is no `zone_ids` array on a map. Doc ids are reused
+// verbatim from the legacy map_sets so the port is a clean 1:1.
+// ---------------------------------------------------------------------------
+const MAP_MANHATTAN_ID = 'manhattan_neighborhoods'
+const MAP_BROOKLYN_ID = 'brooklyn_alpha_d33_36'
+
+interface CanonicalMap {
+  id: string
+  name: string
+  description: string
+  city: string
+  borough: string
+  map_center: { lat: number; lng: number; zoom: number }
+  is_active: boolean
+  recommended_teams: number
+  recommended_duration: number
+}
+
+const CANONICAL_MAPS: CanonicalMap[] = [
+  {
+    id: MAP_BROOKLYN_ID,
+    name: 'Brooklyn Alpha (D33–36)',
+    description: 'Original alpha test map — Brooklyn City Council Districts 33, 34, 35, 36.',
+    city: 'nyc',
+    borough: 'Brooklyn',
+    map_center: { lat: 40.6782, lng: -73.9442, zoom: 12 },
+    is_active: true,
+    recommended_teams: 3,
+    recommended_duration: 180,
+  },
+  {
+    id: MAP_MANHATTAN_ID,
+    name: 'Manhattan (Full Borough)',
+    description: '29 zones covering all of Manhattan — Lower Manhattan to Inwood, plus Central Park.',
+    city: 'nyc',
+    borough: 'Manhattan',
+    map_center: { lat: 40.7831, lng: -73.9712, zoom: 12 },
+    is_active: true,
+    recommended_teams: 5,
+    recommended_duration: 180,
+  },
+]
+
 export default function SeedMaps() {
   const [status, setStatus] = useState<string[]>([])
   const [running, setRunning] = useState(false)
@@ -468,6 +517,7 @@ export default function SeedMaps() {
       try {
         await setDoc(doc(db, 'zones', zone.id), {
           id: zone.id,
+          map_id: MAP_MANHATTAN_ID,   // every zone belongs to exactly one map
           nta_code: zone.nta_code,
           name: zone.name,
           full_name: zone.full_name,
@@ -490,62 +540,149 @@ export default function SeedMaps() {
     log(`Manhattan zones: ${created} written`)
   }
 
-  const seedMapSets = async () => {
-    log('--- Seeding map_sets ---')
+  // -------------------------------------------------------------------------
+  // Seed the top-level `maps` collection.
+  //
+  // Writes the two canonical maps, then ports any OTHER legacy map_sets found
+  // in the database into `maps` (dropping their zone_ids array \u2014 membership now
+  // lives on the zone via map_id, backfilled by migrateZoneMapIds below).
+  // -------------------------------------------------------------------------
+  const seedMaps = async () => {
+    log('--- Seeding `maps` collection ---')
 
-    // Brooklyn Alpha: auto-detect existing Brooklyn zone IDs
+    // Canonical maps (Brooklyn Alpha + Manhattan)
+    for (const m of CANONICAL_MAPS) {
+      try {
+        await setDoc(doc(db, 'maps', m.id), {
+          id: m.id,
+          name: m.name,
+          description: m.description,
+          city: m.city,
+          borough: m.borough,
+          map_center: m.map_center,
+          is_active: m.is_active,
+          recommended_teams: m.recommended_teams,
+          recommended_duration: m.recommended_duration,
+          created_at: new Date(),
+        }, { merge: true })
+        log(`  \u2713 map: ${m.name} (${m.id})`)
+      } catch (err: any) {
+        log(`  \u2717 map: ${m.name} \u2014 ${err.message}`)
+      }
+    }
+
+    // Port any additional legacy map_sets (beyond the two canonical ids) so a
+    // production DB with extra map sets doesn't lose them. zone_ids is dropped.
+    try {
+      const legacySnap = await getDocs(collection(db, 'map_sets'))
+      const canonicalIds = new Set(CANONICAL_MAPS.map((m) => m.id))
+      let ported = 0
+      for (const d of legacySnap.docs) {
+        if (canonicalIds.has(d.id)) continue
+        const data = d.data()
+        const rest: Record<string, any> = { ...data }
+        delete rest.zone_ids   // membership now lives on the zone (map_id), not the map
+        await setDoc(doc(db, 'maps', d.id), {
+          ...rest,
+          id: d.id,
+          is_active: data.is_active ?? true,
+          created_at: data.created_at ?? new Date(),
+        }, { merge: true })
+        ported++
+        log(`  \u2713 ported legacy map_set \u2192 map: ${data.name || d.id} (${d.id})`)
+      }
+      if (ported === 0) log('  (no extra legacy map_sets to port)')
+    } catch (err: any) {
+      log(`  \u2717 porting legacy map_sets \u2014 ${err.message}`)
+    }
+
+    log('Maps seeded.')
+  }
+
+  // -------------------------------------------------------------------------
+  // Backfill `map_id` onto every zone (one-time migration).
+  //
+  // Assignment is FIRST-WINS across these passes, so a zone that legacy data
+  // listed under two maps keeps its first assignment and is logged as a
+  // conflict for you to split into a second doc manually \u2014 the script never
+  // duplicates or deletes zones on its own.
+  //
+  //   Pass 1  existing map_sets' zone_ids (data-driven, authoritative)
+  //   Pass 2  known Manhattan zone list        \u2192 manhattan_neighborhoods
+  //   Pass 3  Brooklyn scan (borough/legacy id) \u2192 brooklyn_alpha_d33_36
+  //
+  // Any zone still unassigned afterwards is reported as an orphan.
+  // -------------------------------------------------------------------------
+  const migrateZoneMapIds = async () => {
+    log('--- Backfilling zone.map_id ---')
+
     const zonesSnap = await getDocs(
       query(collection(db, 'zones'), where('city', '==', 'nyc'))
     )
-    const brooklynZoneIds: string[] = []
+    const allZoneIds = new Set(zonesSnap.docs.map((d) => d.id))
+
+    const assignment = new Map<string, string>()   // zoneId -> mapId (first-wins)
+    const conflicts: string[] = []
+
+    const assign = (zoneId: string, mapId: string) => {
+      if (!allZoneIds.has(zoneId)) return           // map lists a zone that doesn't exist
+      const existing = assignment.get(zoneId)
+      if (existing === undefined) {
+        assignment.set(zoneId, mapId)
+      } else if (existing !== mapId) {
+        conflicts.push(`${zoneId}: kept ${existing}, also claimed by ${mapId}`)
+      }
+    }
+
+    // Pass 1 \u2014 existing map_sets (sorted by id for deterministic first-wins)
+    try {
+      const legacySnap = await getDocs(collection(db, 'map_sets'))
+      const sorted = [...legacySnap.docs].sort((a, b) => a.id.localeCompare(b.id))
+      for (const d of sorted) {
+        const ids: string[] = d.data().zone_ids || []
+        for (const zid of ids) assign(zid, d.id)
+      }
+    } catch (err: any) {
+      log(`  \u2717 reading map_sets \u2014 ${err.message}`)
+    }
+
+    // Pass 2 \u2014 known Manhattan zones
+    for (const zid of ALL_MANHATTAN_ZONE_IDS) assign(zid, MAP_MANHATTAN_ID)
+
+    // Pass 3 \u2014 Brooklyn zones (borough=Brooklyn, or legacy non-zone_mn_ ids)
     zonesSnap.forEach((d) => {
       const data = d.data()
       if (data.borough === 'Brooklyn' || (!data.borough && !d.id.startsWith('zone_mn_'))) {
-        brooklynZoneIds.push(d.id)
+        assign(d.id, MAP_BROOKLYN_ID)
       }
     })
 
-    // Brooklyn Alpha map_set
-    try {
-      await setDoc(doc(db, 'map_sets', 'brooklyn_alpha_d33_36'), {
-        id: 'brooklyn_alpha_d33_36',
-        name: 'Brooklyn Alpha (D33\u201336)',
-        description: 'Original alpha test map \u2014 Brooklyn City Council Districts 33, 34, 35, 36.',
-        city: 'nyc',
-        borough: 'Brooklyn',
-        zone_ids: brooklynZoneIds,
-        map_center: { lat: 40.6782, lng: -73.9442, zoom: 12 },
-        is_active: true,
-        recommended_teams: 3,
-        recommended_duration: 180,
-        created_at: new Date(),
-      }, { merge: true })
-      log(`  \u2713 Brooklyn Alpha (${brooklynZoneIds.length} zones)`)
-    } catch (err: any) {
-      log(`  \u2717 Brooklyn Alpha \u2014 ${err.message}`)
+    // Backfill the resolved assignments
+    let written = 0
+    for (const [zoneId, mapId] of assignment) {
+      try {
+        await setDoc(doc(db, 'zones', zoneId), { map_id: mapId }, { merge: true })
+        written++
+      } catch (err: any) {
+        log(`  \u2717 ${zoneId} \u2014 ${err.message}`)
+      }
+    }
+    log(`  \u2713 assigned map_id to ${written} zones`)
+
+    // Report conflicts (shared-across-maps in legacy data)
+    if (conflicts.length > 0) {
+      log(`  \u26a0 ${conflicts.length} zone(s) were claimed by multiple maps (kept first, split manually if needed):`)
+      conflicts.forEach((c) => log(`      ${c}`))
     }
 
-    // Manhattan Full Borough map_set
-    try {
-      await setDoc(doc(db, 'map_sets', 'manhattan_neighborhoods'), {
-        id: 'manhattan_neighborhoods',
-        name: 'Manhattan (Full Borough)',
-        description: '29 zones covering all of Manhattan \u2014 Lower Manhattan to Inwood, plus Central Park.',
-        city: 'nyc',
-        borough: 'Manhattan',
-        zone_ids: ALL_MANHATTAN_ZONE_IDS,
-        map_center: { lat: 40.7831, lng: -73.9712, zoom: 12 },
-        is_active: true,
-        recommended_teams: 5,
-        recommended_duration: 180,
-        created_at: new Date(),
-      }, { merge: true })
-      log(`  \u2713 Manhattan Full Borough (${ALL_MANHATTAN_ZONE_IDS.length} zones)`)
-    } catch (err: any) {
-      log(`  \u2717 Manhattan \u2014 ${err.message}`)
+    // Report orphans (zones with no map after all passes)
+    const orphans = [...allZoneIds].filter((zid) => !assignment.has(zid))
+    if (orphans.length > 0) {
+      log(`  \u26a0 ${orphans.length} zone(s) have NO map_id \u2014 assign a map manually:`)
+      orphans.forEach((zid) => log(`      ${zid}`))
+    } else {
+      log('  \u2713 no orphan zones \u2014 every zone has a map_id')
     }
-
-    log('Map sets seeded.')
   }
 
   const addBoroughToExistingZones = async () => {
@@ -571,12 +708,13 @@ export default function SeedMaps() {
   const runAll = async () => {
     setRunning(true)
     setStatus([])
-    log('Starting seed...')
+    log('Starting seed + migration...')
     await addBoroughToExistingZones()
     await seedManhattanZones()
-    await seedMapSets()
+    await seedMaps()
+    await migrateZoneMapIds()
     log('')
-    log('\u2705 All done! 29 Manhattan zones and map_sets are live.')
+    log('\u2705 All done! `maps` collection seeded and every zone has a map_id.')
     setRunning(false)
   }
 
@@ -593,7 +731,7 @@ export default function SeedMaps() {
           Seed Maps & Zones
         </h1>
         <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 24 }}>
-          Seeds 29 Manhattan zones (28 neighborhoods + Central Park) + 2 map_sets
+          Seeds 29 Manhattan zones + the `maps` collection, and backfills map_id on every zone
         </p>
 
         <div style={{
@@ -608,9 +746,9 @@ export default function SeedMaps() {
           </p>
           {[
             'Add borough: "Brooklyn" to existing zone docs (if missing)',
-            'Create/update 29 Manhattan zones in Firestore (28 neighborhoods + Central Park)',
-            'Create/update "Brooklyn Alpha" map_set (auto-detects existing Brooklyn zones)',
-            'Create/update "Manhattan (Full Borough)" map_set (29 zones)',
+            'Create/update 29 Manhattan zones in Firestore, each stamped with map_id',
+            'Seed the `maps` collection: "Brooklyn Alpha" + "Manhattan (Full Borough)" (+ port any extra legacy map_sets)',
+            'Backfill map_id onto every zone (first-wins; warns on shared/orphan zones)',
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
               <span style={{ color: '#FFD166' }}>{i + 1}.</span>
