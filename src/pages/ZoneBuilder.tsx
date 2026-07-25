@@ -12,10 +12,13 @@
 // =============================================================================
 
 import { useEffect, useRef, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import bbox from "@turf/bbox";
+import center from "@turf/center";
 import { db } from "../lib/firebase";
 import type { Zone } from "../types/game";
 
@@ -37,7 +40,9 @@ const SRC_BOUNDARY = "zb-map-boundary";
 export default function ZoneBuilder() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const draw = useRef<MapboxDraw | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const fittedMapRef = useRef<string>("");
 
   const [cityId, setCityId] = useState("nyc");
   const [maps, setMaps] = useState<MapOption[]>([]);
@@ -46,6 +51,16 @@ export default function ZoneBuilder() {
   const [loadingMaps, setLoadingMaps] = useState(false);
   const [loadingZones, setLoadingZones] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Pending drawn zone awaiting metadata + save.
+  const [pendingGeometry, setPendingGeometry] = useState<GeoJSON.Geometry | null>(null);
+  const pendingDrawId = useRef<string | null>(null);
+  const [zoneName, setZoneName] = useState("");
+  const [cultureTags, setCultureTags] = useState("");
+  const [landmarks, setLandmarks] = useState("");
+  const [transit, setTransit] = useState("");
+  const [difficulty, setDifficulty] = useState(3);
+  const [saving, setSaving] = useState(false);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
@@ -181,14 +196,32 @@ export default function ZoneBuilder() {
         },
       });
 
+      // Polygon drawing. We drive modes from our own buttons, so hide the
+      // default control UI. A finished polygon fires 'draw.create'.
+      draw.current = new MapboxDraw({ displayControlsDefault: false });
+      map.current.addControl(draw.current as unknown as mapboxgl.IControl);
+      map.current.on("draw.create", handleDrawCreate as never);
+
       setMapReady(true);
     });
 
     return () => {
       map.current?.remove();
       map.current = null;
+      draw.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A polygon was finished — capture it and open the metadata form. We keep the
+  // feature in the draw layer (so the user sees it) until they save or cancel.
+  function handleDrawCreate(e: { features: GeoJSON.Feature[] }) {
+    const f = e.features?.[0];
+    if (!f || !f.geometry) return;
+    pendingDrawId.current = f.id != null ? String(f.id) : null;
+    setPendingGeometry(f.geometry);
+    setMessage("");
+  }
 
   // ---- Push zones + boundary onto the map whenever they change ----
   useEffect(() => {
@@ -236,11 +269,16 @@ export default function ZoneBuilder() {
         : emptyFC()
     );
 
-    // Fit to whatever we have (boundary first, else zones).
+    // Fit to whatever we have (boundary first, else zones) — but only once per
+    // map open, so the view doesn't jump every time a zone is saved.
     const fitFeatures = boundaryGeom
       ? [{ type: "Feature", properties: {}, geometry: boundaryGeom }]
       : zoneFeatures;
-    if (fitFeatures.length > 0) {
+    if (
+      selectedMapId &&
+      fittedMapRef.current !== selectedMapId &&
+      fitFeatures.length > 0
+    ) {
       try {
         const [minX, minY, maxX, maxY] = bbox({
           type: "FeatureCollection",
@@ -253,11 +291,75 @@ export default function ZoneBuilder() {
           ],
           { padding: 60, duration: 600, maxZoom: 15 }
         );
+        fittedMapRef.current = selectedMapId;
       } catch {
         /* ignore malformed geometry */
       }
     }
-  }, [zones, selectedMap, mapReady]);
+  }, [zones, selectedMap, selectedMapId, mapReady]);
+
+  // ---- Drawing + saving zones ----
+
+  function startDrawZone() {
+    if (!selectedMapId) {
+      setMessage("Error: pick a map first.");
+      return;
+    }
+    cancelPending(); // clear any half-finished draw
+    draw.current?.changeMode("draw_polygon");
+    setMessage("Click to place points; double-click (or Enter) to finish.");
+  }
+
+  // Remove the pending drawn feature and reset the form.
+  function cancelPending() {
+    if (pendingDrawId.current) {
+      try {
+        draw.current?.delete(pendingDrawId.current);
+      } catch {
+        /* already gone */
+      }
+    }
+    pendingDrawId.current = null;
+    setPendingGeometry(null);
+    setZoneName("");
+    setCultureTags("");
+    setLandmarks("");
+    setTransit("");
+    setDifficulty(3);
+  }
+
+  async function saveZone() {
+    if (!pendingGeometry || !selectedMapId) return;
+    setSaving(true);
+    try {
+      const c = center({ type: "Feature", properties: {}, geometry: pendingGeometry });
+      const [lng, lat] = c.geometry.coordinates;
+      const id = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
+        Math.random() * 1000
+      )}`;
+      const zoneDoc: Zone = {
+        id,
+        map_id: selectedMapId,
+        name: zoneName.trim() || "Untitled zone",
+        city: cityId,
+        boundary: JSON.stringify(pendingGeometry),
+        center_lat: Math.round(lat * 1e6) / 1e6,
+        center_lng: Math.round(lng * 1e6) / 1e6,
+        culture_tags: splitTags(cultureTags),
+        transit_lines: splitTags(transit),
+        landmarks: splitTags(landmarks),
+        difficulty_rating: difficulty,
+      };
+      await setDoc(doc(db, "zones", id), zoneDoc);
+      setZones((prev) => [...prev, zoneDoc]);
+      const savedName = zoneDoc.name;
+      cancelPending();
+      setMessage(`Saved zone "${savedName}".`);
+    } catch (err) {
+      setMessage("Error saving zone: " + (err as Error).message);
+    }
+    setSaving(false);
+  }
 
   return (
     <div
@@ -337,6 +439,106 @@ export default function ZoneBuilder() {
           </div>
         )}
 
+        {/* Draw a zone / zone metadata form */}
+        {selectedMap && !pendingGeometry && (
+          <button onClick={startDrawZone} style={primaryBtnStyle}>
+            ✏️ Draw a zone
+          </button>
+        )}
+
+        {pendingGeometry && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              background: "rgba(76,154,255,0.06)",
+              border: "1px solid rgba(76,154,255,0.3)",
+              borderRadius: 10,
+            }}
+          >
+            <div
+              style={{ fontWeight: 700, marginBottom: 12, fontSize: "0.95rem" }}
+            >
+              New zone
+            </div>
+
+            <label style={labelStyle}>Zone name</label>
+            <input
+              value={zoneName}
+              onChange={(e) => setZoneName(e.target.value)}
+              placeholder="e.g. Prospect Heights"
+              style={inputStyle}
+              autoFocus
+            />
+
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Culture tags (comma-separated)
+            </label>
+            <input
+              value={cultureTags}
+              onChange={(e) => setCultureTags(e.target.value)}
+              placeholder="caribbean, food, art"
+              style={inputStyle}
+            />
+
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Landmarks (comma-separated)
+            </label>
+            <input
+              value={landmarks}
+              onChange={(e) => setLandmarks(e.target.value)}
+              placeholder="Prospect Park, Brooklyn Museum"
+              style={inputStyle}
+            />
+
+            <label style={{ ...labelStyle, marginTop: 12 }}>
+              Transit lines (comma-separated)
+            </label>
+            <input
+              value={transit}
+              onChange={(e) => setTransit(e.target.value)}
+              placeholder="2, 3, B44"
+              style={inputStyle}
+            />
+
+            <label style={{ ...labelStyle, marginTop: 12 }}>Difficulty</label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(parseInt(e.target.value))}
+              style={{ ...inputStyle, width: 90 }}
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button
+                onClick={saveZone}
+                disabled={saving}
+                style={{
+                  ...primaryBtnStyle,
+                  marginTop: 0,
+                  flex: 1,
+                  opacity: saving ? 0.6 : 1,
+                  cursor: saving ? "not-allowed" : "pointer",
+                }}
+              >
+                {saving ? "Saving…" : "Save zone"}
+              </button>
+              <button
+                onClick={cancelPending}
+                disabled={saving}
+                style={secondaryBtnStyle}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {message && (
           <div
             style={{
@@ -372,6 +574,13 @@ function emptyFC(): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features: [] };
 }
 
+function splitTags(s: string): string[] {
+  return s
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
 // Zone/map boundaries are stored as JSON strings (sometimes already-parsed
 // objects on freshly-written docs). Return a usable geometry or null.
 function parseGeometry(raw: unknown): GeoJSON.Geometry | null {
@@ -405,4 +614,30 @@ const inputStyle: React.CSSProperties = {
   fontSize: "0.88rem",
   width: "100%",
   boxSizing: "border-box",
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  marginTop: 16,
+  width: "100%",
+  background: "#06D6A0",
+  color: "#000",
+  border: "none",
+  borderRadius: 8,
+  padding: "11px 16px",
+  fontWeight: 700,
+  fontSize: "0.9rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  color: "#aaa",
+  border: "1px solid #333",
+  borderRadius: 8,
+  padding: "11px 16px",
+  fontWeight: 600,
+  fontSize: "0.9rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
 };
