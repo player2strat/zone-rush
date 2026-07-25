@@ -11,7 +11,7 @@
 // its saved zones + boundary read-only. Drawing/validation land in later steps.
 // =============================================================================
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -19,8 +19,14 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import bbox from "@turf/bbox";
 import center from "@turf/center";
+import intersect from "@turf/intersect";
+import area from "@turf/area";
 import { db } from "../lib/firebase";
 import type { Zone } from "../types/game";
+
+// Overlap smaller than this (square meters) is treated as a drawing-imprecision
+// sliver along a shared border, not a real double-covered area, and is ignored.
+const OVERLAP_TOLERANCE_SQM = 50;
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -61,8 +67,15 @@ export default function ZoneBuilder() {
   const [transit, setTransit] = useState("");
   const [difficulty, setDifficulty] = useState(3);
   const [saving, setSaving] = useState(false);
+  const [overrideOverlap, setOverrideOverlap] = useState(false);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
+
+  // Real (non-sliver) overlaps between the pending zone and each saved zone.
+  const overlaps = useMemo(
+    () => (pendingGeometry ? computeOverlaps(pendingGeometry, zones) : []),
+    [pendingGeometry, zones]
+  );
 
   // ---- Load maps for the current city ----
   useEffect(() => {
@@ -220,6 +233,7 @@ export default function ZoneBuilder() {
     if (!f || !f.geometry) return;
     pendingDrawId.current = f.id != null ? String(f.id) : null;
     setPendingGeometry(f.geometry);
+    setOverrideOverlap(false);
     setMessage("");
   }
 
@@ -326,10 +340,18 @@ export default function ZoneBuilder() {
     setLandmarks("");
     setTransit("");
     setDifficulty(3);
+    setOverrideOverlap(false);
   }
 
   async function saveZone() {
     if (!pendingGeometry || !selectedMapId) return;
+    // Block overlapping saves unless the user explicitly overrode.
+    if (overlaps.length > 0 && !overrideOverlap) {
+      setMessage(
+        "Error: this zone overlaps an existing one. Fix it, or check 'save anyway'."
+      );
+      return;
+    }
     setSaving(true);
     try {
       const c = center({ type: "Feature", properties: {}, geometry: pendingGeometry });
@@ -514,20 +536,70 @@ export default function ZoneBuilder() {
               ))}
             </select>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button
-                onClick={saveZone}
-                disabled={saving}
+            {/* Overlap warning + override */}
+            {overlaps.length > 0 && (
+              <div
                 style={{
-                  ...primaryBtnStyle,
-                  marginTop: 0,
-                  flex: 1,
-                  opacity: saving ? 0.6 : 1,
-                  cursor: saving ? "not-allowed" : "pointer",
+                  marginTop: 14,
+                  padding: "10px 12px",
+                  background: "rgba(239,71,111,0.1)",
+                  border: "1px solid rgba(239,71,111,0.4)",
+                  borderRadius: 8,
+                  fontSize: "0.8rem",
+                  color: "#EF476F",
                 }}
               >
-                {saving ? "Saving…" : "Save zone"}
-              </button>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  ⚠ Overlaps {overlaps.length} saved zone
+                  {overlaps.length > 1 ? "s" : ""}
+                </div>
+                <div style={{ color: "#f2a6ba", lineHeight: 1.5 }}>
+                  {overlaps
+                    .map((o) => `${o.name} (${Math.round(o.areaSqM)} m²)`)
+                    .join(", ")}
+                </div>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 10,
+                    color: "#f2a6ba",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={overrideOverlap}
+                    onChange={(e) => setOverrideOverlap(e.target.checked)}
+                  />
+                  Save anyway (allow overlap)
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              {(() => {
+                const blocked = overlaps.length > 0 && !overrideOverlap;
+                const disabled = saving || blocked;
+                return (
+                  <button
+                    onClick={saveZone}
+                    disabled={disabled}
+                    style={{
+                      ...primaryBtnStyle,
+                      marginTop: 0,
+                      flex: 1,
+                      background: blocked ? "#333" : primaryBtnStyle.background,
+                      color: blocked ? "#888" : primaryBtnStyle.color,
+                      opacity: saving ? 0.6 : 1,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {saving ? "Saving…" : blocked ? "Overlap — blocked" : "Save zone"}
+                  </button>
+                );
+              })()}
               <button
                 onClick={cancelPending}
                 disabled={saving}
@@ -579,6 +651,52 @@ function splitTags(s: string): string[] {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+}
+
+interface Overlap {
+  id: string;
+  name: string;
+  areaSqM: number;
+}
+
+// Real (non-sliver) overlaps between a candidate polygon and each saved zone.
+// A shared border is a line (zero area) and won't register; only genuine
+// double-covered area above the tolerance is reported.
+function computeOverlaps(
+  pending: GeoJSON.Geometry,
+  zones: Zone[]
+): Overlap[] {
+  const out: Overlap[] = [];
+  const pendingFeature = toPolyFeature(pending);
+  if (!pendingFeature) return out;
+  for (const z of zones) {
+    const zg = parseGeometry(z.boundary);
+    const zf = zg ? toPolyFeature(zg) : null;
+    if (!zf) continue;
+    try {
+      const inter = intersect({
+        type: "FeatureCollection",
+        features: [pendingFeature, zf],
+      });
+      if (inter) {
+        const a = area(inter);
+        if (a > OVERLAP_TOLERANCE_SQM) {
+          out.push({ id: z.id, name: z.name, areaSqM: a });
+        }
+      }
+    } catch {
+      /* skip geometries turf can't intersect */
+    }
+  }
+  return out;
+}
+
+// Narrow a geometry to a Polygon/MultiPolygon feature (what the turf ops want).
+function toPolyFeature(
+  geom: GeoJSON.Geometry
+): GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null {
+  if (geom.type !== "Polygon" && geom.type !== "MultiPolygon") return null;
+  return { type: "Feature", properties: {}, geometry: geom };
 }
 
 // Zone/map boundaries are stored as JSON strings (sometimes already-parsed
