@@ -712,6 +712,128 @@ export default function ZoneBuilder() {
     setCreatingBusy(false);
   }
 
+  // Create a whole new map from an uploaded GeoJSON: one polygon feature per
+  // zone, plus a boundary derived from the union of those zones. Self-contained
+  // — the new map owns exactly these zones, so nothing is mixed across maps.
+  async function importMapFromFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setCreatingBusy(true);
+    try {
+      const geojson = JSON.parse(await file.text());
+      const parsed = parseZonesFromGeojson(geojson);
+      if (parsed.length === 0) {
+        setMessage("Error: no polygons found in that file.");
+        setCreatingBusy(false);
+        return;
+      }
+
+      const mapName =
+        newMapName.trim() ||
+        file.name.replace(/\.(geo)?json$/i, "") ||
+        "Imported map";
+      const newMapId = `map_${slugify(mapName)}_${Date.now().toString(36)}`;
+
+      // Boundary = union of the imported zones.
+      let boundaryStr: string | undefined;
+      try {
+        const feats = parsed.map((z) => ({
+          type: "Feature" as const,
+          properties: {},
+          geometry: z.geometry,
+        }));
+        const merged =
+          feats.length === 1
+            ? feats[0]
+            : union({ type: "FeatureCollection", features: feats });
+        if (merged) boundaryStr = JSON.stringify(merged.geometry);
+      } catch {
+        /* no boundary if union fails */
+      }
+
+      const mapCenter =
+        centerFromFeatures(
+          parsed.map((z) => ({
+            type: "Feature",
+            properties: {},
+            geometry: z.geometry,
+          }))
+        ) || defaultCenterFor(cityId);
+
+      const mapDoc: Record<string, unknown> = {
+        id: newMapId,
+        name: mapName,
+        city: cityId,
+        is_active: false,
+        created_at: serverTimestamp(),
+        map_center: mapCenter,
+      };
+      if (boundaryStr) mapDoc.boundary = boundaryStr;
+      if (newMapBorough.trim()) mapDoc.borough = newMapBorough.trim();
+      if (newMapDesc.trim()) mapDoc.description = newMapDesc.trim();
+      await setDoc(doc(db, "maps", newMapId), mapDoc);
+
+      // Write zones in batches (Firestore caps a batch at 500 ops).
+      let batch = writeBatch(db);
+      let n = 0;
+      for (let i = 0; i < parsed.length; i++) {
+        const z = parsed[i];
+        const zid = `zone_${newMapId}_${Date.now().toString(36)}${i}`;
+        batch.set(doc(db, "zones", zid), {
+          id: zid,
+          map_id: newMapId,
+          name: z.name,
+          city: cityId,
+          boundary: JSON.stringify(z.geometry),
+          center_lat: z.center_lat,
+          center_lng: z.center_lng,
+          culture_tags: [],
+          transit_lines: [],
+          landmarks: [],
+          difficulty_rating: 3,
+          ...(z.district_number != null
+            ? { district_number: z.district_number }
+            : {}),
+        });
+        if (++n >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          n = 0;
+        }
+      }
+      if (n > 0) await batch.commit();
+
+      setMaps((prev) =>
+        [
+          ...prev,
+          {
+            id: newMapId,
+            name: mapName,
+            is_active: false,
+            boundary: boundaryStr,
+            map_center: mapCenter,
+            borough: newMapBorough.trim() || undefined,
+            description: newMapDesc.trim() || undefined,
+          },
+        ].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setMode("open");
+      setSelectedMapId(newMapId);
+      setNewMapName("");
+      setNewMapBorough("");
+      setNewMapDesc("");
+      setMessage(
+        `Imported "${mapName}" with ${parsed.length} zone${
+          parsed.length === 1 ? "" : "s"
+        }${boundaryStr ? " + boundary" : ""}.`
+      );
+    } catch (err) {
+      setMessage("Error importing map: " + (err as Error).message);
+    }
+    setCreatingBusy(false);
+  }
+
   async function togglePublish() {
     if (!selectedMap) return;
     const next = !selectedMap.is_active;
@@ -1274,11 +1396,51 @@ export default function ZoneBuilder() {
                 cursor: creatingBusy ? "not-allowed" : "pointer",
               }}
             >
-              {creatingBusy ? "Creating…" : "Create map"}
+              {creatingBusy ? "Creating…" : "Create empty map"}
             </button>
             <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 10 }}>
               Creates a draft map, then opens it so you can draw its boundary and
               zones.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                margin: "18px 0",
+                color: "#555",
+                fontSize: "0.75rem",
+              }}
+            >
+              <div style={{ flex: 1, height: 1, background: "#1a1a1a" }} />
+              or
+              <div style={{ flex: 1, height: 1, background: "#1a1a1a" }} />
+            </div>
+
+            <label
+              style={{
+                ...secondaryFullBtnStyle,
+                marginTop: 0,
+                display: "block",
+                textAlign: "center",
+                opacity: creatingBusy ? 0.6 : 1,
+                cursor: creatingBusy ? "not-allowed" : "pointer",
+              }}
+            >
+              {creatingBusy ? "Importing…" : "⬆ Import map from GeoJSON"}
+              <input
+                type="file"
+                accept=".geojson,.json"
+                onChange={importMapFromFile}
+                disabled={creatingBusy}
+                style={{ display: "none" }}
+              />
+            </label>
+            <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 8 }}>
+              One polygon per zone. Creates a new draft map containing just those
+              zones, with a boundary derived from them. Uses the name above, or
+              the file name.
             </p>
           </div>
         )}
@@ -2154,6 +2316,72 @@ function extractBoundaryGeometry(
   } catch {
     return polys[0];
   }
+}
+
+interface ParsedZone {
+  name: string;
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  center_lat: number;
+  center_lng: number;
+  district_number?: number;
+}
+
+// Turn an uploaded GeoJSON of neighborhoods/districts into zone drafts. One
+// polygon feature = one zone. Detects a name and district-number property the
+// same way Zone Manager does. Used to build a whole new map from a file.
+function parseZonesFromGeojson(geojson: unknown): ParsedZone[] {
+  const g = geojson as {
+    type?: string;
+    features?: { properties?: Record<string, unknown>; geometry?: GeoJSON.Geometry }[];
+    geometry?: GeoJSON.Geometry;
+    properties?: Record<string, unknown>;
+  };
+  const features =
+    g?.type === "FeatureCollection" && Array.isArray(g.features)
+      ? g.features
+      : g?.type === "Feature"
+      ? [g]
+      : g?.type === "Polygon" || g?.type === "MultiPolygon"
+      ? [{ properties: {}, geometry: g as GeoJSON.Geometry }]
+      : [];
+  if (features.length === 0) return [];
+
+  const keys = Object.keys(features[0]?.properties || {});
+  const districtKey = keys.find((k) => /dist|district|ward|number|coun/i.test(k));
+  const nameKey = keys.find((k) =>
+    /name|label|title|nta|neighbor|hood/i.test(k)
+  );
+
+  const out: ParsedZone[] = [];
+  features.forEach((feat, i) => {
+    const geom = feat?.geometry;
+    if (!geom || (geom.type !== "Polygon" && geom.type !== "MultiPolygon")) return;
+    const props = feat.properties || {};
+    const num = districtKey ? parseInt(String(props[districtKey])) : NaN;
+    const name =
+      nameKey && props[nameKey]
+        ? String(props[nameKey])
+        : !isNaN(num)
+        ? `District ${num}`
+        : `Zone ${i + 1}`;
+    let center_lat = 0;
+    let center_lng = 0;
+    try {
+      const c = center({ type: "Feature", properties: {}, geometry: geom });
+      center_lng = Math.round(c.geometry.coordinates[0] * 1e6) / 1e6;
+      center_lat = Math.round(c.geometry.coordinates[1] * 1e6) / 1e6;
+    } catch {
+      /* leave 0,0 */
+    }
+    out.push({
+      name,
+      geometry: geom,
+      center_lat,
+      center_lng,
+      ...(isNaN(num) ? {} : { district_number: num }),
+    });
+  });
+  return out;
 }
 
 const labelStyle: React.CSSProperties = {

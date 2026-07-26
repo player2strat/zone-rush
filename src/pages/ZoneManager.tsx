@@ -37,6 +37,7 @@ export default function ZoneManager() {
   // Maps for the current city — used to assign newly-imported zones to a map.
   const [maps, setMaps] = useState<MapOption[]>([]);
   const [assignMapId, setAssignMapId] = useState(""); // map applied to zones that don't have one yet
+  const [filterMapId, setFilterMapId] = useState(""); // "" = all maps; else show one map's zones
 
   // Load existing zones from Firestore
   useEffect(() => {
@@ -292,6 +293,11 @@ export default function ZoneManager() {
     );
   }
 
+  // Zones shown in the list: all, or scoped to the selected filter map.
+  const visibleZones = filterMapId
+    ? zones.filter((z) => z.map_id === filterMapId)
+    : zones;
+
   return (
     <div
       style={{
@@ -470,6 +476,41 @@ export default function ZoneManager() {
           </div>
         )}
 
+        {/* Filter which map's zones to show */}
+        <div style={{ marginBottom: 12 }}>
+          <label
+            style={{
+              fontSize: "0.75rem",
+              color: "#666",
+              display: "block",
+              marginBottom: 4,
+            }}
+          >
+            Show zones for map
+          </label>
+          <select
+            value={filterMapId}
+            onChange={(e) => setFilterMapId(e.target.value)}
+            style={{
+              background: "#111",
+              border: "1px solid #333",
+              color: "#fff",
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: "0.9rem",
+              width: 280,
+              maxWidth: "100%",
+            }}
+          >
+            <option value="">All maps ({zones.length})</option>
+            {maps.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({zones.filter((z) => z.map_id === m.id).length})
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Zone count + save button */}
         <div
           style={{
@@ -480,7 +521,7 @@ export default function ZoneManager() {
           }}
         >
           <span style={{ color: "#888", fontSize: "0.85rem" }}>
-            {zones.length} zones loaded
+            Showing {visibleZones.length} of {zones.length} zones
           </span>
           <button
             onClick={saveAll}
@@ -501,7 +542,7 @@ export default function ZoneManager() {
         </div>
 
         {/* Zone list */}
-        {zones.map((zone) => (
+        {visibleZones.map((zone) => (
           <div
             key={zone.id}
             style={{
