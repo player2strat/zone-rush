@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -63,6 +64,8 @@ export default function ZoneBuilder() {
   const drawTarget = useRef<"zone" | "boundary" | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const fittedMapRef = useRef<string>("");
+  // Latest startEditZone, so the once-registered map-click handler isn't stale.
+  const startEditZoneRef = useRef<(zoneId: string) => void>(() => {});
 
   const [cityId, setCityId] = useState("nyc");
   const [maps, setMaps] = useState<MapOption[]>([]);
@@ -72,9 +75,14 @@ export default function ZoneBuilder() {
   const [loadingZones, setLoadingZones] = useState(false);
   const [message, setMessage] = useState("");
 
-  // Pending drawn zone awaiting metadata + save.
+  // Pending geometry being worked on — either a freshly drawn zone (editingZoneId
+  // null) or an existing zone being reshaped (editingZoneId set). The metadata
+  // form and overlap check both read this.
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSON.Geometry | null>(null);
   const pendingDrawId = useRef<string | null>(null);
+  // Set when editing an existing saved zone (its doc id). null for a new zone.
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
   const [landmarks, setLandmarks] = useState("");
@@ -115,9 +123,16 @@ export default function ZoneBuilder() {
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
   // Real (non-sliver) overlaps between the pending zone and each saved zone.
+  // When editing, exclude the zone itself (it always "overlaps" its own area).
   const overlaps = useMemo(
-    () => (pendingGeometry ? computeOverlaps(pendingGeometry, zones) : []),
-    [pendingGeometry, zones]
+    () =>
+      pendingGeometry
+        ? computeOverlaps(
+            pendingGeometry,
+            zones.filter((z) => z.id !== editingZoneId)
+          )
+        : [],
+    [pendingGeometry, zones, editingZoneId]
   );
 
   // Coverage gap: the part of the map boundary not yet covered by any zone.
@@ -208,8 +223,10 @@ export default function ZoneBuilder() {
     draw.current?.deleteAll();
     pendingDrawId.current = null;
     pendingBoundaryDrawId.current = null;
+    editDrawId.current = null;
     justCreated.current = false;
     setPendingGeometry(null);
+    setEditingZoneId(null);
     setPendingBoundary(null);
     setRedrawingBoundary(false);
     setOverrideOverlap(false);
@@ -314,6 +331,19 @@ export default function ZoneBuilder() {
       map.current.addControl(draw.current as unknown as mapboxgl.IControl);
       map.current.on("draw.create", handleDrawCreate as never);
       map.current.on("draw.modechange", handleDrawModeChange as never);
+      map.current.on("draw.update", handleDrawUpdate as never);
+
+      // Click a saved zone's shape to edit it (ref keeps the handler current).
+      map.current.on("click", `${SRC_ZONES}-fill`, (e) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (id) startEditZoneRef.current(String(id));
+      });
+      map.current.on("mouseenter", `${SRC_ZONES}-fill`, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "pointer";
+      });
+      map.current.on("mouseleave", `${SRC_ZONES}-fill`, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "";
+      });
 
       setMapReady(true);
     });
@@ -360,6 +390,15 @@ export default function ZoneBuilder() {
     }
   }
 
+  // Live geometry while editing an existing zone (vertex drag/add/delete).
+  function handleDrawUpdate(e: { features: GeoJSON.Feature[] }) {
+    const f = e.features?.[0];
+    if (!f || !f.geometry) return;
+    if (editDrawId.current && String(f.id) === editDrawId.current) {
+      setPendingGeometry(f.geometry);
+    }
+  }
+
   // ---- Push zones + boundary onto the map whenever they change ----
   useEffect(() => {
     if (!mapReady || !map.current) return;
@@ -368,6 +407,9 @@ export default function ZoneBuilder() {
     const zoneFeatures: GeoJSON.Feature[] = [];
     const labelFeatures: GeoJSON.Feature[] = [];
     for (const z of zones) {
+      // The zone under edit is shown by the draw tool instead — skip it here so
+      // it isn't drawn twice.
+      if (z.id === editingZoneId) continue;
       const geom = parseGeometry(z.boundary);
       if (!geom) continue;
       zoneFeatures.push({
@@ -435,7 +477,7 @@ export default function ZoneBuilder() {
         /* ignore malformed geometry */
       }
     }
-  }, [zones, selectedMap, selectedMapId, mapReady, redrawingBoundary]);
+  }, [zones, selectedMap, selectedMapId, mapReady, redrawingBoundary, editingZoneId]);
 
   // ---- Push the coverage gap onto the map whenever it changes ----
   useEffect(() => {
@@ -444,6 +486,11 @@ export default function ZoneBuilder() {
       gapFeature ?? emptyFC()
     );
   }, [gapFeature, mapReady]);
+
+  // Keep the map-click handler pointing at the current startEditZone closure.
+  useEffect(() => {
+    startEditZoneRef.current = startEditZone;
+  });
 
   // ---- Drawing + saving zones ----
 
@@ -664,7 +711,8 @@ export default function ZoneBuilder() {
     setDupBusy(false);
   }
 
-  // Remove the pending drawn feature and reset the form.
+  // Remove the pending drawn/edited feature and reset the form. Covers both a
+  // new zone in progress and an existing zone being edited.
   function cancelPending() {
     if (pendingDrawId.current) {
       try {
@@ -673,7 +721,25 @@ export default function ZoneBuilder() {
         /* already gone */
       }
     }
+    if (editDrawId.current) {
+      try {
+        draw.current?.delete(editDrawId.current);
+      } catch {
+        /* already gone */
+      }
+    }
+    // If we were in an edit (direct_select) mode, return to plain select so the
+    // static zone layer takes over rendering again.
+    if (editDrawId.current) {
+      try {
+        draw.current?.changeMode("simple_select");
+      } catch {
+        /* not in a draw mode */
+      }
+    }
     pendingDrawId.current = null;
+    editDrawId.current = null;
+    setEditingZoneId(null);
     setPendingGeometry(null);
     setZoneName("");
     setCultureTags("");
@@ -681,6 +747,77 @@ export default function ZoneBuilder() {
     setTransit("");
     setDifficulty(3);
     setOverrideOverlap(false);
+  }
+
+  // Load a saved zone into the draw tool for reshaping, and open its metadata in
+  // the form. Ignored while busy with another draw/edit so you don't lose work.
+  function startEditZone(zoneId: string) {
+    if (drawingMode || pendingBoundary || pendingGeometry) return;
+    const z = zones.find((zz) => zz.id === zoneId);
+    if (!z) return;
+    const geom = parseGeometry(z.boundary);
+    if (!geom) {
+      setMessage("Error: this zone has no editable polygon.");
+      return;
+    }
+    const feature: GeoJSON.Feature = {
+      type: "Feature",
+      properties: {},
+      geometry: geom,
+    };
+    const ids = draw.current?.add(feature);
+    const drawId = ids && ids.length ? String(ids[0]) : null;
+    editDrawId.current = drawId;
+    if (drawId) {
+      try {
+        draw.current?.changeMode("direct_select", { featureId: drawId });
+      } catch {
+        try {
+          draw.current?.changeMode("simple_select", { featureIds: [drawId] });
+        } catch {
+          /* leave in default mode */
+        }
+      }
+    }
+    setEditingZoneId(zoneId);
+    setPendingGeometry(geom);
+    setZoneName(z.name || "");
+    setCultureTags((z.culture_tags || []).join(", "));
+    setLandmarks((z.landmarks || []).join(", "));
+    setTransit((z.transit_lines || []).join(", "));
+    setDifficulty(z.difficulty_rating || 3);
+    setOverrideOverlap(false);
+    // Fly to the zone so its vertices are easy to grab.
+    try {
+      const [minX, minY, maxX, maxY] = bbox(feature);
+      map.current?.fitBounds(
+        [
+          [minX, minY],
+          [maxX, maxY],
+        ],
+        { padding: 80, maxZoom: 15, duration: 500 }
+      );
+    } catch {
+      /* ignore */
+    }
+    setMessage("Editing zone — drag the points to reshape, then Save changes.");
+  }
+
+  // Delete a saved zone from Firestore and the map.
+  async function deleteZone(zoneId: string) {
+    const z = zones.find((zz) => zz.id === zoneId);
+    if (!window.confirm(`Delete "${z?.name || "this zone"}"? This can't be undone.`))
+      return;
+    setSaving(true);
+    try {
+      await deleteDoc(doc(db, "zones", zoneId));
+      if (editingZoneId === zoneId) cancelPending();
+      setZones((prev) => prev.filter((zz) => zz.id !== zoneId));
+      setMessage(`Deleted "${z?.name || "zone"}".`);
+    } catch (err) {
+      setMessage("Error deleting zone: " + (err as Error).message);
+    }
+    setSaving(false);
   }
 
   async function saveZone() {
@@ -694,17 +831,18 @@ export default function ZoneBuilder() {
     }
     setSaving(true);
     try {
-      const c = center({ type: "Feature", properties: {}, geometry: pendingGeometry });
+      // Prefer the freshest geometry from the draw tool (edit vertex drags).
+      let geom = pendingGeometry;
+      if (editingZoneId && editDrawId.current) {
+        const f = draw.current?.get(editDrawId.current);
+        if (f?.geometry) geom = f.geometry as GeoJSON.Geometry;
+      }
+      const c = center({ type: "Feature", properties: {}, geometry: geom });
       const [lng, lat] = c.geometry.coordinates;
-      const id = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
-        Math.random() * 1000
-      )}`;
-      const zoneDoc: Zone = {
-        id,
-        map_id: selectedMapId,
-        name: zoneName.trim() || "Untitled zone",
-        city: cityId,
-        boundary: JSON.stringify(pendingGeometry),
+      const name = zoneName.trim() || "Untitled zone";
+      const fields = {
+        name,
+        boundary: JSON.stringify(geom),
         center_lat: Math.round(lat * 1e6) / 1e6,
         center_lng: Math.round(lng * 1e6) / 1e6,
         culture_tags: splitTags(cultureTags),
@@ -712,11 +850,31 @@ export default function ZoneBuilder() {
         landmarks: splitTags(landmarks),
         difficulty_rating: difficulty,
       };
-      await setDoc(doc(db, "zones", id), zoneDoc);
-      setZones((prev) => [...prev, zoneDoc]);
-      const savedName = zoneDoc.name;
-      cancelPending();
-      setMessage(`Saved zone "${savedName}".`);
+
+      if (editingZoneId) {
+        // Update the existing doc in place (same id, same map_id).
+        await setDoc(doc(db, "zones", editingZoneId), fields, { merge: true });
+        setZones((prev) =>
+          prev.map((z) => (z.id === editingZoneId ? { ...z, ...fields } : z))
+        );
+        cancelPending();
+        setMessage(`Saved changes to "${name}".`);
+      } else {
+        // Create a new zone.
+        const id = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
+          Math.random() * 1000
+        )}`;
+        const zoneDoc: Zone = {
+          id,
+          map_id: selectedMapId,
+          city: cityId,
+          ...fields,
+        };
+        await setDoc(doc(db, "zones", id), zoneDoc);
+        setZones((prev) => [...prev, zoneDoc]);
+        cancelPending();
+        setMessage(`Saved zone "${name}".`);
+      }
     } catch (err) {
       setMessage("Error saving zone: " + (err as Error).message);
     }
@@ -1056,6 +1214,81 @@ export default function ZoneBuilder() {
           </>
         )}
 
+        {/* Zones list — pick one to edit or delete */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          zones.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <p style={{ ...labelStyle, marginBottom: 8 }}>
+                Zones ({zones.length}) — click to edit
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 260,
+                  overflowY: "auto",
+                }}
+              >
+                {[...zones]
+                  .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                  .map((z) => (
+                    <div
+                      key={z.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid #1a1a1a",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <button
+                        onClick={() => startEditZone(z.id)}
+                        title="Edit this zone"
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "#ddd",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {z.name || "Untitled zone"}
+                      </button>
+                      <button
+                        onClick={() => deleteZone(z.id)}
+                        title="Delete this zone"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#7a3a48",
+                          cursor: "pointer",
+                          fontSize: "0.9rem",
+                          fontFamily: "inherit",
+                          padding: "0 4px",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
         {/* Boundary confirm */}
         {pendingBoundary && (
           <div
@@ -1112,10 +1345,17 @@ export default function ZoneBuilder() {
             }}
           >
             <div
-              style={{ fontWeight: 700, marginBottom: 12, fontSize: "0.95rem" }}
+              style={{ fontWeight: 700, marginBottom: 4, fontSize: "0.95rem" }}
             >
-              New zone
+              {editingZoneId ? "Edit zone" : "New zone"}
             </div>
+            {editingZoneId && (
+              <div
+                style={{ color: "#8fb7e6", fontSize: "0.78rem", marginBottom: 12 }}
+              >
+                Drag the points on the map to reshape.
+              </div>
+            )}
 
             <label style={labelStyle}>Zone name</label>
             <input
@@ -1229,7 +1469,13 @@ export default function ZoneBuilder() {
                       cursor: disabled ? "not-allowed" : "pointer",
                     }}
                   >
-                    {saving ? "Saving…" : blocked ? "Overlap — blocked" : "Save zone"}
+                    {saving
+                      ? "Saving…"
+                      : blocked
+                      ? "Overlap — blocked"
+                      : editingZoneId
+                      ? "Save changes"
+                      : "Save zone"}
                   </button>
                 );
               })()}
@@ -1241,6 +1487,28 @@ export default function ZoneBuilder() {
                 Cancel
               </button>
             </div>
+
+            {editingZoneId && (
+              <button
+                onClick={() => deleteZone(editingZoneId)}
+                disabled={saving}
+                style={{
+                  marginTop: 10,
+                  width: "100%",
+                  background: "rgba(239,71,111,0.1)",
+                  color: "#EF476F",
+                  border: "1px solid rgba(239,71,111,0.3)",
+                  borderRadius: 8,
+                  padding: "9px 16px",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Delete zone
+              </button>
+            )}
           </div>
         )}
           </>
