@@ -820,12 +820,14 @@ export default function ZoneBuilder() {
     setSaving(false);
   }
 
-  async function saveZone() {
+  // Save the pending zone. When `carve` is true, overlapping neighbors are
+  // trimmed so this zone wins the contested area (clean shared borders); when
+  // false, overlap is blocked unless the user overrode it.
+  async function saveZone(carve = false) {
     if (!pendingGeometry || !selectedMapId) return;
-    // Block overlapping saves unless the user explicitly overrode.
-    if (overlaps.length > 0 && !overrideOverlap) {
+    if (overlaps.length > 0 && !overrideOverlap && !carve) {
       setMessage(
-        "Error: this zone overlaps an existing one. Fix it, or check 'save anyway'."
+        "Error: this zone overlaps an existing one. Fix it, check 'save anyway', or Fit neighbors."
       );
       return;
     }
@@ -851,30 +853,118 @@ export default function ZoneBuilder() {
         difficulty_rating: difficulty,
       };
 
-      if (editingZoneId) {
-        // Update the existing doc in place (same id, same map_id).
-        await setDoc(doc(db, "zones", editingZoneId), fields, { merge: true });
-        setZones((prev) =>
-          prev.map((z) => (z.id === editingZoneId ? { ...z, ...fields } : z))
-        );
-        cancelPending();
-        setMessage(`Saved changes to "${name}".`);
-      } else {
-        // Create a new zone.
-        const id = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
+      // If carving, compute the trimmed shape of each overlapping neighbor
+      // (neighbor − thisZone). Abort if any neighbor would be fully consumed.
+      const clipped: {
+        id: string;
+        boundary: string;
+        center_lat: number;
+        center_lng: number;
+      }[] = [];
+      if (carve) {
+        const aFeature = toPolyFeature(geom);
+        const vanished: string[] = [];
+        for (const o of overlaps) {
+          const z = zones.find((zz) => zz.id === o.id);
+          const zg = z ? parseGeometry(z.boundary) : null;
+          const zf = zg ? toPolyFeature(zg) : null;
+          if (!zf || !aFeature) continue;
+          let diff: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
+          try {
+            diff = difference({
+              type: "FeatureCollection",
+              features: [zf, aFeature],
+            });
+          } catch {
+            diff = zf; // can't clip this one — leave it unchanged
+          }
+          if (!diff) {
+            vanished.push(z?.name || o.id);
+            continue;
+          }
+          const cc = center(diff);
+          clipped.push({
+            id: o.id,
+            boundary: JSON.stringify(diff.geometry),
+            center_lat: Math.round(cc.geometry.coordinates[1] * 1e6) / 1e6,
+            center_lng: Math.round(cc.geometry.coordinates[0] * 1e6) / 1e6,
+          });
+        }
+        if (vanished.length) {
+          setMessage(
+            `Can't fit: ${vanished.join(
+              ", "
+            )} would be fully covered. Shrink this zone or delete them first.`
+          );
+          setSaving(false);
+          return;
+        }
+      }
+
+      // One atomic write: this zone (create or update) + any clipped neighbors.
+      const batch = writeBatch(db);
+      const newId =
+        editingZoneId ||
+        `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
           Math.random() * 1000
         )}`;
-        const zoneDoc: Zone = {
-          id,
+      if (editingZoneId) {
+        batch.set(doc(db, "zones", editingZoneId), fields, { merge: true });
+      } else {
+        batch.set(doc(db, "zones", newId), {
+          id: newId,
           map_id: selectedMapId,
           city: cityId,
           ...fields,
-        };
-        await setDoc(doc(db, "zones", id), zoneDoc);
-        setZones((prev) => [...prev, zoneDoc]);
-        cancelPending();
-        setMessage(`Saved zone "${name}".`);
+        });
       }
+      for (const cl of clipped) {
+        batch.set(
+          doc(db, "zones", cl.id),
+          {
+            boundary: cl.boundary,
+            center_lat: cl.center_lat,
+            center_lng: cl.center_lng,
+          },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+
+      // Reflect locally: update edited/clipped zones, append a new one.
+      setZones((prev) => {
+        const clippedById = new Map(clipped.map((cl) => [cl.id, cl]));
+        let next = prev.map((z) => {
+          if (z.id === editingZoneId) return { ...z, ...fields };
+          const cl = clippedById.get(z.id);
+          return cl
+            ? {
+                ...z,
+                boundary: cl.boundary,
+                center_lat: cl.center_lat,
+                center_lng: cl.center_lng,
+              }
+            : z;
+        });
+        if (!editingZoneId) {
+          next = [
+            ...next,
+            { id: newId, map_id: selectedMapId, city: cityId, ...fields },
+          ];
+        }
+        return next;
+      });
+
+      cancelPending();
+      setMessage(
+        clipped.length
+          ? `Saved "${name}" and trimmed ${clipped.length} neighbor${
+              clipped.length > 1 ? "s" : ""
+            }.`
+          : editingZoneId
+          ? `Saved changes to "${name}".`
+          : `Saved zone "${name}".`
+      );
     } catch (err) {
       setMessage("Error saving zone: " + (err as Error).message);
     }
@@ -1448,6 +1538,28 @@ export default function ZoneBuilder() {
                   />
                   Save anyway (allow overlap)
                 </label>
+
+                <button
+                  onClick={() => saveZone(true)}
+                  disabled={saving}
+                  title="This zone keeps the contested area; the listed neighbors are trimmed to a clean border."
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    background: "#06D6A0",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "9px 16px",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  ✂ Fit neighbors &amp; save
+                </button>
               </div>
             )}
 
@@ -1457,7 +1569,7 @@ export default function ZoneBuilder() {
                 const disabled = saving || blocked;
                 return (
                   <button
-                    onClick={saveZone}
+                    onClick={() => saveZone(false)}
                     disabled={disabled}
                     style={{
                       ...primaryBtnStyle,
