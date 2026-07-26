@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   collection,
   deleteDoc,
@@ -58,6 +59,7 @@ const SRC_BOUNDARY = "zb-map-boundary";
 const SRC_GAP = "zb-coverage-gap";
 
 export default function ZoneBuilder() {
+  const navigate = useNavigate();
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
@@ -574,6 +576,53 @@ export default function ZoneBuilder() {
     setSavingBoundary(false);
   }
 
+  // Import a boundary outline from a GeoJSON file. Loads it as a pending
+  // boundary (added to the draw layer + previewed on the map); the existing
+  // Save/Cancel confirm then persists or discards it.
+  async function importBoundaryFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the same file be re-picked later
+    if (!file) return;
+    if (!selectedMapId) {
+      setMessage("Error: pick a map first.");
+      return;
+    }
+    try {
+      const geojson = JSON.parse(await file.text());
+      const geom = extractBoundaryGeometry(geojson);
+      if (!geom) {
+        setMessage("Error: no polygon found in that file.");
+        return;
+      }
+      cancelPending();
+      cancelPendingBoundary();
+      const feature: GeoJSON.Feature = {
+        type: "Feature",
+        properties: {},
+        geometry: geom,
+      };
+      const ids = draw.current?.add(feature);
+      pendingBoundaryDrawId.current = ids && ids.length ? String(ids[0]) : null;
+      setRedrawingBoundary(true); // hide any existing boundary while previewing
+      setPendingBoundary(geom);
+      try {
+        const [minX, minY, maxX, maxY] = bbox(feature);
+        map.current?.fitBounds(
+          [
+            [minX, minY],
+            [maxX, maxY],
+          ],
+          { padding: 60, maxZoom: 15, duration: 500 }
+        );
+      } catch {
+        /* ignore */
+      }
+      setMessage("Imported boundary — review it, then Save boundary or Cancel.");
+    } catch (err) {
+      setMessage("Error reading file: " + (err as Error).message);
+    }
+  }
+
   // ---- New map + publish ----
 
   async function createMap() {
@@ -995,11 +1044,17 @@ export default function ZoneBuilder() {
         <h1 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Builder
         </h1>
-        <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 20 }}>
+        <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 12 }}>
           Open a map to draw its boundary and zones, or create a new one.
         </p>
+        <button
+          onClick={() => navigate("/admin/zones")}
+          style={crossLinkStyle}
+        >
+          Bulk-import zones in Zone Manager →
+        </button>
 
-        <label style={labelStyle}>City</label>
+        <label style={{ ...labelStyle, marginTop: 20 }}>City</label>
         <input
           value={cityId}
           onChange={(e) => setCityId(e.target.value.toLowerCase())}
@@ -1301,6 +1356,21 @@ export default function ZoneBuilder() {
                 ? "↺ Redraw map boundary"
                 : "＋ Draw map boundary"}
             </button>
+            <label
+              style={{
+                ...secondaryFullBtnStyle,
+                display: "block",
+                textAlign: "center",
+              }}
+            >
+              ⬆ Import boundary (GeoJSON)
+              <input
+                type="file"
+                accept=".geojson,.json"
+                onChange={importBoundaryFile}
+                style={{ display: "none" }}
+              />
+            </label>
           </>
         )}
 
@@ -1788,6 +1858,50 @@ function parseGeometry(raw: unknown): GeoJSON.Geometry | null {
   }
 }
 
+// Pull a single boundary outline from an uploaded GeoJSON. Accepts a bare
+// geometry, a Feature, or a FeatureCollection. If the file has multiple polygon
+// features they're unioned into one outline (so a file of a borough's districts
+// yields the borough shape). The result is previewed before saving, so an
+// over-broad file is easy to catch and cancel.
+function extractBoundaryGeometry(
+  geojson: unknown
+): GeoJSON.Polygon | GeoJSON.MultiPolygon | null {
+  const geoms: GeoJSON.Geometry[] = [];
+  const g = geojson as {
+    type?: string;
+    features?: { geometry?: GeoJSON.Geometry }[];
+    geometry?: GeoJSON.Geometry;
+  };
+  if (g?.type === "FeatureCollection" && Array.isArray(g.features)) {
+    for (const f of g.features) if (f?.geometry) geoms.push(f.geometry);
+  } else if (g?.type === "Feature" && g.geometry) {
+    geoms.push(g.geometry);
+  } else if (g?.type === "Polygon" || g?.type === "MultiPolygon") {
+    geoms.push(g as GeoJSON.Geometry);
+  }
+
+  const polys = geoms.filter(
+    (x): x is GeoJSON.Polygon | GeoJSON.MultiPolygon =>
+      x.type === "Polygon" || x.type === "MultiPolygon"
+  );
+  if (polys.length === 0) return null;
+  if (polys.length === 1) return polys[0];
+
+  try {
+    const merged = union({
+      type: "FeatureCollection",
+      features: polys.map((geom) => ({
+        type: "Feature" as const,
+        properties: {},
+        geometry: geom,
+      })),
+    });
+    return merged ? merged.geometry : polys[0];
+  } catch {
+    return polys[0];
+  }
+}
+
 const labelStyle: React.CSSProperties = {
   fontSize: "0.72rem",
   color: "#888",
@@ -1839,6 +1953,19 @@ const secondaryFullBtnStyle: React.CSSProperties = {
   ...secondaryBtnStyle,
   width: "100%",
   marginTop: 10,
+};
+
+// Subtle inline text link between admin pages.
+const crossLinkStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#4C9AFF",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontSize: "0.8rem",
+  fontWeight: 600,
+  padding: 0,
+  textAlign: "left",
 };
 
 // Segmented-control button (Open existing / Create new). Active tab is filled.

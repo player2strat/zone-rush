@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { collection, getDocs, doc, setDoc, deleteDoc, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -24,6 +25,7 @@ interface ZoneDraft {
 }
 
 export default function ZoneManager() {
+  const navigate = useNavigate();
   const [zones, setZones] = useState<ZoneDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -304,10 +306,26 @@ export default function ZoneManager() {
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Manager
         </h1>
-        <p style={{ color: "#888", marginBottom: 24, fontSize: "0.9rem" }}>
+        <p style={{ color: "#888", marginBottom: 8, fontSize: "0.9rem" }}>
           Upload a GeoJSON file to add zones, fill in metadata, then save to
           Firestore. No code needed.
         </p>
+        <button
+          onClick={() => navigate("/admin/zone-builder")}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#4C9AFF",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            padding: 0,
+            marginBottom: 24,
+          }}
+        >
+          Draw or edit zones in Zone Builder →
+        </button>
 
         {/* City config */}
         <div
