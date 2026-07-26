@@ -50,6 +50,8 @@ interface MapOption {
   boundary?: string; // GeoJSON string, if this map has an outer frame drawn
   is_active?: boolean;
   map_center?: { lat: number; lng: number; zoom: number };
+  borough?: string;
+  description?: string;
 }
 
 // Source/layer ids we manage on the map.
@@ -122,6 +124,13 @@ export default function ZoneBuilder() {
   const [dupName, setDupName] = useState("");
   const [dupBusy, setDupBusy] = useState(false);
 
+  // Edit-map-details flow (rename / borough / description).
+  const [editMapOpen, setEditMapOpen] = useState(false);
+  const [emName, setEmName] = useState("");
+  const [emBorough, setEmBorough] = useState("");
+  const [emDesc, setEmDesc] = useState("");
+  const [emBusy, setEmBusy] = useState(false);
+
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
   // Real (non-sliver) overlaps between the pending zone and each saved zone.
@@ -176,6 +185,8 @@ export default function ZoneBuilder() {
             boundary: data.boundary,
             is_active: data.is_active,
             map_center: data.map_center,
+            borough: data.borough,
+            description: data.description,
           };
         });
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -235,6 +246,7 @@ export default function ZoneBuilder() {
     setDrawingMode(null);
     setDuplicatingOpen(false);
     setDupName("");
+    setEditMapOpen(false);
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -796,6 +808,43 @@ export default function ZoneBuilder() {
     setDupBusy(false);
   }
 
+  function openEditMap() {
+    if (!selectedMap) return;
+    setEmName(selectedMap.name || "");
+    setEmBorough(selectedMap.borough || "");
+    setEmDesc(selectedMap.description || "");
+    setEditMapOpen(true);
+  }
+
+  // Save edits to the map's own details (name / borough / description).
+  async function saveMapDetails() {
+    if (!selectedMap) return;
+    const name = emName.trim();
+    if (!name) {
+      setMessage("Error: the map needs a name.");
+      return;
+    }
+    setEmBusy(true);
+    try {
+      const update = {
+        name,
+        borough: emBorough.trim(),
+        description: emDesc.trim(),
+      };
+      await setDoc(doc(db, "maps", selectedMap.id), update, { merge: true });
+      setMaps((prev) =>
+        prev
+          .map((m) => (m.id === selectedMap.id ? { ...m, ...update } : m))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditMapOpen(false);
+      setMessage(`Saved map details for "${name}".`);
+    } catch (err) {
+      setMessage("Error saving map details: " + (err as Error).message);
+    }
+    setEmBusy(false);
+  }
+
   // Remove the pending drawn/edited feature and reset the form. Covers both a
   // new zone in progress and an existing zone being edited.
   function cancelPending() {
@@ -1306,6 +1355,78 @@ export default function ZoneBuilder() {
             </div>
           </div>
         )}
+
+        {/* Edit map details */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          (editMapOpen ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid #1a1a1a",
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Edit map details
+              </div>
+              <label style={labelStyle}>Name</label>
+              <input
+                value={emName}
+                onChange={(e) => setEmName(e.target.value)}
+                style={inputStyle}
+                autoFocus
+              />
+              <label style={{ ...labelStyle, marginTop: 12 }}>
+                Borough (optional)
+              </label>
+              <input
+                value={emBorough}
+                onChange={(e) => setEmBorough(e.target.value)}
+                placeholder="Brooklyn"
+                style={inputStyle}
+              />
+              <label style={{ ...labelStyle, marginTop: 12 }}>
+                Description (optional)
+              </label>
+              <input
+                value={emDesc}
+                onChange={(e) => setEmDesc(e.target.value)}
+                placeholder="Short blurb for the map picker"
+                style={inputStyle}
+              />
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button
+                  onClick={saveMapDetails}
+                  disabled={emBusy}
+                  style={{
+                    ...primaryBtnStyle,
+                    marginTop: 0,
+                    flex: 1,
+                    opacity: emBusy ? 0.6 : 1,
+                    cursor: emBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {emBusy ? "Saving…" : "Save details"}
+                </button>
+                <button
+                  onClick={() => setEditMapOpen(false)}
+                  disabled={emBusy}
+                  style={secondaryBtnStyle}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={openEditMap} style={secondaryFullBtnStyle}>
+              ✎ Edit map details
+            </button>
+          ))}
 
         {/* Duplicate map */}
         {selectedMap &&
