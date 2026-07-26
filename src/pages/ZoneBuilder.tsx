@@ -12,14 +12,18 @@
 // =============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   collection,
+  deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
   setDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -46,6 +50,8 @@ interface MapOption {
   boundary?: string; // GeoJSON string, if this map has an outer frame drawn
   is_active?: boolean;
   map_center?: { lat: number; lng: number; zoom: number };
+  borough?: string;
+  description?: string;
 }
 
 // Source/layer ids we manage on the map.
@@ -55,12 +61,15 @@ const SRC_BOUNDARY = "zb-map-boundary";
 const SRC_GAP = "zb-coverage-gap";
 
 export default function ZoneBuilder() {
+  const navigate = useNavigate();
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
   const drawTarget = useRef<"zone" | "boundary" | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const fittedMapRef = useRef<string>("");
+  // Latest startEditZone, so the once-registered map-click handler isn't stale.
+  const startEditZoneRef = useRef<(zoneId: string) => void>(() => {});
 
   const [cityId, setCityId] = useState("nyc");
   const [maps, setMaps] = useState<MapOption[]>([]);
@@ -70,9 +79,14 @@ export default function ZoneBuilder() {
   const [loadingZones, setLoadingZones] = useState(false);
   const [message, setMessage] = useState("");
 
-  // Pending drawn zone awaiting metadata + save.
+  // Pending geometry being worked on — either a freshly drawn zone (editingZoneId
+  // null) or an existing zone being reshaped (editingZoneId set). The metadata
+  // form and overlap check both read this.
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSON.Geometry | null>(null);
   const pendingDrawId = useRef<string | null>(null);
+  // Set when editing an existing saved zone (its doc id). null for a new zone.
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
   const [landmarks, setLandmarks] = useState("");
@@ -105,12 +119,31 @@ export default function ZoneBuilder() {
   const [creatingBusy, setCreatingBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
+  // Duplicate-map flow.
+  const [duplicatingOpen, setDuplicatingOpen] = useState(false);
+  const [dupName, setDupName] = useState("");
+  const [dupBusy, setDupBusy] = useState(false);
+
+  // Edit-map-details flow (rename / borough / description).
+  const [editMapOpen, setEditMapOpen] = useState(false);
+  const [emName, setEmName] = useState("");
+  const [emBorough, setEmBorough] = useState("");
+  const [emDesc, setEmDesc] = useState("");
+  const [emBusy, setEmBusy] = useState(false);
+
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
   // Real (non-sliver) overlaps between the pending zone and each saved zone.
+  // When editing, exclude the zone itself (it always "overlaps" its own area).
   const overlaps = useMemo(
-    () => (pendingGeometry ? computeOverlaps(pendingGeometry, zones) : []),
-    [pendingGeometry, zones]
+    () =>
+      pendingGeometry
+        ? computeOverlaps(
+            pendingGeometry,
+            zones.filter((z) => z.id !== editingZoneId)
+          )
+        : [],
+    [pendingGeometry, zones, editingZoneId]
   );
 
   // Coverage gap: the part of the map boundary not yet covered by any zone.
@@ -152,6 +185,8 @@ export default function ZoneBuilder() {
             boundary: data.boundary,
             is_active: data.is_active,
             map_center: data.map_center,
+            borough: data.borough,
+            description: data.description,
           };
         });
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -201,12 +236,17 @@ export default function ZoneBuilder() {
     draw.current?.deleteAll();
     pendingDrawId.current = null;
     pendingBoundaryDrawId.current = null;
+    editDrawId.current = null;
     justCreated.current = false;
     setPendingGeometry(null);
+    setEditingZoneId(null);
     setPendingBoundary(null);
     setRedrawingBoundary(false);
     setOverrideOverlap(false);
     setDrawingMode(null);
+    setDuplicatingOpen(false);
+    setDupName("");
+    setEditMapOpen(false);
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -305,6 +345,19 @@ export default function ZoneBuilder() {
       map.current.addControl(draw.current as unknown as mapboxgl.IControl);
       map.current.on("draw.create", handleDrawCreate as never);
       map.current.on("draw.modechange", handleDrawModeChange as never);
+      map.current.on("draw.update", handleDrawUpdate as never);
+
+      // Click a saved zone's shape to edit it (ref keeps the handler current).
+      map.current.on("click", `${SRC_ZONES}-fill`, (e) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (id) startEditZoneRef.current(String(id));
+      });
+      map.current.on("mouseenter", `${SRC_ZONES}-fill`, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "pointer";
+      });
+      map.current.on("mouseleave", `${SRC_ZONES}-fill`, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "";
+      });
 
       setMapReady(true);
     });
@@ -351,6 +404,15 @@ export default function ZoneBuilder() {
     }
   }
 
+  // Live geometry while editing an existing zone (vertex drag/add/delete).
+  function handleDrawUpdate(e: { features: GeoJSON.Feature[] }) {
+    const f = e.features?.[0];
+    if (!f || !f.geometry) return;
+    if (editDrawId.current && String(f.id) === editDrawId.current) {
+      setPendingGeometry(f.geometry);
+    }
+  }
+
   // ---- Push zones + boundary onto the map whenever they change ----
   useEffect(() => {
     if (!mapReady || !map.current) return;
@@ -359,6 +421,9 @@ export default function ZoneBuilder() {
     const zoneFeatures: GeoJSON.Feature[] = [];
     const labelFeatures: GeoJSON.Feature[] = [];
     for (const z of zones) {
+      // The zone under edit is shown by the draw tool instead — skip it here so
+      // it isn't drawn twice.
+      if (z.id === editingZoneId) continue;
       const geom = parseGeometry(z.boundary);
       if (!geom) continue;
       zoneFeatures.push({
@@ -426,7 +491,7 @@ export default function ZoneBuilder() {
         /* ignore malformed geometry */
       }
     }
-  }, [zones, selectedMap, selectedMapId, mapReady, redrawingBoundary]);
+  }, [zones, selectedMap, selectedMapId, mapReady, redrawingBoundary, editingZoneId]);
 
   // ---- Push the coverage gap onto the map whenever it changes ----
   useEffect(() => {
@@ -435,6 +500,11 @@ export default function ZoneBuilder() {
       gapFeature ?? emptyFC()
     );
   }, [gapFeature, mapReady]);
+
+  // Keep the map-click handler pointing at the current startEditZone closure.
+  useEffect(() => {
+    startEditZoneRef.current = startEditZone;
+  });
 
   // ---- Drawing + saving zones ----
 
@@ -494,20 +564,56 @@ export default function ZoneBuilder() {
     setRedrawingBoundary(false); // restore the saved frame (cancel) or show new (save)
   }
 
+  // Compute a {lat,lng,zoom} that frames the given features, using the live map
+  // so the zoom actually fits. City-agnostic — works anywhere on Earth. Returns
+  // null if the map isn't ready or the features have no usable extent.
+  function centerFromFeatures(
+    features: GeoJSON.Feature[]
+  ): { lat: number; lng: number; zoom: number } | null {
+    if (!map.current || features.length === 0) return null;
+    try {
+      const [minX, minY, maxX, maxY] = bbox({
+        type: "FeatureCollection",
+        features,
+      });
+      const cam = map.current.cameraForBounds(
+        [
+          [minX, minY],
+          [maxX, maxY],
+        ],
+        { padding: 40 }
+      );
+      if (!cam || !cam.center) return null;
+      const ctr = cam.center as { lng: number; lat: number };
+      return {
+        lat: Math.round(ctr.lat * 1e6) / 1e6,
+        lng: Math.round(ctr.lng * 1e6) / 1e6,
+        zoom: Math.round((cam.zoom ?? 12) * 100) / 100,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function saveBoundary() {
     if (!pendingBoundary || !selectedMapId) return;
     setSavingBoundary(true);
     try {
       const boundaryStr = JSON.stringify(pendingBoundary);
-      await setDoc(
-        doc(db, "maps", selectedMapId),
-        { boundary: boundaryStr },
-        { merge: true }
-      );
+      // Auto-frame the map on its new boundary (city-agnostic centering).
+      const newCenter = centerFromFeatures([
+        { type: "Feature", properties: {}, geometry: pendingBoundary },
+      ]);
+      const update: Record<string, unknown> = { boundary: boundaryStr };
+      if (newCenter) update.map_center = newCenter;
+
+      await setDoc(doc(db, "maps", selectedMapId), update, { merge: true });
       // Reflect locally so the boundary + coverage aid update immediately.
       setMaps((prev) =>
         prev.map((m) =>
-          m.id === selectedMapId ? { ...m, boundary: boundaryStr } : m
+          m.id === selectedMapId
+            ? { ...m, boundary: boundaryStr, ...(newCenter ? { map_center: newCenter } : {}) }
+            : m
         )
       );
       cancelPendingBoundary();
@@ -516,6 +622,53 @@ export default function ZoneBuilder() {
       setMessage("Error saving boundary: " + (err as Error).message);
     }
     setSavingBoundary(false);
+  }
+
+  // Import a boundary outline from a GeoJSON file. Loads it as a pending
+  // boundary (added to the draw layer + previewed on the map); the existing
+  // Save/Cancel confirm then persists or discards it.
+  async function importBoundaryFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the same file be re-picked later
+    if (!file) return;
+    if (!selectedMapId) {
+      setMessage("Error: pick a map first.");
+      return;
+    }
+    try {
+      const geojson = JSON.parse(await file.text());
+      const geom = extractBoundaryGeometry(geojson);
+      if (!geom) {
+        setMessage("Error: no polygon found in that file.");
+        return;
+      }
+      cancelPending();
+      cancelPendingBoundary();
+      const feature: GeoJSON.Feature = {
+        type: "Feature",
+        properties: {},
+        geometry: geom,
+      };
+      const ids = draw.current?.add(feature);
+      pendingBoundaryDrawId.current = ids && ids.length ? String(ids[0]) : null;
+      setRedrawingBoundary(true); // hide any existing boundary while previewing
+      setPendingBoundary(geom);
+      try {
+        const [minX, minY, maxX, maxY] = bbox(feature);
+        map.current?.fitBounds(
+          [
+            [minX, minY],
+            [maxX, maxY],
+          ],
+          { padding: 60, maxZoom: 15, duration: 500 }
+        );
+      } catch {
+        /* ignore */
+      }
+      setMessage("Imported boundary — review it, then Save boundary or Cancel.");
+    } catch (err) {
+      setMessage("Error reading file: " + (err as Error).message);
+    }
   }
 
   // ---- New map + publish ----
@@ -588,7 +741,112 @@ export default function ZoneBuilder() {
     setPublishing(false);
   }
 
-  // Remove the pending drawn feature and reset the form.
+  // Duplicate the selected map into a new unpublished draft: copies the map's
+  // metadata + boundary and every zone (as fresh docs pointed at the new map).
+  // The original is untouched. One atomic batched write.
+  async function duplicateMap() {
+    if (!selectedMap) return;
+    const name = dupName.trim() || `Copy of ${selectedMap.name}`;
+    setDupBusy(true);
+    try {
+      // Read the source map + its zones fresh, so the copy matches what's saved.
+      const [srcMapSnap, zoneSnap] = await Promise.all([
+        getDoc(doc(db, "maps", selectedMap.id)),
+        getDocs(
+          query(collection(db, "zones"), where("map_id", "==", selectedMap.id))
+        ),
+      ]);
+      const srcMapData = srcMapSnap.exists() ? srcMapSnap.data() : {};
+
+      const newMapId = `map_${slugify(name)}_${Date.now().toString(36)}`;
+      const batch = writeBatch(db);
+
+      // Spread the source map so optional metadata (boundary, map_center,
+      // borough, description, …) carries over, then override the identity fields.
+      batch.set(doc(db, "maps", newMapId), {
+        ...srcMapData,
+        id: newMapId,
+        name,
+        is_active: false, // always a draft — never auto-selectable at game creation
+        created_at: serverTimestamp(),
+      });
+
+      zoneSnap.docs.forEach((d, i) => {
+        const z = d.data() as Zone;
+        const newZoneId = `zone_${newMapId}_${Date.now().toString(36)}${i}`;
+        batch.set(doc(db, "zones", newZoneId), {
+          ...z,
+          id: newZoneId,
+          map_id: newMapId,
+        });
+      });
+
+      await batch.commit();
+
+      // Reflect locally and open the copy.
+      setMaps((prev) =>
+        [
+          ...prev,
+          {
+            id: newMapId,
+            name,
+            is_active: false,
+            boundary: selectedMap.boundary,
+            map_center: selectedMap.map_center,
+          },
+        ].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setSelectedMapId(newMapId);
+      setDuplicatingOpen(false);
+      setDupName("");
+      setMessage(
+        `Duplicated "${selectedMap.name}" → "${name}" (${zoneSnap.size} zones). Opened the copy.`
+      );
+    } catch (err) {
+      setMessage("Error duplicating map: " + (err as Error).message);
+    }
+    setDupBusy(false);
+  }
+
+  function openEditMap() {
+    if (!selectedMap) return;
+    setEmName(selectedMap.name || "");
+    setEmBorough(selectedMap.borough || "");
+    setEmDesc(selectedMap.description || "");
+    setEditMapOpen(true);
+  }
+
+  // Save edits to the map's own details (name / borough / description).
+  async function saveMapDetails() {
+    if (!selectedMap) return;
+    const name = emName.trim();
+    if (!name) {
+      setMessage("Error: the map needs a name.");
+      return;
+    }
+    setEmBusy(true);
+    try {
+      const update = {
+        name,
+        borough: emBorough.trim(),
+        description: emDesc.trim(),
+      };
+      await setDoc(doc(db, "maps", selectedMap.id), update, { merge: true });
+      setMaps((prev) =>
+        prev
+          .map((m) => (m.id === selectedMap.id ? { ...m, ...update } : m))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditMapOpen(false);
+      setMessage(`Saved map details for "${name}".`);
+    } catch (err) {
+      setMessage("Error saving map details: " + (err as Error).message);
+    }
+    setEmBusy(false);
+  }
+
+  // Remove the pending drawn/edited feature and reset the form. Covers both a
+  // new zone in progress and an existing zone being edited.
   function cancelPending() {
     if (pendingDrawId.current) {
       try {
@@ -597,7 +855,25 @@ export default function ZoneBuilder() {
         /* already gone */
       }
     }
+    if (editDrawId.current) {
+      try {
+        draw.current?.delete(editDrawId.current);
+      } catch {
+        /* already gone */
+      }
+    }
+    // If we were in an edit (direct_select) mode, return to plain select so the
+    // static zone layer takes over rendering again.
+    if (editDrawId.current) {
+      try {
+        draw.current?.changeMode("simple_select");
+      } catch {
+        /* not in a draw mode */
+      }
+    }
     pendingDrawId.current = null;
+    editDrawId.current = null;
+    setEditingZoneId(null);
     setPendingGeometry(null);
     setZoneName("");
     setCultureTags("");
@@ -607,28 +883,102 @@ export default function ZoneBuilder() {
     setOverrideOverlap(false);
   }
 
-  async function saveZone() {
+  // Load a saved zone into the draw tool for reshaping, and open its metadata in
+  // the form. Ignored while busy with another draw/edit so you don't lose work.
+  function startEditZone(zoneId: string) {
+    if (drawingMode || pendingBoundary || pendingGeometry) return;
+    const z = zones.find((zz) => zz.id === zoneId);
+    if (!z) return;
+    const geom = parseGeometry(z.boundary);
+    if (!geom) {
+      setMessage("Error: this zone has no editable polygon.");
+      return;
+    }
+    const feature: GeoJSON.Feature = {
+      type: "Feature",
+      properties: {},
+      geometry: geom,
+    };
+    const ids = draw.current?.add(feature);
+    const drawId = ids && ids.length ? String(ids[0]) : null;
+    editDrawId.current = drawId;
+    if (drawId) {
+      try {
+        draw.current?.changeMode("direct_select", { featureId: drawId });
+      } catch {
+        try {
+          draw.current?.changeMode("simple_select", { featureIds: [drawId] });
+        } catch {
+          /* leave in default mode */
+        }
+      }
+    }
+    setEditingZoneId(zoneId);
+    setPendingGeometry(geom);
+    setZoneName(z.name || "");
+    setCultureTags((z.culture_tags || []).join(", "));
+    setLandmarks((z.landmarks || []).join(", "));
+    setTransit((z.transit_lines || []).join(", "));
+    setDifficulty(z.difficulty_rating || 3);
+    setOverrideOverlap(false);
+    // Fly to the zone so its vertices are easy to grab.
+    try {
+      const [minX, minY, maxX, maxY] = bbox(feature);
+      map.current?.fitBounds(
+        [
+          [minX, minY],
+          [maxX, maxY],
+        ],
+        { padding: 80, maxZoom: 15, duration: 500 }
+      );
+    } catch {
+      /* ignore */
+    }
+    setMessage("Editing zone — drag the points to reshape, then Save changes.");
+  }
+
+  // Delete a saved zone from Firestore and the map.
+  async function deleteZone(zoneId: string) {
+    const z = zones.find((zz) => zz.id === zoneId);
+    if (!window.confirm(`Delete "${z?.name || "this zone"}"? This can't be undone.`))
+      return;
+    setSaving(true);
+    try {
+      await deleteDoc(doc(db, "zones", zoneId));
+      if (editingZoneId === zoneId) cancelPending();
+      setZones((prev) => prev.filter((zz) => zz.id !== zoneId));
+      setMessage(`Deleted "${z?.name || "zone"}".`);
+    } catch (err) {
+      setMessage("Error deleting zone: " + (err as Error).message);
+    }
+    setSaving(false);
+  }
+
+  // Save the pending zone. When `carve` is true, overlapping neighbors are
+  // trimmed so this zone wins the contested area (clean shared borders); when
+  // false, overlap is blocked unless the user overrode it.
+  async function saveZone(carve = false) {
     if (!pendingGeometry || !selectedMapId) return;
-    // Block overlapping saves unless the user explicitly overrode.
-    if (overlaps.length > 0 && !overrideOverlap) {
+    if (overlaps.length > 0 && !overrideOverlap && !carve) {
       setMessage(
-        "Error: this zone overlaps an existing one. Fix it, or check 'save anyway'."
+        "Error: this zone overlaps an existing one. Fix it, check 'save anyway', or Fit neighbors."
       );
       return;
     }
     setSaving(true);
     try {
-      const c = center({ type: "Feature", properties: {}, geometry: pendingGeometry });
+      // Prefer the freshest geometry from the draw tool (edit vertex drags).
+      let geom = pendingGeometry;
+      if (editingZoneId && editDrawId.current) {
+        const f = draw.current?.get(editDrawId.current);
+        if (f?.geometry) geom = f.geometry as GeoJSON.Geometry;
+      }
+      const c = center({ type: "Feature", properties: {}, geometry: geom });
       const [lng, lat] = c.geometry.coordinates;
-      const id = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
-        Math.random() * 1000
-      )}`;
-      const zoneDoc: Zone = {
-        id,
-        map_id: selectedMapId,
-        name: zoneName.trim() || "Untitled zone",
-        city: cityId,
-        boundary: JSON.stringify(pendingGeometry),
+      const name = zoneName.trim() || "Untitled zone";
+      const fields = {
+        name,
+        boundary: JSON.stringify(geom),
         center_lat: Math.round(lat * 1e6) / 1e6,
         center_lng: Math.round(lng * 1e6) / 1e6,
         culture_tags: splitTags(cultureTags),
@@ -636,11 +986,149 @@ export default function ZoneBuilder() {
         landmarks: splitTags(landmarks),
         difficulty_rating: difficulty,
       };
-      await setDoc(doc(db, "zones", id), zoneDoc);
-      setZones((prev) => [...prev, zoneDoc]);
-      const savedName = zoneDoc.name;
+
+      // If carving, compute the trimmed shape of each overlapping neighbor
+      // (neighbor − thisZone). Abort if any neighbor would be fully consumed.
+      const clipped: {
+        id: string;
+        boundary: string;
+        center_lat: number;
+        center_lng: number;
+      }[] = [];
+      if (carve) {
+        const aFeature = toPolyFeature(geom);
+        const vanished: string[] = [];
+        for (const o of overlaps) {
+          const z = zones.find((zz) => zz.id === o.id);
+          const zg = z ? parseGeometry(z.boundary) : null;
+          const zf = zg ? toPolyFeature(zg) : null;
+          if (!zf || !aFeature) continue;
+          let diff: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
+          try {
+            diff = difference({
+              type: "FeatureCollection",
+              features: [zf, aFeature],
+            });
+          } catch {
+            diff = zf; // can't clip this one — leave it unchanged
+          }
+          if (!diff) {
+            vanished.push(z?.name || o.id);
+            continue;
+          }
+          const cc = center(diff);
+          clipped.push({
+            id: o.id,
+            boundary: JSON.stringify(diff.geometry),
+            center_lat: Math.round(cc.geometry.coordinates[1] * 1e6) / 1e6,
+            center_lng: Math.round(cc.geometry.coordinates[0] * 1e6) / 1e6,
+          });
+        }
+        if (vanished.length) {
+          setMessage(
+            `Can't fit: ${vanished.join(
+              ", "
+            )} would be fully covered. Shrink this zone or delete them first.`
+          );
+          setSaving(false);
+          return;
+        }
+      }
+
+      // One atomic write: this zone (create or update) + any clipped neighbors.
+      const batch = writeBatch(db);
+      const newId =
+        editingZoneId ||
+        `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
+          Math.random() * 1000
+        )}`;
+      if (editingZoneId) {
+        batch.set(doc(db, "zones", editingZoneId), fields, { merge: true });
+      } else {
+        batch.set(doc(db, "zones", newId), {
+          id: newId,
+          map_id: selectedMapId,
+          city: cityId,
+          ...fields,
+        });
+      }
+      for (const cl of clipped) {
+        batch.set(
+          doc(db, "zones", cl.id),
+          {
+            boundary: cl.boundary,
+            center_lat: cl.center_lat,
+            center_lng: cl.center_lng,
+          },
+          { merge: true }
+        );
+      }
+
+      // With no boundary to frame the map, keep its center on the zones so it's
+      // correctly located for any city (not left at a stale default).
+      let zoneCenter: { lat: number; lng: number; zoom: number } | null = null;
+      if (!selectedMap?.boundary) {
+        const feats: GeoJSON.Feature[] = [];
+        for (const z of zones) {
+          if (z.id === editingZoneId) continue;
+          const g = parseGeometry(z.boundary);
+          if (g) feats.push({ type: "Feature", properties: {}, geometry: g });
+        }
+        feats.push({ type: "Feature", properties: {}, geometry: geom });
+        zoneCenter = centerFromFeatures(feats);
+        if (zoneCenter) {
+          batch.set(
+            doc(db, "maps", selectedMapId),
+            { map_center: zoneCenter },
+            { merge: true }
+          );
+        }
+      }
+
+      await batch.commit();
+
+      if (zoneCenter) {
+        setMaps((prev) =>
+          prev.map((m) =>
+            m.id === selectedMapId ? { ...m, map_center: zoneCenter! } : m
+          )
+        );
+      }
+
+      // Reflect locally: update edited/clipped zones, append a new one.
+      setZones((prev) => {
+        const clippedById = new Map(clipped.map((cl) => [cl.id, cl]));
+        let next = prev.map((z) => {
+          if (z.id === editingZoneId) return { ...z, ...fields };
+          const cl = clippedById.get(z.id);
+          return cl
+            ? {
+                ...z,
+                boundary: cl.boundary,
+                center_lat: cl.center_lat,
+                center_lng: cl.center_lng,
+              }
+            : z;
+        });
+        if (!editingZoneId) {
+          next = [
+            ...next,
+            { id: newId, map_id: selectedMapId, city: cityId, ...fields },
+          ];
+        }
+        return next;
+      });
+
       cancelPending();
-      setMessage(`Saved zone "${savedName}".`);
+      setMessage(
+        clipped.length
+          ? `Saved "${name}" and trimmed ${clipped.length} neighbor${
+              clipped.length > 1 ? "s" : ""
+            }.`
+          : editingZoneId
+          ? `Saved changes to "${name}".`
+          : `Saved zone "${name}".`
+      );
     } catch (err) {
       setMessage("Error saving zone: " + (err as Error).message);
     }
@@ -671,11 +1159,17 @@ export default function ZoneBuilder() {
         <h1 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Builder
         </h1>
-        <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 20 }}>
+        <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 12 }}>
           Open a map to draw its boundary and zones, or create a new one.
         </p>
+        <button
+          onClick={() => navigate("/admin/zones")}
+          style={crossLinkStyle}
+        >
+          Bulk-import zones in Zone Manager →
+        </button>
 
-        <label style={labelStyle}>City</label>
+        <label style={{ ...labelStyle, marginTop: 20 }}>City</label>
         <input
           value={cityId}
           onChange={(e) => setCityId(e.target.value.toLowerCase())}
@@ -862,6 +1356,146 @@ export default function ZoneBuilder() {
           </div>
         )}
 
+        {/* Edit map details */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          (editMapOpen ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid #1a1a1a",
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Edit map details
+              </div>
+              <label style={labelStyle}>Name</label>
+              <input
+                value={emName}
+                onChange={(e) => setEmName(e.target.value)}
+                style={inputStyle}
+                autoFocus
+              />
+              <label style={{ ...labelStyle, marginTop: 12 }}>
+                Borough (optional)
+              </label>
+              <input
+                value={emBorough}
+                onChange={(e) => setEmBorough(e.target.value)}
+                placeholder="Brooklyn"
+                style={inputStyle}
+              />
+              <label style={{ ...labelStyle, marginTop: 12 }}>
+                Description (optional)
+              </label>
+              <input
+                value={emDesc}
+                onChange={(e) => setEmDesc(e.target.value)}
+                placeholder="Short blurb for the map picker"
+                style={inputStyle}
+              />
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button
+                  onClick={saveMapDetails}
+                  disabled={emBusy}
+                  style={{
+                    ...primaryBtnStyle,
+                    marginTop: 0,
+                    flex: 1,
+                    opacity: emBusy ? 0.6 : 1,
+                    cursor: emBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {emBusy ? "Saving…" : "Save details"}
+                </button>
+                <button
+                  onClick={() => setEditMapOpen(false)}
+                  disabled={emBusy}
+                  style={secondaryBtnStyle}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={openEditMap} style={secondaryFullBtnStyle}>
+              ✎ Edit map details
+            </button>
+          ))}
+
+        {/* Duplicate map */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          (duplicatingOpen ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid #1a1a1a",
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Duplicate map
+              </div>
+              <label style={labelStyle}>New map name</label>
+              <input
+                value={dupName}
+                onChange={(e) => setDupName(e.target.value)}
+                style={inputStyle}
+                autoFocus
+              />
+              <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 8 }}>
+                Copies {zones.length} zone{zones.length === 1 ? "" : "s"}
+                {selectedMap.boundary ? " + boundary" : ""} into a new draft.
+                The original stays unchanged.
+              </p>
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button
+                  onClick={duplicateMap}
+                  disabled={dupBusy}
+                  style={{
+                    ...primaryBtnStyle,
+                    marginTop: 0,
+                    flex: 1,
+                    opacity: dupBusy ? 0.6 : 1,
+                    cursor: dupBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {dupBusy ? "Duplicating…" : "Duplicate"}
+                </button>
+                <button
+                  onClick={() => {
+                    setDuplicatingOpen(false);
+                    setDupName("");
+                  }}
+                  disabled={dupBusy}
+                  style={secondaryBtnStyle}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setDupName(`Copy of ${selectedMap.name}`);
+                setDuplicatingOpen(true);
+              }}
+              style={secondaryFullBtnStyle}
+            >
+              ⧉ Duplicate map
+            </button>
+          ))}
+
         {/* Drawing in progress — active state so it's clear the tool is armed */}
         {selectedMap && drawingMode && (
           <div
@@ -909,8 +1543,98 @@ export default function ZoneBuilder() {
                 ? "↺ Redraw map boundary"
                 : "＋ Draw map boundary"}
             </button>
+            <label
+              style={{
+                ...secondaryFullBtnStyle,
+                display: "block",
+                textAlign: "center",
+              }}
+            >
+              ⬆ Import boundary (GeoJSON)
+              <input
+                type="file"
+                accept=".geojson,.json"
+                onChange={importBoundaryFile}
+                style={{ display: "none" }}
+              />
+            </label>
           </>
         )}
+
+        {/* Zones list — pick one to edit or delete */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          zones.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <p style={{ ...labelStyle, marginBottom: 8 }}>
+                Zones ({zones.length}) — click to edit
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 260,
+                  overflowY: "auto",
+                }}
+              >
+                {[...zones]
+                  .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                  .map((z) => (
+                    <div
+                      key={z.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid #1a1a1a",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <button
+                        onClick={() => startEditZone(z.id)}
+                        title="Edit this zone"
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          color: "#ddd",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {z.name || "Untitled zone"}
+                      </button>
+                      <button
+                        onClick={() => deleteZone(z.id)}
+                        title="Delete this zone"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#7a3a48",
+                          cursor: "pointer",
+                          fontSize: "0.9rem",
+                          fontFamily: "inherit",
+                          padding: "0 4px",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
         {/* Boundary confirm */}
         {pendingBoundary && (
@@ -968,10 +1692,17 @@ export default function ZoneBuilder() {
             }}
           >
             <div
-              style={{ fontWeight: 700, marginBottom: 12, fontSize: "0.95rem" }}
+              style={{ fontWeight: 700, marginBottom: 4, fontSize: "0.95rem" }}
             >
-              New zone
+              {editingZoneId ? "Edit zone" : "New zone"}
             </div>
+            {editingZoneId && (
+              <div
+                style={{ color: "#8fb7e6", fontSize: "0.78rem", marginBottom: 12 }}
+              >
+                Drag the points on the map to reshape.
+              </div>
+            )}
 
             <label style={labelStyle}>Zone name</label>
             <input
@@ -1064,6 +1795,28 @@ export default function ZoneBuilder() {
                   />
                   Save anyway (allow overlap)
                 </label>
+
+                <button
+                  onClick={() => saveZone(true)}
+                  disabled={saving}
+                  title="This zone keeps the contested area; the listed neighbors are trimmed to a clean border."
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    background: "#06D6A0",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "9px 16px",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  ✂ Fit neighbors &amp; save
+                </button>
               </div>
             )}
 
@@ -1073,7 +1826,7 @@ export default function ZoneBuilder() {
                 const disabled = saving || blocked;
                 return (
                   <button
-                    onClick={saveZone}
+                    onClick={() => saveZone(false)}
                     disabled={disabled}
                     style={{
                       ...primaryBtnStyle,
@@ -1085,7 +1838,13 @@ export default function ZoneBuilder() {
                       cursor: disabled ? "not-allowed" : "pointer",
                     }}
                   >
-                    {saving ? "Saving…" : blocked ? "Overlap — blocked" : "Save zone"}
+                    {saving
+                      ? "Saving…"
+                      : blocked
+                      ? "Overlap — blocked"
+                      : editingZoneId
+                      ? "Save changes"
+                      : "Save zone"}
                   </button>
                 );
               })()}
@@ -1097,6 +1856,28 @@ export default function ZoneBuilder() {
                 Cancel
               </button>
             </div>
+
+            {editingZoneId && (
+              <button
+                onClick={() => deleteZone(editingZoneId)}
+                disabled={saving}
+                style={{
+                  marginTop: 10,
+                  width: "100%",
+                  background: "rgba(239,71,111,0.1)",
+                  color: "#EF476F",
+                  border: "1px solid rgba(239,71,111,0.3)",
+                  borderRadius: 8,
+                  padding: "9px 16px",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Delete zone
+              </button>
+            )}
           </div>
         )}
           </>
@@ -1264,6 +2045,50 @@ function parseGeometry(raw: unknown): GeoJSON.Geometry | null {
   }
 }
 
+// Pull a single boundary outline from an uploaded GeoJSON. Accepts a bare
+// geometry, a Feature, or a FeatureCollection. If the file has multiple polygon
+// features they're unioned into one outline (so a file of a borough's districts
+// yields the borough shape). The result is previewed before saving, so an
+// over-broad file is easy to catch and cancel.
+function extractBoundaryGeometry(
+  geojson: unknown
+): GeoJSON.Polygon | GeoJSON.MultiPolygon | null {
+  const geoms: GeoJSON.Geometry[] = [];
+  const g = geojson as {
+    type?: string;
+    features?: { geometry?: GeoJSON.Geometry }[];
+    geometry?: GeoJSON.Geometry;
+  };
+  if (g?.type === "FeatureCollection" && Array.isArray(g.features)) {
+    for (const f of g.features) if (f?.geometry) geoms.push(f.geometry);
+  } else if (g?.type === "Feature" && g.geometry) {
+    geoms.push(g.geometry);
+  } else if (g?.type === "Polygon" || g?.type === "MultiPolygon") {
+    geoms.push(g as GeoJSON.Geometry);
+  }
+
+  const polys = geoms.filter(
+    (x): x is GeoJSON.Polygon | GeoJSON.MultiPolygon =>
+      x.type === "Polygon" || x.type === "MultiPolygon"
+  );
+  if (polys.length === 0) return null;
+  if (polys.length === 1) return polys[0];
+
+  try {
+    const merged = union({
+      type: "FeatureCollection",
+      features: polys.map((geom) => ({
+        type: "Feature" as const,
+        properties: {},
+        geometry: geom,
+      })),
+    });
+    return merged ? merged.geometry : polys[0];
+  } catch {
+    return polys[0];
+  }
+}
+
 const labelStyle: React.CSSProperties = {
   fontSize: "0.72rem",
   color: "#888",
@@ -1315,6 +2140,19 @@ const secondaryFullBtnStyle: React.CSSProperties = {
   ...secondaryBtnStyle,
   width: "100%",
   marginTop: 10,
+};
+
+// Subtle inline text link between admin pages.
+const crossLinkStyle: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  color: "#4C9AFF",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  fontSize: "0.8rem",
+  fontWeight: 600,
+  padding: 0,
+  textAlign: "left",
 };
 
 // Segmented-control button (Open existing / Create new). Active tab is filled.
