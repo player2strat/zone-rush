@@ -89,6 +89,12 @@ export default function ZoneBuilder() {
   // While true we hide the previously-saved boundary (and its gap) so you draw
   // the new frame on a clean canvas, not on top of the old one.
   const [redrawingBoundary, setRedrawingBoundary] = useState(false);
+  // Which shape is being actively drawn right now (armed, points not yet
+  // finished). Drives the "drawing…" active state in the panel.
+  const [drawingMode, setDrawingMode] = useState<"zone" | "boundary" | null>(null);
+  // Set on draw.create so the follow-up modechange knows the draw completed
+  // (vs. was cancelled with Escape).
+  const justCreated = useRef(false);
 
   // Panel mode: work on an existing map, or create a new one. These are
   // alternatives — only one shows at a time so they don't read as one flow.
@@ -195,10 +201,12 @@ export default function ZoneBuilder() {
     draw.current?.deleteAll();
     pendingDrawId.current = null;
     pendingBoundaryDrawId.current = null;
+    justCreated.current = false;
     setPendingGeometry(null);
     setPendingBoundary(null);
     setRedrawingBoundary(false);
     setOverrideOverlap(false);
+    setDrawingMode(null);
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -296,6 +304,7 @@ export default function ZoneBuilder() {
       draw.current = new MapboxDraw({ displayControlsDefault: false });
       map.current.addControl(draw.current as unknown as mapboxgl.IControl);
       map.current.on("draw.create", handleDrawCreate as never);
+      map.current.on("draw.modechange", handleDrawModeChange as never);
 
       setMapReady(true);
     });
@@ -315,6 +324,8 @@ export default function ZoneBuilder() {
     if (!f || !f.geometry) return;
     const target = drawTarget.current;
     drawTarget.current = null;
+    justCreated.current = true; // tell the follow-up modechange this completed
+    setDrawingMode(null);
     if (target === "boundary") {
       pendingBoundaryDrawId.current = f.id != null ? String(f.id) : null;
       setPendingBoundary(f.geometry);
@@ -324,6 +335,20 @@ export default function ZoneBuilder() {
       setOverrideOverlap(false);
     }
     setMessage("");
+  }
+
+  // Leaving draw mode back to select — either the polygon finished (handled by
+  // draw.create, justCreated=true) or it was cancelled with Escape. On a cancel
+  // we disarm and restore any boundary we'd hidden for the redraw.
+  function handleDrawModeChange(e: { mode: string }) {
+    if (e.mode !== "simple_select") return;
+    setDrawingMode(null);
+    drawTarget.current = null;
+    if (justCreated.current) {
+      justCreated.current = false;
+    } else {
+      setRedrawingBoundary(false);
+    }
   }
 
   // ---- Push zones + boundary onto the map whenever they change ----
@@ -421,6 +446,8 @@ export default function ZoneBuilder() {
     cancelPending();
     cancelPendingBoundary();
     drawTarget.current = "zone";
+    justCreated.current = false;
+    setDrawingMode("zone");
     draw.current?.changeMode("draw_polygon");
     setMessage("Click to place points; double-click (or Enter) to finish.");
   }
@@ -433,9 +460,25 @@ export default function ZoneBuilder() {
     cancelPending();
     cancelPendingBoundary();
     drawTarget.current = "boundary";
+    justCreated.current = false;
     setRedrawingBoundary(true); // hide the old frame while drawing the new one
+    setDrawingMode("boundary");
     draw.current?.changeMode("draw_polygon");
     setMessage("Draw the map's outer frame; double-click (or Enter) to finish.");
+  }
+
+  // Abort an armed draw before it's finished (explicit Cancel button).
+  function cancelDrawing() {
+    justCreated.current = false;
+    try {
+      draw.current?.changeMode("simple_select"); // discards the in-progress shape
+    } catch {
+      /* not in a draw mode */
+    }
+    drawTarget.current = null;
+    setDrawingMode(null);
+    setRedrawingBoundary(false);
+    setMessage("");
   }
 
   function cancelPendingBoundary() {
@@ -819,8 +862,44 @@ export default function ZoneBuilder() {
           </div>
         )}
 
+        {/* Drawing in progress — active state so it's clear the tool is armed */}
+        {selectedMap && drawingMode && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              background:
+                drawingMode === "boundary"
+                  ? "rgba(255,209,102,0.1)"
+                  : "rgba(6,214,160,0.1)",
+              border: `1px solid ${
+                drawingMode === "boundary"
+                  ? "rgba(255,209,102,0.5)"
+                  : "rgba(6,214,160,0.5)"
+              }`,
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              ✎ Drawing {drawingMode === "boundary" ? "map boundary" : "zone"}…
+            </div>
+            <div
+              style={{ color: "#999", fontSize: "0.8rem", marginBottom: 12 }}
+            >
+              Click points on the map; double-click (or Enter) to finish, or Esc
+              to cancel.
+            </div>
+            <button
+              onClick={cancelDrawing}
+              style={{ ...secondaryFullBtnStyle, marginTop: 0 }}
+            >
+              Cancel drawing
+            </button>
+          </div>
+        )}
+
         {/* Draw actions */}
-        {selectedMap && !pendingGeometry && !pendingBoundary && (
+        {selectedMap && !drawingMode && !pendingGeometry && !pendingBoundary && (
           <>
             <button onClick={startDrawZone} style={primaryBtnStyle}>
               ✏️ Draw a zone
@@ -828,7 +907,7 @@ export default function ZoneBuilder() {
             <button onClick={startDrawBoundary} style={secondaryFullBtnStyle}>
               {selectedMap.boundary
                 ? "↺ Redraw map boundary"
-                : "▢ Draw map boundary"}
+                : "＋ Draw map boundary"}
             </button>
           </>
         )}
