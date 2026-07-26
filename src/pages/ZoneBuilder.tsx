@@ -552,20 +552,56 @@ export default function ZoneBuilder() {
     setRedrawingBoundary(false); // restore the saved frame (cancel) or show new (save)
   }
 
+  // Compute a {lat,lng,zoom} that frames the given features, using the live map
+  // so the zoom actually fits. City-agnostic — works anywhere on Earth. Returns
+  // null if the map isn't ready or the features have no usable extent.
+  function centerFromFeatures(
+    features: GeoJSON.Feature[]
+  ): { lat: number; lng: number; zoom: number } | null {
+    if (!map.current || features.length === 0) return null;
+    try {
+      const [minX, minY, maxX, maxY] = bbox({
+        type: "FeatureCollection",
+        features,
+      });
+      const cam = map.current.cameraForBounds(
+        [
+          [minX, minY],
+          [maxX, maxY],
+        ],
+        { padding: 40 }
+      );
+      if (!cam || !cam.center) return null;
+      const ctr = cam.center as { lng: number; lat: number };
+      return {
+        lat: Math.round(ctr.lat * 1e6) / 1e6,
+        lng: Math.round(ctr.lng * 1e6) / 1e6,
+        zoom: Math.round((cam.zoom ?? 12) * 100) / 100,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function saveBoundary() {
     if (!pendingBoundary || !selectedMapId) return;
     setSavingBoundary(true);
     try {
       const boundaryStr = JSON.stringify(pendingBoundary);
-      await setDoc(
-        doc(db, "maps", selectedMapId),
-        { boundary: boundaryStr },
-        { merge: true }
-      );
+      // Auto-frame the map on its new boundary (city-agnostic centering).
+      const newCenter = centerFromFeatures([
+        { type: "Feature", properties: {}, geometry: pendingBoundary },
+      ]);
+      const update: Record<string, unknown> = { boundary: boundaryStr };
+      if (newCenter) update.map_center = newCenter;
+
+      await setDoc(doc(db, "maps", selectedMapId), update, { merge: true });
       // Reflect locally so the boundary + coverage aid update immediately.
       setMaps((prev) =>
         prev.map((m) =>
-          m.id === selectedMapId ? { ...m, boundary: boundaryStr } : m
+          m.id === selectedMapId
+            ? { ...m, boundary: boundaryStr, ...(newCenter ? { map_center: newCenter } : {}) }
+            : m
         )
       );
       cancelPendingBoundary();
@@ -978,7 +1014,37 @@ export default function ZoneBuilder() {
           { merge: true }
         );
       }
+
+      // With no boundary to frame the map, keep its center on the zones so it's
+      // correctly located for any city (not left at a stale default).
+      let zoneCenter: { lat: number; lng: number; zoom: number } | null = null;
+      if (!selectedMap?.boundary) {
+        const feats: GeoJSON.Feature[] = [];
+        for (const z of zones) {
+          if (z.id === editingZoneId) continue;
+          const g = parseGeometry(z.boundary);
+          if (g) feats.push({ type: "Feature", properties: {}, geometry: g });
+        }
+        feats.push({ type: "Feature", properties: {}, geometry: geom });
+        zoneCenter = centerFromFeatures(feats);
+        if (zoneCenter) {
+          batch.set(
+            doc(db, "maps", selectedMapId),
+            { map_center: zoneCenter },
+            { merge: true }
+          );
+        }
+      }
+
       await batch.commit();
+
+      if (zoneCenter) {
+        setMaps((prev) =>
+          prev.map((m) =>
+            m.id === selectedMapId ? { ...m, map_center: zoneCenter! } : m
+          )
+        );
+      }
 
       // Reflect locally: update edited/clipped zones, append a new one.
       setZones((prev) => {
