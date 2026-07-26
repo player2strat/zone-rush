@@ -15,11 +15,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
   setDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -104,6 +106,11 @@ export default function ZoneBuilder() {
   const [newMapDesc, setNewMapDesc] = useState("");
   const [creatingBusy, setCreatingBusy] = useState(false);
   const [publishing, setPublishing] = useState(false);
+
+  // Duplicate-map flow.
+  const [duplicatingOpen, setDuplicatingOpen] = useState(false);
+  const [dupName, setDupName] = useState("");
+  const [dupBusy, setDupBusy] = useState(false);
 
   const selectedMap = maps.find((m) => m.id === selectedMapId) || null;
 
@@ -207,6 +214,8 @@ export default function ZoneBuilder() {
     setRedrawingBoundary(false);
     setOverrideOverlap(false);
     setDrawingMode(null);
+    setDuplicatingOpen(false);
+    setDupName("");
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -588,6 +597,73 @@ export default function ZoneBuilder() {
     setPublishing(false);
   }
 
+  // Duplicate the selected map into a new unpublished draft: copies the map's
+  // metadata + boundary and every zone (as fresh docs pointed at the new map).
+  // The original is untouched. One atomic batched write.
+  async function duplicateMap() {
+    if (!selectedMap) return;
+    const name = dupName.trim() || `Copy of ${selectedMap.name}`;
+    setDupBusy(true);
+    try {
+      // Read the source map + its zones fresh, so the copy matches what's saved.
+      const [srcMapSnap, zoneSnap] = await Promise.all([
+        getDoc(doc(db, "maps", selectedMap.id)),
+        getDocs(
+          query(collection(db, "zones"), where("map_id", "==", selectedMap.id))
+        ),
+      ]);
+      const srcMapData = srcMapSnap.exists() ? srcMapSnap.data() : {};
+
+      const newMapId = `map_${slugify(name)}_${Date.now().toString(36)}`;
+      const batch = writeBatch(db);
+
+      // Spread the source map so optional metadata (boundary, map_center,
+      // borough, description, …) carries over, then override the identity fields.
+      batch.set(doc(db, "maps", newMapId), {
+        ...srcMapData,
+        id: newMapId,
+        name,
+        is_active: false, // always a draft — never auto-selectable at game creation
+        created_at: serverTimestamp(),
+      });
+
+      zoneSnap.docs.forEach((d, i) => {
+        const z = d.data() as Zone;
+        const newZoneId = `zone_${newMapId}_${Date.now().toString(36)}${i}`;
+        batch.set(doc(db, "zones", newZoneId), {
+          ...z,
+          id: newZoneId,
+          map_id: newMapId,
+        });
+      });
+
+      await batch.commit();
+
+      // Reflect locally and open the copy.
+      setMaps((prev) =>
+        [
+          ...prev,
+          {
+            id: newMapId,
+            name,
+            is_active: false,
+            boundary: selectedMap.boundary,
+            map_center: selectedMap.map_center,
+          },
+        ].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setSelectedMapId(newMapId);
+      setDuplicatingOpen(false);
+      setDupName("");
+      setMessage(
+        `Duplicated "${selectedMap.name}" → "${name}" (${zoneSnap.size} zones). Opened the copy.`
+      );
+    } catch (err) {
+      setMessage("Error duplicating map: " + (err as Error).message);
+    }
+    setDupBusy(false);
+  }
+
   // Remove the pending drawn feature and reset the form.
   function cancelPending() {
     if (pendingDrawId.current) {
@@ -861,6 +937,74 @@ export default function ZoneBuilder() {
             </div>
           </div>
         )}
+
+        {/* Duplicate map */}
+        {selectedMap &&
+          !drawingMode &&
+          !pendingGeometry &&
+          !pendingBoundary &&
+          (duplicatingOpen ? (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid #1a1a1a",
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                Duplicate map
+              </div>
+              <label style={labelStyle}>New map name</label>
+              <input
+                value={dupName}
+                onChange={(e) => setDupName(e.target.value)}
+                style={inputStyle}
+                autoFocus
+              />
+              <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 8 }}>
+                Copies {zones.length} zone{zones.length === 1 ? "" : "s"}
+                {selectedMap.boundary ? " + boundary" : ""} into a new draft.
+                The original stays unchanged.
+              </p>
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button
+                  onClick={duplicateMap}
+                  disabled={dupBusy}
+                  style={{
+                    ...primaryBtnStyle,
+                    marginTop: 0,
+                    flex: 1,
+                    opacity: dupBusy ? 0.6 : 1,
+                    cursor: dupBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {dupBusy ? "Duplicating…" : "Duplicate"}
+                </button>
+                <button
+                  onClick={() => {
+                    setDuplicatingOpen(false);
+                    setDupName("");
+                  }}
+                  disabled={dupBusy}
+                  style={secondaryBtnStyle}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setDupName(`Copy of ${selectedMap.name}`);
+                setDuplicatingOpen(true);
+              }}
+              style={secondaryFullBtnStyle}
+            >
+              ⧉ Duplicate map
+            </button>
+          ))}
 
         {/* Drawing in progress — active state so it's clear the tool is armed */}
         {selectedMap && drawingMode && (
