@@ -845,6 +845,43 @@ export default function ZoneBuilder() {
     setEmBusy(false);
   }
 
+  // Delete the whole map and every zone that belongs to it. Destructive and
+  // irreversible, so it re-reads the zones for an accurate count and requires a
+  // typed-out confirm naming the map.
+  async function deleteMap() {
+    if (!selectedMap) return;
+    setEmBusy(true);
+    try {
+      const zoneSnap = await getDocs(
+        query(collection(db, "zones"), where("map_id", "==", selectedMap.id))
+      );
+      const zoneCount = zoneSnap.size;
+      const ok = window.confirm(
+        `Delete map "${selectedMap.name}"${
+          selectedMap.is_active ? " (PUBLISHED)" : ""
+        } and its ${zoneCount} zone${zoneCount === 1 ? "" : "s"}? ` +
+          `This permanently removes them and can't be undone.`
+      );
+      if (!ok) {
+        setEmBusy(false);
+        return;
+      }
+
+      const batch = writeBatch(db);
+      zoneSnap.docs.forEach((d) => batch.delete(d.ref));
+      batch.delete(doc(db, "maps", selectedMap.id));
+      await batch.commit();
+
+      const deletedName = selectedMap.name;
+      setMaps((prev) => prev.filter((m) => m.id !== selectedMap.id));
+      setSelectedMapId("");
+      setMessage(`Deleted map "${deletedName}" and ${zoneCount} zone(s).`);
+    } catch (err) {
+      setMessage("Error deleting map: " + (err as Error).message);
+    }
+    setEmBusy(false);
+  }
+
   // Remove the pending drawn/edited feature and reset the form. Covers both a
   // new zone in progress and an existing zone being edited.
   function cancelPending() {
@@ -1420,6 +1457,36 @@ export default function ZoneBuilder() {
                 >
                   Cancel
                 </button>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: "1px solid #1a1a1a",
+                }}
+              >
+                <button
+                  onClick={deleteMap}
+                  disabled={emBusy}
+                  style={{
+                    width: "100%",
+                    background: "rgba(239,71,111,0.1)",
+                    color: "#EF476F",
+                    border: "1px solid rgba(239,71,111,0.3)",
+                    borderRadius: 8,
+                    padding: "9px 16px",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: emBusy ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  Delete this map &amp; its zones
+                </button>
+                <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 6 }}>
+                  Permanent — removes the map and every zone on it.
+                </p>
               </div>
             </div>
           ) : (
