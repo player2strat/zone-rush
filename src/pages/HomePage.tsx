@@ -6,10 +6,22 @@
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
+import { useUserRole } from '../hooks/useUserRole'
+
+// Admin/GM-only tools. These routes are gated by AdminGuard; this list just
+// surfaces them so admins don't have to type URLs.
+const ADMIN_LINKS = [
+  { path: '/admin/zone-builder', label: 'Zone Builder', desc: 'Draw maps & zones' },
+  { path: '/admin/zones', label: 'Zone Manager', desc: 'Import & edit zone metadata' },
+  { path: '/admin/seed-maps', label: 'Seed Maps', desc: 'Seed starter maps' },
+  { path: '/admin/seed', label: 'Seed Challenges', desc: 'Seed challenge cards' },
+]
 
 export default function HomePage() {
   const navigate = useNavigate()
   const user = auth.currentUser
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin' || role === 'gm'
 
   const handleSignOut = async () => {
     await signOut(auth)
@@ -119,6 +131,58 @@ export default function HomePage() {
           </span>
         </button>
       </div>
+
+      {/* Admin tools — only for admin/GM roles */}
+      {isAdmin && (
+        <div style={{
+          marginTop: 32,
+          width: '100%',
+          maxWidth: 320,
+          border: '1px solid #1a1a1a',
+          borderRadius: 12,
+          padding: 16,
+        }}>
+          <p style={{
+            fontSize: '0.7rem',
+            color: '#666',
+            textTransform: 'uppercase',
+            letterSpacing: 1.5,
+            fontWeight: 700,
+            margin: '0 0 12px',
+          }}>
+            Admin Tools
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ADMIN_LINKS.map((link) => (
+              <button
+                key={link.path}
+                onClick={() => navigate(link.path)}
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid #222',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ color: '#ddd', fontWeight: 600, fontSize: '0.9rem' }}>
+                  {link.label}
+                </span>
+                <span style={{
+                  display: 'block',
+                  color: '#666',
+                  fontSize: '0.75rem',
+                  marginTop: 2,
+                }}>
+                  {link.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bottom links */}
       <div style={{

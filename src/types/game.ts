@@ -54,6 +54,13 @@ export interface GameMap {
   map_center?: { lat: number; lng: number; zoom: number }
   recommended_teams?: number
   recommended_duration?: number
+
+  // The map's overall outer frame, drawn once in the Zone Builder. GeoJSON
+  // Polygon/MultiPolygon stored as a JSON string (parse with JSON.parse), same
+  // convention as Zone.boundary. Used by the Zone Builder's coverage/gap aid to
+  // highlight space inside the frame not yet covered by a saved zone. Optional —
+  // absent on maps created before the builder / not yet given a boundary. (v12)
+  boundary?: string
 }
 
 // ─── Challenge ───────────────────────────────────────────────────────────────
