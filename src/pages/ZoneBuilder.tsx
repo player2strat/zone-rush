@@ -2478,6 +2478,8 @@ const secondaryBtnStyle: React.CSSProperties = {
 const secondaryFullBtnStyle: React.CSSProperties = {
   ...secondaryBtnStyle,
   width: "100%",
+  // <label> defaults to content-box, so width:100% + padding overflows; pin it.
+  boxSizing: "border-box",
   marginTop: 10,
 };
 
