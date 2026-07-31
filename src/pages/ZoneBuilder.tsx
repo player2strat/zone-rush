@@ -237,6 +237,69 @@ function createSnapPolygonMode(): MapboxDraw.DrawCustomMode {
   };
 }
 
+// A direct_select variant for editing an existing zone: dragging a single
+// vertex (or a just-dragged midpoint) snaps it onto neighbor borders. The base
+// mode moves vertices by cursor DELTA, so after the base drag we hard-set the
+// vertex to the snapped point for exact coincidence — a delta nudge alone would
+// leave it off by the cursor-grab offset.
+function createSnapDirectSelectMode(): MapboxDraw.DrawCustomMode {
+  const base = BUILTIN_MODES.direct_select;
+
+  interface DirectSelectState extends SnapModeState {
+    selectedCoordPaths?: string[];
+    feature?: {
+      updateCoordinate: (path: string, lng: number, lat: number) => void;
+    };
+  }
+
+  return {
+    ...base,
+    onSetup(opts) {
+      const state = base.onSetup!.call(this, opts) as DirectSelectState;
+      state.snapTargets =
+        (opts as { snapTargets?: SnapTarget[] })?.snapTargets || [];
+      return state;
+    },
+    onDrag(state, e) {
+      const s = state as DirectSelectState;
+      let snapped: [number, number] | null = null;
+      const singleVertex =
+        Array.isArray(s.selectedCoordPaths) && s.selectedCoordPaths.length === 1;
+      if (singleVertex && e?.lngLat) {
+        snapped = snapPoint(
+          this.map,
+          s.snapTargets,
+          [e.lngLat.lng, e.lngLat.lat],
+          SNAP_PIXELS
+        );
+        updateSnapIndicator(this.map, snapped);
+        if (snapped) e.lngLat = new mapboxgl.LngLat(snapped[0], snapped[1]);
+      }
+      base.onDrag!.call(this, state, e);
+      // Force the vertex exactly onto the snap point (see note above).
+      if (snapped && singleVertex && s.feature) {
+        try {
+          s.feature.updateCoordinate(
+            s.selectedCoordPaths![0],
+            snapped[0],
+            snapped[1]
+          );
+        } catch {
+          /* leave the delta-moved position */
+        }
+      }
+    },
+    onMouseUp(state, e) {
+      updateSnapIndicator(this.map, null);
+      base.onMouseUp?.call(this, state, e);
+    },
+    onStop(state) {
+      updateSnapIndicator(this.map, null);
+      base.onStop?.call(this, state);
+    },
+  };
+}
+
 export default function ZoneBuilder() {
   const navigate = useNavigate();
   const mapContainer = useRef<HTMLDivElement | null>(null);
@@ -535,7 +598,11 @@ export default function ZoneBuilder() {
       // 'snap_polygon' mode snaps points to existing zones/boundary while drawing.
       draw.current = new MapboxDraw({
         displayControlsDefault: false,
-        modes: { ...BUILTIN_MODES, snap_polygon: createSnapPolygonMode() },
+        modes: {
+          ...BUILTIN_MODES,
+          snap_polygon: createSnapPolygonMode(),
+          snap_direct_select: createSnapDirectSelectMode(),
+        },
       });
       map.current.addControl(draw.current as unknown as mapboxgl.IControl);
       map.current.on("draw.create", handleDrawCreate as never);
@@ -1271,8 +1338,21 @@ export default function ZoneBuilder() {
     const drawId = ids && ids.length ? String(ids[0]) : null;
     editDrawId.current = drawId;
     if (drawId) {
+      // Vertex drags snap to the OTHER zones + the boundary — excluding the
+      // zone being edited, or its vertices would stick to their own old border.
+      const targets = buildSnapTargets(
+        zones.filter((zz) => zz.id !== zoneId),
+        selectedMap?.boundary
+      );
       try {
-        draw.current?.changeMode("direct_select", { featureId: drawId });
+        (
+          draw.current as unknown as {
+            changeMode: (mode: string, opts?: object) => void;
+          }
+        ).changeMode("snap_direct_select", {
+          featureId: drawId,
+          snapTargets: targets,
+        });
       } catch {
         try {
           draw.current?.changeMode("simple_select", { featureIds: [drawId] });
