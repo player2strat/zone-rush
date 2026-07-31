@@ -788,10 +788,10 @@ export default function ZoneBuilder() {
           boundary: JSON.stringify(z.geometry),
           center_lat: z.center_lat,
           center_lng: z.center_lng,
-          culture_tags: [],
-          transit_lines: [],
-          landmarks: [],
-          difficulty_rating: 3,
+          culture_tags: z.culture_tags,
+          transit_lines: z.transit_lines,
+          landmarks: z.landmarks,
+          difficulty_rating: z.difficulty_rating,
           ...(z.district_number != null
             ? { district_number: z.district_number }
             : {}),
@@ -2324,6 +2324,35 @@ interface ParsedZone {
   center_lat: number;
   center_lng: number;
   district_number?: number;
+  culture_tags: string[];
+  transit_lines: string[];
+  landmarks: string[];
+  difficulty_rating: number;
+}
+
+// Read a tag list from feature properties as a string array (accepts an array
+// or a comma/semicolon-separated string). Zones store these as arrays.
+function readTagArray(props: Record<string, unknown>, keys: string[]): string[] {
+  for (const k of keys) {
+    const v = props?.[k];
+    if (Array.isArray(v)) {
+      return v.map((x) => String(x).trim()).filter(Boolean);
+    }
+    if (typeof v === "string" && v.trim()) {
+      return v
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
+
+// Numeric difficulty_rating (1–5) from properties; default 3.
+function readDifficultyRating(props: Record<string, unknown>): number {
+  const v = props?.difficulty_rating ?? props?.difficulty;
+  const n = typeof v === "number" ? v : parseInt(String(v), 10);
+  return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 3;
 }
 
 // Turn an uploaded GeoJSON of neighborhoods/districts into zone drafts. One
@@ -2378,6 +2407,21 @@ function parseZonesFromGeojson(geojson: unknown): ParsedZone[] {
       geometry: geom,
       center_lat,
       center_lng,
+      culture_tags: readTagArray(props, [
+        "culture_tags",
+        "cultureTags",
+        "culture",
+        "tags",
+      ]),
+      transit_lines: readTagArray(props, [
+        "transit_lines",
+        "transitLines",
+        "transit",
+        "subway_lines",
+        "lines",
+      ]),
+      landmarks: readTagArray(props, ["landmarks", "landmark"]),
+      difficulty_rating: readDifficultyRating(props),
       ...(isNaN(num) ? {} : { district_number: num }),
     });
   });
@@ -2434,6 +2478,8 @@ const secondaryBtnStyle: React.CSSProperties = {
 const secondaryFullBtnStyle: React.CSSProperties = {
   ...secondaryBtnStyle,
   width: "100%",
+  // <label> defaults to content-box, so width:100% + padding overflows; pin it.
+  boxSizing: "border-box",
   marginTop: 10,
 };
 

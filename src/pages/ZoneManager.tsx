@@ -24,6 +24,45 @@ interface ZoneDraft {
   isNew?: boolean;
 }
 
+// Slug for a generated map doc id, e.g. "Manhattan Alpha" -> "manhattan_alpha".
+function slugify(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "map"
+  );
+}
+
+// Read a tag-list field from GeoJSON feature properties. Accepts an array or a
+// comma/semicolon-separated string; returns the comma-string form this editor
+// uses. Tries several key spellings.
+function readTagList(props: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = props?.[k];
+    if (Array.isArray(v)) {
+      return v.map((x) => String(x).trim()).filter(Boolean).join(", ");
+    }
+    if (typeof v === "string" && v.trim()) {
+      return v
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(", ");
+    }
+  }
+  return "";
+}
+
+// Read a numeric difficulty_rating (1–5) from properties; default 3. Zone
+// difficulty is numeric, so a non-numeric value (e.g. "hard") falls back to 3.
+function readDifficulty(props: Record<string, unknown>): number {
+  const v = props?.difficulty_rating ?? props?.difficulty;
+  const n = typeof v === "number" ? v : parseInt(String(v), 10);
+  return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 3;
+}
+
 export default function ZoneManager() {
   const navigate = useNavigate();
   const [zones, setZones] = useState<ZoneDraft[]>([]);
@@ -38,6 +77,15 @@ export default function ZoneManager() {
   const [maps, setMaps] = useState<MapOption[]>([]);
   const [assignMapId, setAssignMapId] = useState(""); // map applied to zones that don't have one yet
   const [filterMapId, setFilterMapId] = useState(""); // "" = all maps; else show one map's zones
+
+  // "Save as map" — bundle selected zones into a new maps doc (the collection
+  // CreateGame's picker reads; membership lives on zone.map_id). map_sets is
+  // legacy and read by nothing, so we write a real map instead.
+  const [selectedForMap, setSelectedForMap] = useState<Set<string>>(new Set());
+  const [mapName, setMapName] = useState("");
+  const [mapBorough, setMapBorough] = useState("");
+  const [mapDesc, setMapDesc] = useState("");
+  const [savingMap, setSavingMap] = useState(false);
 
   // Load existing zones from Firestore
   useEffect(() => {
@@ -143,10 +191,9 @@ export default function ZoneManager() {
               : 0;
 
           // Pull any name from properties
+          const props = feat.properties || {};
           const nameKey = possibleKeys.find((k) => /name|label|title/i.test(k));
-          const defaultName = nameKey
-            ? feat.properties[nameKey]
-            : `District ${num}`;
+          const defaultName = nameKey ? props[nameKey] : `District ${num}`;
 
           return {
             id: `zone_district_${num}`,
@@ -156,10 +203,22 @@ export default function ZoneManager() {
             boundary: boundary,
             center_lat: Math.round(centerLat * 1000000) / 1000000,
             center_lng: Math.round(centerLng * 1000000) / 1000000,
-            culture_tags: "",
-            transit_lines: "",
-            landmarks: "",
-            difficulty_rating: 3,
+            // Read pre-filled metadata from feature properties if present.
+            culture_tags: readTagList(props, [
+              "culture_tags",
+              "cultureTags",
+              "culture",
+              "tags",
+            ]),
+            transit_lines: readTagList(props, [
+              "transit_lines",
+              "transitLines",
+              "transit",
+              "subway_lines",
+              "lines",
+            ]),
+            landmarks: readTagList(props, ["landmarks", "landmark"]),
+            difficulty_rating: readDifficulty(props),
             isNew: true,
           };
         }
@@ -274,6 +333,124 @@ export default function ZoneManager() {
       setMessage("Error saving: " + (err as Error).message);
     }
     setSaving(false);
+  };
+
+  // Toggle a zone in/out of the "save as map" selection.
+  const toggleForMap = (id: string) => {
+    setSelectedForMap((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Bundle the checked zones into a NEW map: writes those zone docs (assigned to
+  // the map via map_id) and creates a `maps` doc — the collection CreateGame's
+  // picker reads. Center = average of the selected zones' centers; zoom default.
+  const saveAsMap = async () => {
+    const name = mapName.trim();
+    if (!name) {
+      setMessage("Error: give the map a name first.");
+      return;
+    }
+    const selected = zones.filter((z) => selectedForMap.has(z.id));
+    if (selected.length === 0) {
+      setMessage("Error: select at least one zone for the map.");
+      return;
+    }
+
+    setSavingMap(true);
+    setMessage("Creating map...");
+    try {
+      const mapId = `map_${slugify(name)}_${Date.now().toString(36)}`;
+
+      // Center = average of the selected zones' centers (matches SeedMaps'
+      // map_center object shape). default_zoom is a fixed sensible default.
+      const avgLat =
+        selected.reduce((s, z) => s + (z.center_lat || 0), 0) / selected.length;
+      const avgLng =
+        selected.reduce((s, z) => s + (z.center_lng || 0), 0) / selected.length;
+      const map_center = {
+        lat: Math.round(avgLat * 1e6) / 1e6,
+        lng: Math.round(avgLng * 1e6) / 1e6,
+        zoom: 12,
+      };
+
+      // Write the selected zones (full docs) assigned to the new map. Covers
+      // both freshly-uploaded zones and ones already saved.
+      for (const zone of selected) {
+        await setDoc(
+          doc(db, "zones", zone.id),
+          {
+            id: zone.id,
+            map_id: mapId,
+            district_number: zone.district_number,
+            name: zone.name,
+            city: zone.city,
+            boundary:
+              typeof zone.boundary === "string"
+                ? zone.boundary
+                : JSON.stringify(zone.boundary),
+            center_lat: zone.center_lat,
+            center_lng: zone.center_lng,
+            culture_tags: zone.culture_tags
+              .split(",")
+              .map((t: string) => t.trim())
+              .filter(Boolean),
+            transit_lines: zone.transit_lines
+              .split(",")
+              .map((t: string) => t.trim())
+              .filter(Boolean),
+            landmarks: zone.landmarks
+              .split(",")
+              .map((t: string) => t.trim())
+              .filter(Boolean),
+            difficulty_rating: zone.difficulty_rating,
+          },
+          { merge: true }
+        );
+      }
+
+      // Create the `maps` doc (same shape SeedMaps writes). is_active:true so it
+      // appears in CreateGame's picker immediately.
+      const mapDoc: Record<string, unknown> = {
+        id: mapId,
+        name,
+        city: cityId,
+        map_center,
+        is_active: true,
+        created_at: new Date(),
+      };
+      if (mapBorough.trim()) mapDoc.borough = mapBorough.trim();
+      if (mapDesc.trim()) mapDoc.description = mapDesc.trim();
+      await setDoc(doc(db, "maps", mapId), mapDoc);
+
+      // Reflect locally: the selected zones now belong to the new map, and the
+      // map joins the picker lists.
+      setZones((prev) =>
+        prev.map((z) =>
+          selectedForMap.has(z.id) ? { ...z, map_id: mapId, isNew: false } : z
+        )
+      );
+      setMaps((prev) =>
+        [...prev, { id: mapId, name }].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      );
+      setSelectedForMap(new Set());
+      setMapName("");
+      setMapBorough("");
+      setMapDesc("");
+      setMessage(
+        `Created map "${name}" with ${selected.length} zone${
+          selected.length === 1 ? "" : "s"
+        }. It's now selectable in Create Game.`
+      );
+    } catch (err) {
+      setMessage("Error creating map: " + (err as Error).message);
+    }
+    setSavingMap(false);
   };
 
   if (loading) {
@@ -541,6 +718,106 @@ export default function ZoneManager() {
           </button>
         </div>
 
+        {/* Save selected zones as a new map */}
+        {zones.length > 0 && (
+          <div
+            style={{
+              background: "rgba(155,93,229,0.06)",
+              border: "1px solid rgba(155,93,229,0.3)",
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              Save selected zones as a new map
+            </div>
+            <p style={{ color: "#888", fontSize: "0.8rem", marginBottom: 12 }}>
+              Check zones below, name the map, and save. It becomes a picker card
+              in Create Game (writes a <code>maps</code> doc + sets each zone's{" "}
+              <code>map_id</code>).
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <input
+                value={mapName}
+                onChange={(e) => setMapName(e.target.value)}
+                placeholder="Map name (e.g. Manhattan Alpha)"
+                style={{ ...inputStyle, flex: 1, width: "auto", minWidth: 200 }}
+              />
+              <input
+                value={mapBorough}
+                onChange={(e) => setMapBorough(e.target.value)}
+                placeholder="Borough (optional)"
+                style={{ ...inputStyle, width: 180 }}
+              />
+            </div>
+            <input
+              value={mapDesc}
+              onChange={(e) => setMapDesc(e.target.value)}
+              placeholder="Description (optional — shown on the picker card)"
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginBottom: 12 }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <span
+                style={{
+                  color: selectedForMap.size > 0 ? "#9B5DE5" : "#666",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                }}
+              >
+                {selectedForMap.size} zone{selectedForMap.size === 1 ? "" : "s"} selected
+              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() =>
+                    setSelectedForMap(new Set(visibleZones.map((z) => z.id)))
+                  }
+                  style={ghostBtn}
+                >
+                  Select shown
+                </button>
+                <button onClick={() => setSelectedForMap(new Set())} style={ghostBtn}>
+                  Clear
+                </button>
+                <button
+                  onClick={saveAsMap}
+                  disabled={savingMap || selectedForMap.size === 0 || !mapName.trim()}
+                  style={{
+                    background:
+                      savingMap || selectedForMap.size === 0 || !mapName.trim()
+                        ? "#333"
+                        : "#9B5DE5",
+                    color:
+                      savingMap || selectedForMap.size === 0 || !mapName.trim()
+                        ? "#888"
+                        : "#fff",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "9px 18px",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor:
+                      savingMap || selectedForMap.size === 0 || !mapName.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {savingMap ? "Saving…" : "Save as map"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Zone list */}
         {visibleZones.map((zone) => (
           <div
@@ -555,14 +832,29 @@ export default function ZoneManager() {
               overflow: "hidden",
             }}
           >
-            {/* Zone header — click to expand */}
-            <button
-              onClick={() =>
-                setExpandedZone(expandedZone === zone.id ? null : zone.id)
-              }
-              style={{
-                width: "100%",
-                padding: "14px 16px",
+            {/* Zone header — checkbox bundles into a new map; click to expand */}
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={selectedForMap.has(zone.id)}
+                onChange={() => toggleForMap(zone.id)}
+                title="Include this zone in the new map"
+                style={{
+                  margin: "0 0 0 16px",
+                  width: 16,
+                  height: 16,
+                  cursor: "pointer",
+                  accentColor: "#9B5DE5",
+                  flexShrink: 0,
+                }}
+              />
+              <button
+                onClick={() =>
+                  setExpandedZone(expandedZone === zone.id ? null : zone.id)
+                }
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -633,6 +925,7 @@ export default function ZoneManager() {
                 ▼
               </span>
             </button>
+            </div>
 
             {/* Expanded edit form */}
             {expandedZone === zone.id && (
@@ -768,4 +1061,16 @@ const inputStyle: React.CSSProperties = {
   fontSize: "0.88rem",
   width: "100%",
   boxSizing: "border-box",
+};
+
+const ghostBtn: React.CSSProperties = {
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid #333",
+  color: "#aaa",
+  borderRadius: 8,
+  padding: "9px 14px",
+  fontWeight: 600,
+  fontSize: "0.82rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
 };
