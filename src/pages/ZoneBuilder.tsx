@@ -59,6 +59,183 @@ const SRC_ZONES = "zb-saved-zones";
 const SRC_ZONE_LABELS = "zb-zone-labels";
 const SRC_BOUNDARY = "zb-map-boundary";
 const SRC_GAP = "zb-coverage-gap";
+const SRC_SNAP = "zb-snap-indicator";
+
+// Snap radius in screen pixels: a point being drawn within this distance of an
+// existing zone edge/vertex (or the boundary) snaps onto it, so shared borders
+// coincide instead of leaving a gap/overlap.
+const SNAP_PIXELS = 12;
+
+// ---- Snapping (draw-time) --------------------------------------------------
+
+interface SnapTarget {
+  coords: number[][]; // ring coordinates as [lng,lat][]
+  bbox: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
+}
+
+// Collect polygon rings (with bboxes) from zones + an optional boundary — the
+// geometry a freshly drawn point can snap onto.
+function buildSnapTargets(zones: Zone[], boundaryStr?: string): SnapTarget[] {
+  const targets: SnapTarget[] = [];
+  const addGeom = (geom: GeoJSON.Geometry | null) => {
+    if (!geom) return;
+    const rings: number[][][] =
+      geom.type === "Polygon"
+        ? geom.coordinates
+        : geom.type === "MultiPolygon"
+        ? geom.coordinates.flat()
+        : [];
+    for (const ring of rings) {
+      if (!ring || ring.length < 2) continue;
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+      for (const c of ring) {
+        if (c[0] < minLng) minLng = c[0];
+        if (c[0] > maxLng) maxLng = c[0];
+        if (c[1] < minLat) minLat = c[1];
+        if (c[1] > maxLat) maxLat = c[1];
+      }
+      targets.push({ coords: ring, bbox: [minLng, minLat, maxLng, maxLat] });
+    }
+  };
+  for (const z of zones) addGeom(parseGeometry(z.boundary));
+  if (boundaryStr) addGeom(parseGeometry(boundaryStr));
+  return targets;
+}
+
+// Nearest point on screen segment ab to point p (all pixel-space).
+function nearestOnSegment(
+  p: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): { x: number; y: number } {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
+
+// Snap lng/lat to the nearest target vertex (priority) or edge within SNAP_PIXELS
+// on screen. Returns the snapped [lng,lat], or null if nothing is close enough.
+function snapPoint(
+  map: mapboxgl.Map,
+  targets: SnapTarget[],
+  lngLat: [number, number],
+  pixels: number
+): [number, number] | null {
+  const [clng, clat] = lngLat;
+  const cursor = map.project(lngLat);
+  const M = 0.02; // coarse degree pre-filter so far rings aren't projected
+
+  let best: [number, number] | null = null;
+  let bestD = pixels;
+  for (const t of targets) {
+    const [w, s, e, n] = t.bbox;
+    if (clng < w - M || clng > e + M || clat < s - M || clat > n + M) continue;
+    for (const c of t.coords) {
+      const pt = map.project([c[0], c[1]]);
+      const d = Math.hypot(pt.x - cursor.x, pt.y - cursor.y);
+      if (d < bestD) {
+        bestD = d;
+        best = [c[0], c[1]];
+      }
+    }
+  }
+  if (best) return best;
+
+  bestD = pixels;
+  for (const t of targets) {
+    const [w, s, e, n] = t.bbox;
+    if (clng < w - M || clng > e + M || clat < s - M || clat > n + M) continue;
+    for (let i = 0; i + 1 < t.coords.length; i++) {
+      const a = map.project([t.coords[i][0], t.coords[i][1]]);
+      const b = map.project([t.coords[i + 1][0], t.coords[i + 1][1]]);
+      const np = nearestOnSegment(cursor, a, b);
+      const d = Math.hypot(np.x - cursor.x, np.y - cursor.y);
+      if (d < bestD) {
+        bestD = d;
+        const ll = map.unproject([np.x, np.y]);
+        best = [ll.lng, ll.lat];
+      }
+    }
+  }
+  return best;
+}
+
+// Show/clear the dot that marks where the next point will snap.
+function updateSnapIndicator(map: mapboxgl.Map, coord: [number, number] | null) {
+  const src = map.getSource(SRC_SNAP) as mapboxgl.GeoJSONSource | undefined;
+  if (!src) return;
+  src.setData(
+    coord
+      ? {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: coord },
+        }
+      : { type: "FeatureCollection", features: [] }
+  );
+}
+
+// The runtime built-in mode implementations. (The shipped types describe a
+// different constants object under `.modes`, so cast to the real shape.)
+const BUILTIN_MODES = (
+  MapboxDraw as unknown as { modes: Record<string, MapboxDraw.DrawCustomMode> }
+).modes;
+
+interface SnapModeState {
+  snapTargets: SnapTarget[];
+  [k: string]: unknown;
+}
+
+// A draw_polygon variant that snaps each placed/previewed point onto nearby
+// geometry passed via changeMode('snap_polygon', { snapTargets }).
+function createSnapPolygonMode(): MapboxDraw.DrawCustomMode {
+  const base = BUILTIN_MODES.draw_polygon;
+
+  const applySnap = (
+    ctx: MapboxDraw.DrawCustomModeThis,
+    state: SnapModeState,
+    e: { lngLat?: mapboxgl.LngLat }
+  ) => {
+    const ll = e?.lngLat;
+    if (!ll) return;
+    const snapped = snapPoint(ctx.map, state.snapTargets, [ll.lng, ll.lat], SNAP_PIXELS);
+    updateSnapIndicator(ctx.map, snapped);
+    if (snapped) e.lngLat = new mapboxgl.LngLat(snapped[0], snapped[1]);
+  };
+
+  return {
+    ...base,
+    onSetup(opts) {
+      const state = base.onSetup!.call(this, opts) as SnapModeState;
+      state.snapTargets =
+        (opts as { snapTargets?: SnapTarget[] })?.snapTargets || [];
+      return state;
+    },
+    onMouseMove(state, e) {
+      applySnap(this, state as SnapModeState, e);
+      base.onMouseMove!.call(this, state, e);
+    },
+    onClick(state, e) {
+      applySnap(this, state as SnapModeState, e);
+      base.onClick!.call(this, state, e);
+    },
+    onTap(state, e) {
+      applySnap(this, state as SnapModeState, e);
+      base.onTap!.call(this, state, e);
+    },
+    onStop(state) {
+      updateSnapIndicator(this.map, null);
+      base.onStop!.call(this, state);
+    },
+  };
+}
 
 export default function ZoneBuilder() {
   const navigate = useNavigate();
@@ -339,9 +516,27 @@ export default function ZoneBuilder() {
         },
       });
 
+      // Snap indicator — a dot showing where the next drawn point will land.
+      map.current.addSource(SRC_SNAP, { type: "geojson", data: emptyFC() });
+      map.current.addLayer({
+        id: `${SRC_SNAP}-dot`,
+        type: "circle",
+        source: SRC_SNAP,
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#FF2D95",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+
       // Polygon drawing. We drive modes from our own buttons, so hide the
-      // default control UI. A finished polygon fires 'draw.create'.
-      draw.current = new MapboxDraw({ displayControlsDefault: false });
+      // default control UI. A finished polygon fires 'draw.create'. The custom
+      // 'snap_polygon' mode snaps points to existing zones/boundary while drawing.
+      draw.current = new MapboxDraw({
+        displayControlsDefault: false,
+        modes: { ...BUILTIN_MODES, snap_polygon: createSnapPolygonMode() },
+      });
       map.current.addControl(draw.current as unknown as mapboxgl.IControl);
       map.current.on("draw.create", handleDrawCreate as never);
       map.current.on("draw.modechange", handleDrawModeChange as never);
@@ -508,6 +703,16 @@ export default function ZoneBuilder() {
 
   // ---- Drawing + saving zones ----
 
+  // Enter the snapping draw mode with the given snap targets. ('snap_polygon'
+  // isn't in the built-in DrawMode union, so cast the changeMode call.)
+  function enterSnapPolygon(targets: SnapTarget[]) {
+    (
+      draw.current as unknown as {
+        changeMode: (mode: string, opts?: object) => void;
+      } | null
+    )?.changeMode("snap_polygon", { snapTargets: targets });
+  }
+
   function startDrawZone() {
     if (!selectedMapId) {
       setMessage("Error: pick a map first.");
@@ -518,8 +723,11 @@ export default function ZoneBuilder() {
     drawTarget.current = "zone";
     justCreated.current = false;
     setDrawingMode("zone");
-    draw.current?.changeMode("draw_polygon");
-    setMessage("Click to place points; double-click (or Enter) to finish.");
+    // Snap new zones to existing zones + the map boundary.
+    enterSnapPolygon(buildSnapTargets(zones, selectedMap?.boundary));
+    setMessage(
+      "Click to place points; they snap to nearby borders. Double-click (or Enter) to finish."
+    );
   }
 
   function startDrawBoundary() {
@@ -533,7 +741,8 @@ export default function ZoneBuilder() {
     justCreated.current = false;
     setRedrawingBoundary(true); // hide the old frame while drawing the new one
     setDrawingMode("boundary");
-    draw.current?.changeMode("draw_polygon");
+    // Snap the boundary to existing zones so it hugs them.
+    enterSnapPolygon(buildSnapTargets(zones));
     setMessage("Draw the map's outer frame; double-click (or Enter) to finish.");
   }
 
