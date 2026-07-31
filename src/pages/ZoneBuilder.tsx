@@ -1071,6 +1071,7 @@ export default function ZoneBuilder() {
           ...(z.district_number != null
             ? { district_number: z.district_number }
             : {}),
+          ...(z.nta_code ? { nta_code: z.nta_code } : {}),
         });
         if (++n >= 450) {
           await batch.commit();
@@ -2613,6 +2614,7 @@ interface ParsedZone {
   center_lat: number;
   center_lng: number;
   district_number?: number;
+  nta_code?: string;
   culture_tags: string[];
   transit_lines: string[];
   landmarks: string[];
@@ -2644,6 +2646,37 @@ function readDifficultyRating(props: Record<string, unknown>): number {
   return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 3;
 }
 
+// Keys that hold an identifier rather than a human-readable label.
+const CODEISH_KEY = /code|abbr|fips|gid|objectid|(^|_)id($|_)/i;
+
+// Pick the property holding the display name, by ranked preference rather than
+// first-match. Code-ish keys are rejected outright: an NYC NTA file has BOTH
+// NTACode and NTAName, and a loose first-match would grab the code ("BK37").
+function pickNameKey(keys: string[]): string | undefined {
+  const candidates = keys.filter((k) => !CODEISH_KEY.test(k));
+  const ranked = [
+    /^(nta)?_?name$/i, // name, ntaname, nta_name
+    /name/i, // NTAName, neighborhood_name, …
+    /^(label|title)$/i,
+    /label|title/i,
+    /neighbou?rhood|hood/i,
+  ];
+  for (const re of ranked) {
+    const hit = candidates.find((k) => re.test(k));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+// Pick the property holding a zone code (e.g. NTACode), stored as nta_code so
+// the code is preserved without hijacking the name.
+function pickCodeKey(keys: string[]): string | undefined {
+  return (
+    keys.find((k) => /^(nta)?_?code$/i.test(k)) ||
+    keys.find((k) => /code/i.test(k))
+  );
+}
+
 // Turn an uploaded GeoJSON of neighborhoods/districts into zone drafts. One
 // polygon feature = one zone. Detects a name and district-number property the
 // same way Zone Manager does. Used to build a whole new map from a file.
@@ -2666,9 +2699,8 @@ function parseZonesFromGeojson(geojson: unknown): ParsedZone[] {
 
   const keys = Object.keys(features[0]?.properties || {});
   const districtKey = keys.find((k) => /dist|district|ward|number|coun/i.test(k));
-  const nameKey = keys.find((k) =>
-    /name|label|title|nta|neighbor|hood/i.test(k)
-  );
+  const nameKey = pickNameKey(keys);
+  const codeKey = pickCodeKey(keys);
 
   const out: ParsedZone[] = [];
   features.forEach((feat, i) => {
@@ -2676,12 +2708,13 @@ function parseZonesFromGeojson(geojson: unknown): ParsedZone[] {
     if (!geom || (geom.type !== "Polygon" && geom.type !== "MultiPolygon")) return;
     const props = feat.properties || {};
     const num = districtKey ? parseInt(String(props[districtKey])) : NaN;
+    const nameVal = nameKey ? String(props[nameKey] ?? "").trim() : "";
+    const codeVal = codeKey ? String(props[codeKey] ?? "").trim() : "";
     const name =
-      nameKey && props[nameKey]
-        ? String(props[nameKey])
-        : !isNaN(num)
-        ? `District ${num}`
-        : `Zone ${i + 1}`;
+      nameVal ||
+      (!isNaN(num) ? `District ${num}` : "") ||
+      codeVal ||
+      `Zone ${i + 1}`;
     let center_lat = 0;
     let center_lng = 0;
     try {
@@ -2712,6 +2745,7 @@ function parseZonesFromGeojson(geojson: unknown): ParsedZone[] {
       landmarks: readTagArray(props, ["landmarks", "landmark"]),
       difficulty_rating: readDifficultyRating(props),
       ...(isNaN(num) ? {} : { district_number: num }),
+      ...(codeVal ? { nta_code: codeVal } : {}),
     });
   });
   return out;
