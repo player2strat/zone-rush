@@ -125,7 +125,8 @@ export default function App() {
             <HomePage />
           </>
         } />
-        <Route path="/create" element={<CreateGame />} />
+        {/* Only GMs/admins can create games; players are sent home. */}
+        <Route path="/create" element={<AdminGuard><CreateGame /></AdminGuard>} />
         <Route path="/join" element={<JoinGame />} />
 <Route
           path="/lobby/:gameId"
