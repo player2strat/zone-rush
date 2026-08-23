@@ -60,7 +60,9 @@ service cloud.firestore {
 
     // ---- Gameplay: any signed-in user (players write these mid-game) --------
     match /games/{gameId} {
-      allow read, write: if signedIn();
+      allow read, update, delete: if signedIn();
+      // Only Game Masters / admins can create a game. Players join via code.
+      allow create: if isAdminOrGm();
 
       match /teams/{teamId} {
         allow read, write: if signedIn();

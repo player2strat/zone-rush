@@ -20,8 +20,10 @@ const ADMIN_LINKS = [
 export default function HomePage() {
   const navigate = useNavigate()
   const user = auth.currentUser
-  const { role } = useUserRole()
-  const isAdmin = role === 'admin' || role === 'gm'
+  const { role, loading: roleLoading } = useUserRole()
+  // GM/admin see the Game Master view (Create + Join + admin tools).
+  // Everyone else sees the Player view (Join only).
+  const isGM = role === 'admin' || role === 'gm'
 
   const handleSignOut = async () => {
     await signOut(auth)
@@ -56,7 +58,7 @@ export default function HomePage() {
           margin: 0,
           letterSpacing: -1,
         }}>
-          Ready to explore?
+          {isGM ? 'Game Master' : 'Ready to explore?'}
         </h1>
         <p style={{
           color: '#666',
@@ -67,7 +69,8 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons — wait for the role so the view doesn't flash */}
+      {!roleLoading && (
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -75,7 +78,8 @@ export default function HomePage() {
         width: '100%',
         maxWidth: 320,
       }}>
-        {/* Create Game — GM only */}
+        {/* Create Game — GM only. Players only ever see Join Game. */}
+        {isGM && (
         <button
           onClick={() => navigate('/create')}
           style={{
@@ -102,6 +106,7 @@ export default function HomePage() {
             Set up zones, invite players
           </span>
         </button>
+        )}
 
         {/* Join Game — All players */}
         <button
@@ -127,13 +132,14 @@ export default function HomePage() {
             color: '#3d8a6e',
             marginTop: 4,
           }}>
-            Enter a game code
+            {isGM ? 'Enter a game code' : 'Enter the code from your Game Master'}
           </span>
         </button>
       </div>
+      )}
 
       {/* Admin tools — only for admin/GM roles */}
-      {isAdmin && (
+      {isGM && (
         <div style={{
           marginTop: 32,
           width: '100%',
@@ -191,19 +197,6 @@ export default function HomePage() {
         gap: 24,
         fontSize: '0.82rem',
       }}>
-        <button
-          onClick={() => navigate('/map')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#555',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-          }}
-        >
-          View Map
-        </button>
         <button
           onClick={handleSignOut}
           style={{
