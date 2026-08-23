@@ -83,6 +83,12 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read, write: if signedIn();
       }
+
+      // Late-join requests (doc id = requesting player's uid). Players create
+      // their own; the GM updates status / assigns a team.
+      match /join_requests/{requestId} {
+        allow read, write: if signedIn();
+      }
     }
 
     match /submissions/{submissionId} {

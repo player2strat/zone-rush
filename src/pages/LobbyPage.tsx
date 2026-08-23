@@ -173,17 +173,8 @@ export default function LobbyPage() {
     return () => unsubTeams()
   }, [gameId, user])
 
-  // Redirect players to game screen when GM starts the game
-  useEffect(() => {
-    if (!game || !gameId || !user) return
-    if (game.status === 'active' || game.status === 'strategy') {
-      if (game.created_by === user.uid) {
-        navigate('/gm/' + gameId, { replace: true })
-      } else {
-        navigate('/game/' + gameId, { replace: true })
-      }
-    }
-  }, [game?.status])
+  // NOTE: no status-based redirect here — GameRouteGuard (via useGameRoute)
+  // owns routing on status change and also honors co-GMs in gm_uids.
 
   // -----------------------------------------------------------------------
   // Player: open the name prompt.
@@ -434,6 +425,27 @@ export default function LobbyPage() {
   // GM: remove a player from a team entirely (back to "unassigned")
   // -----------------------------------------------------------------------
 
+  // Player: leave the lobby. Also drops them from their team, otherwise the
+  // home page's active-game lookup would send them straight back here.
+  const handleLeaveLobby = async () => {
+    if (!isGM && gameId && user && playerTeamId) {
+      const team = teams.find((t) => t.id === playerTeamId)
+      const idx = team ? team.members.indexOf(user.uid) : -1
+      if (team && idx !== -1) {
+        try {
+          await updateDoc(doc(db, 'games', gameId, 'teams', playerTeamId), {
+            members: team.members.filter((_, i) => i !== idx),
+            member_names: team.member_names.filter((_, i) => i !== idx),
+          })
+        } catch (err: any) {
+          setError('Failed to leave team: ' + err.message)
+          return
+        }
+      }
+    }
+    navigate('/')
+  }
+
   const handleRemovePlayer = async (userId: string, fromTeamId: string) => {
     if (!gameId) return
     const confirmed = window.confirm('Remove this player from their team? They can rejoin.')
@@ -597,14 +609,14 @@ export default function LobbyPage() {
         {/* ── Header ── */}
         <div style={{ marginBottom: 24 }}>
           <button
-            onClick={() => navigate('/')}
+            onClick={handleLeaveLobby}
             style={{
               background: 'none', border: 'none', color: '#555',
               cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem',
               padding: 0, marginBottom: 12,
             }}
           >
-            ← Leave Lobby
+            {isGM ? '← Back to Home' : '← Leave Lobby'}
           </button>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>

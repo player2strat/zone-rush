@@ -28,7 +28,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, onSnapshot, collection, query, where, orderBy,
-  updateDoc, getDocs, serverTimestamp,
+  updateDoc, getDocs, serverTimestamp, writeBatch, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { isPointInPolygon } from '../lib/geo'
@@ -161,6 +161,10 @@ export default function GMDashboard() {
 
   const [game, setGame] = useState<GameData | null>(null)
   const [teams, setTeams] = useState<TeamData[]>([])
+  // Late joiners waiting for approval (games/{id}/join_requests, status pending).
+  const [joinRequests, setJoinRequests] = useState<{ uid: string; name: string }[]>([])
+  const [joinTeamPick, setJoinTeamPick] = useState<Record<string, string>>({})
+  const [joinBusy, setJoinBusy] = useState<string | null>(null)
   const [submissions, setSubmissions] = useState<SubmissionData[]>([])
   const [challenges, setChallenges] = useState<Map<string, ChallengeData>>(new Map())
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
@@ -173,6 +177,62 @@ export default function GMDashboard() {
   const [processing, setProcessing] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'chat' | 'activity'>('submissions')
+
+  // Subscribe to pending join requests
+  useEffect(() => {
+    if (!gameId) return
+    const q = query(collection(db, 'games', gameId, 'join_requests'), where('status', '==', 'pending'))
+    const unsub = onSnapshot(q, (snap) => {
+      setJoinRequests(snap.docs.map((d) => ({ uid: d.id, name: (d.data().name as string) || 'Player' })))
+    })
+    return unsub
+  }, [gameId])
+
+  // Approve: add to the chosen team + mark the request. One atomic batch.
+  const handleApproveJoin = async (uid: string, name: string) => {
+    if (!gameId) return
+    const teamId = joinTeamPick[uid] || defaultTeamFor()
+    if (!teamId) return
+    setJoinBusy(uid)
+    try {
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'games', gameId, 'teams', teamId), {
+        members: arrayUnion(uid),
+        member_names: arrayUnion(name),
+      })
+      batch.update(doc(db, 'games', gameId, 'join_requests', uid), {
+        status: 'approved',
+        team_id: teamId,
+        decided_at: serverTimestamp(),
+      })
+      await batch.commit()
+    } catch (err) {
+      console.error('Approve join failed:', err)
+    }
+    setJoinBusy(null)
+  }
+
+  const handleDenyJoin = async (uid: string) => {
+    if (!gameId) return
+    setJoinBusy(uid)
+    try {
+      await updateDoc(doc(db, 'games', gameId, 'join_requests', uid), {
+        status: 'denied',
+        decided_at: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Deny join failed:', err)
+    }
+    setJoinBusy(null)
+  }
+
+  // Smallest team with room (or just the smallest if all are full).
+  const defaultTeamFor = (): string => {
+    if (teams.length === 0) return ''
+    const size = game?.settings?.team_size ?? Infinity
+    const sorted = [...teams].sort((a, b) => a.members.length - b.members.length)
+    return (sorted.find((t) => t.members.length < size) || sorted[0]).id
+  }
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [showFullMap, setShowFullMap] = useState(false)
   const [timeLeft, setTimeLeft] = useState('')
@@ -1047,6 +1107,55 @@ const handleApprove = async (sub: SubmissionData) => {
           </div>
         )
       })()}
+
+      {/* LATE-JOIN REQUESTS — shown on every tab so they're never missed */}
+      {joinRequests.length > 0 && (
+        <div style={{ background: 'rgba(255,209,102,0.08)', borderBottom: '1px solid rgba(255,209,102,0.3)', padding: '12px 20px', flexShrink: 0 }}>
+          <div style={{ maxWidth: 720, margin: '0 auto' }}>
+            <p style={{ color: '#FFD166', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 10px' }}>
+              🙋 {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} asking to join
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {joinRequests.map((r) => {
+                const pick = joinTeamPick[r.uid] || defaultTeamFor()
+                const busy = joinBusy === r.uid
+                const size = game?.settings?.team_size
+                return (
+                  <div key={r.uid} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', minWidth: 100 }}>{r.name}</span>
+                    <select
+                      value={pick}
+                      onChange={(e) => setJoinTeamPick((prev) => ({ ...prev, [r.uid]: e.target.value }))}
+                      disabled={busy}
+                      style={{ flex: 1, minWidth: 160, background: '#111', color: '#eee', border: '1px solid #333', borderRadius: 8, padding: '8px 10px', fontFamily: 'inherit', fontSize: '0.85rem' }}
+                    >
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.members.length}{size ? `/${size}` : ''})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleApproveJoin(r.uid, r.name)}
+                      disabled={busy || !pick}
+                      style={{ background: '#06D6A0', color: '#000', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                    >
+                      {busy ? '…' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => handleDenyJoin(r.uid)}
+                      disabled={busy}
+                      style={{ background: 'none', color: '#EF476F', border: '1px solid rgba(239,71,111,0.4)', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TAB CONTENT */}
       <div style={{ flex: 1, overflow: 'auto' }}>

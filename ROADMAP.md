@@ -19,8 +19,9 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
 
 ## Game data safety
 
+- **Verify the `teams` collection-group index exists** in the Firebase console. `App.tsx` `findActiveGameForUser` runs `collectionGroup('teams')` + `array-contains` on `members`, which needs a collection-group-scoped index on `members`; if it's missing, the query fails silently and players are never auto-returned to their game.
+
 - **Snapshot zone names into the game doc** at create time (e.g. `zone_names: {id: name}`) so results/history keep proper names even if the map is later deleted. (Map delete is already blocked while games are in progress and warns about finished games.)
-- Switch individual zone deletes in Zone Builder from `window.confirm` to the same inline two-step confirm used for map delete.
 
 ## Zone Manager
 

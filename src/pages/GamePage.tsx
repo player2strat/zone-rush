@@ -368,12 +368,7 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId, myTeam?.id])
 
-  // Navigate to results when game ends
-  useEffect(() => {
-    if (game?.status === 'ended' && gameId) {
-      navigate('/results/' + gameId)
-    }
-  }, [game?.status, gameId, navigate])
+  // NOTE: the redirect to /results on game end is handled by GameRouteGuard.
 
   // Mark messages as read when chat tab is active
   useEffect(() => {

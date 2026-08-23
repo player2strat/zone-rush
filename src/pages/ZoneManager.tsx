@@ -486,6 +486,12 @@ export default function ZoneManager() {
       }}
     >
       <div style={{ maxWidth: 700, margin: "0 auto" }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+        >
+          ← Home
+        </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Manager
         </h1>

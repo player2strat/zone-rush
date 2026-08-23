@@ -19,7 +19,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, getDocs, doc, setDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 
 // ---------------------------------------------------------------------------
@@ -332,7 +332,9 @@ export default function CreateGame() {
       const joinCode = generateJoinCode()
       const gameId = 'game_' + Date.now()
 
-      await setDoc(doc(db, 'games', gameId), {
+      // One atomic batch: the game doc plus every pre-named team.
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'games', gameId), {
         id: gameId,
         name: gameName.trim(),
         city: cityFilter,
@@ -373,7 +375,7 @@ export default function CreateGame() {
       for (let i = 0; i < maxTeams; i++) {
         const teamId = 'team_' + (i + 1)
         const name = (teamNames[i] || '').trim() || defaultTeamName(i)
-        await setDoc(doc(db, 'games', gameId, 'teams', teamId), {
+        batch.set(doc(db, 'games', gameId, 'teams', teamId), {
           id: teamId,
           name,
           members: [],
@@ -386,6 +388,7 @@ export default function CreateGame() {
           hand: [],
         })
       }
+      await batch.commit()
 
       navigate('/lobby/' + gameId)
     } catch (err: any) {

@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { db, auth } from '../lib/firebase'
 
 export default function JoinGame() {
   const navigate = useNavigate()
@@ -26,12 +26,8 @@ export default function JoinGame() {
     setError('')
 
     try {
-      // Find the game with this join code
-      const q = query(
-        collection(db, 'games'),
-        where('join_code', '==', cleanCode),
-        where('status', '==', 'lobby')
-      )
+      // Find the game with this join code (any status — we route by state below)
+      const q = query(collection(db, 'games'), where('join_code', '==', cleanCode))
       const snapshot = await getDocs(q)
 
       if (snapshot.empty) {
@@ -40,9 +36,35 @@ export default function JoinGame() {
         return
       }
 
-      // Found the game — navigate to its lobby
-      const gameDoc = snapshot.docs[0]
-      navigate('/lobby/' + gameDoc.id)
+      // Prefer a lobby if several games share the code; else the newest.
+      const docs = snapshot.docs
+      const gameDoc = docs.find((d) => d.data().status === 'lobby') || docs[docs.length - 1]
+      const status = gameDoc.data().status
+
+      if (status === 'lobby') {
+        navigate('/lobby/' + gameDoc.id)
+        return
+      }
+      if (status === 'ended') {
+        navigate('/results/' + gameDoc.id)
+        return
+      }
+      // In progress — only existing team members (or the GM) can enter.
+      // GameRouteGuard sends GMs to /gm and players to /game from here.
+      const uid = auth.currentUser?.uid
+      const isGM = uid && (gameDoc.data().created_by === uid || (gameDoc.data().gm_uids || []).includes(uid))
+      if (isGM) {
+        navigate('/gm/' + gameDoc.id)
+        return
+      }
+      const teamsSnap = await getDocs(collection(db, 'games', gameDoc.id, 'teams'))
+      const onTeam = uid && teamsSnap.docs.some((t) => (t.data().members || []).includes(uid))
+      if (onTeam) {
+        navigate('/game/' + gameDoc.id)
+        return
+      }
+      // Not on a team — ask the Game Master to let them in.
+      navigate('/late-join/' + gameDoc.id)
     } catch (err: any) {
       setError('Error finding game: ' + err.message)
       setSearching(false)
