@@ -27,6 +27,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
+import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
 
 interface GameData {
   id: string
@@ -59,30 +60,6 @@ interface TeamData {
   taxi_used: boolean
   hand: string[]
 }
-
-// Team colors — visually distinct for the map
-const TEAM_COLORS = [
-  { name: 'Red', hex: '#EF476F' },
-  { name: 'Blue', hex: '#118AB2' },
-  { name: 'Green', hex: '#06D6A0' },
-  { name: 'Purple', hex: '#9B5DE5' },
-  { name: 'Orange', hex: '#F77F00' },
-  { name: 'Yellow', hex: '#FFD166' },
-  { name: 'Pink', hex: '#FF6B8A' },
-  { name: 'Teal', hex: '#2EC4B6' },
-]
-
-// Fun auto-generated team names
-const TEAM_NAMES = [
-  'The Bodega Cats',
-  'Subway Surfers',
-  'Pigeon Squad',
-  'The Jaywalkers',
-  'Borough Bosses',
-  'Street Legends',
-  'The Wanderers',
-  'Zone Runners',
-]
 
 export default function LobbyPage() {
   const { gameId } = useParams<{ gameId: string }>()
@@ -226,10 +203,10 @@ export default function LobbyPage() {
       const teamRef = doc(db, 'games', gameId, 'teams', teamId)
       await setDoc(teamRef, {
         id: teamId,
-        name: TEAM_NAMES[teamIndex] || 'Team ' + (teamIndex + 1),
+        name: defaultTeamName(teamIndex),
         members: [],
         member_names: [],
-        color: TEAM_COLORS[teamIndex]?.hex || '#888',
+        color: defaultTeamColor(teamIndex),
         total_points: 0,
         zones_claimed: 0,
         zones_locked: 0,
@@ -296,8 +273,8 @@ export default function LobbyPage() {
       } catch { /* ignore */ }
 
       cancelJoin()
-    } catch (err: any) {
-      setNameError('Failed to join: ' + err.message)
+    } catch (err) {
+      setNameError('Failed to join: ' + (err as Error).message)
     } finally {
       setJoining(false)
     }
@@ -341,8 +318,8 @@ export default function LobbyPage() {
         members: arrayUnion(user.uid),
         member_names: arrayUnion(displayName),
       })
-    } catch (err: any) {
-      setError('Failed to switch: ' + err.message)
+    } catch (err) {
+      setError('Failed to switch: ' + (err as Error).message)
     }
 
     setJoining(false)
@@ -363,8 +340,8 @@ export default function LobbyPage() {
         delete next[teamId]
         return next
       })
-    } catch (err: any) {
-      setError('Failed to rename: ' + err.message)
+    } catch (err) {
+      setError('Failed to rename: ' + (err as Error).message)
     }
     setSavingRoster(false)
   }
@@ -414,8 +391,8 @@ export default function LobbyPage() {
         members: arrayUnion(userId),
         member_names: arrayUnion(playerName),
       })
-    } catch (err: any) {
-      setError('Failed to move player: ' + err.message)
+    } catch (err) {
+      setError('Failed to move player: ' + (err as Error).message)
     }
 
     setSavingRoster(false)
@@ -437,8 +414,8 @@ export default function LobbyPage() {
             members: team.members.filter((_, i) => i !== idx),
             member_names: team.member_names.filter((_, i) => i !== idx),
           })
-        } catch (err: any) {
-          setError('Failed to leave team: ' + err.message)
+        } catch (err) {
+          setError('Failed to leave team: ' + (err as Error).message)
           return
         }
       }
@@ -468,8 +445,8 @@ export default function LobbyPage() {
         members: updatedMembers,
         member_names: updatedNames,
       })
-    } catch (err: any) {
-      setError('Failed to remove player: ' + err.message)
+    } catch (err) {
+      setError('Failed to remove player: ' + (err as Error).message)
     }
 
     setSavingRoster(false)
@@ -545,8 +522,8 @@ export default function LobbyPage() {
         started_at: now,
         ends_at: endTime,
       })
-    } catch (err: any) {
-      setError('Failed to start: ' + err.message)
+    } catch (err) {
+      setError('Failed to start: ' + (err as Error).message)
     }
   }
 

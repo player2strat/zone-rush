@@ -65,8 +65,8 @@ export default function JoinGame() {
       }
       // Not on a team — ask the Game Master to let them in.
       navigate('/late-join/' + gameDoc.id)
-    } catch (err: any) {
-      setError('Error finding game: ' + err.message)
+    } catch (err) {
+      setError('Error finding game: ' + (err as Error).message)
       setSearching(false)
     }
   }

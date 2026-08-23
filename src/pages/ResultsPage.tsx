@@ -142,7 +142,7 @@ function ConfettiOverlay({ onDone }: { onDone: () => void }) {
               height: p.shape === 'strip' ? p.size * 3 : p.size,
               borderRadius: p.shape === 'circle' ? '50%' : p.shape === 'strip' ? 2 : 2,
               background: p.color,
-              // @ts-ignore — CSS custom property
+              // @ts-expect-error — CSS custom property
               '--rot': `${p.rotation}deg`,
               animation: `
                 confettiFall ${p.duration}s ${p.delay}s ease-in forwards,

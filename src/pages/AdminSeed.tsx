@@ -25,8 +25,8 @@ export default function AdminSeed() {
       const snapshot = await getDocs(collection(db, "challenges"));
       setExistingCount(snapshot.size);
       addLog("Found " + snapshot.size + " existing challenges in Firestore.");
-    } catch (err: any) {
-      addLog("Error checking existing: " + err.message);
+    } catch (err) {
+      addLog("Error checking existing: " + (err as Error).message);
     }
   };
 
@@ -59,9 +59,9 @@ export default function AdminSeed() {
         if (success % 10 === 0) {
           addLog("...seeded " + success + "/" + stats.total);
         }
-      } catch (err: any) {
+      } catch (err) {
         failed++;
-        addLog("FAILED: " + challenge.id + " (" + challenge.title + ") — " + err.message);
+        addLog("FAILED: " + challenge.id + " (" + challenge.title + ") — " + (err as Error).message);
       }
     }
 

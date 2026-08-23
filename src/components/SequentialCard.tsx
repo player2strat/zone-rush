@@ -101,8 +101,8 @@ export default function SequentialCard({
     try {
       await lockStep(gameId, teamId, challenge.id, lockedCount, draft, steps.length, finalTask)
       // progress updates via the listener; no local mutation needed
-    } catch (err: any) {
-      setLockError(err.message || 'Could not lock that choice.')
+    } catch (err) {
+      setLockError((err as Error).message || 'Could not lock that choice.')
     } finally {
       setLocking(false)
     }

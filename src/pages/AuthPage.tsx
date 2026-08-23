@@ -60,9 +60,9 @@ export default function AuthPage() {
         await createUserDoc(result.user.uid, result.user.displayName || email, email)
       }
       // Auth state change in App.tsx will handle the redirect
-    } catch (err: any) {
+    } catch (err) {
       // Make Firebase error messages human-readable
-      const msg = err.code
+      const msg = (err as { code?: string }).code
         ?.replace('auth/', '')
         ?.replace(/-/g, ' ')
       setError(msg || 'Something went wrong. Try again.')
@@ -78,7 +78,7 @@ export default function AuthPage() {
       const result = await signInWithPopup(auth, googleProvider)
       const user = result.user
       await createUserDoc(user.uid, user.displayName || 'Player', user.email || '')
-    } catch (err: any) {
+    } catch {
       setError('Google sign-in failed. Try again.')
     } finally {
       setLoading(false)

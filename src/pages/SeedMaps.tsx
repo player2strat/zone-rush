@@ -535,8 +535,8 @@ export default function SeedMaps() {
         }, { merge: true })
         created++
         log(`  \u2713 ${zone.name} (${zone.id})`)
-      } catch (err: any) {
-        log(`  \u2717 ${zone.name} \u2014 ${err.message}`)
+      } catch (err) {
+        log(`  \u2717 ${zone.name} \u2014 ${(err as Error).message}`)
       }
     }
     log(`Manhattan zones: ${created} written`)
@@ -568,8 +568,8 @@ export default function SeedMaps() {
           created_at: new Date(),
         }, { merge: true })
         log(`  \u2713 map: ${m.name} (${m.id})`)
-      } catch (err: any) {
-        log(`  \u2717 map: ${m.name} \u2014 ${err.message}`)
+      } catch (err) {
+        log(`  \u2717 map: ${m.name} \u2014 ${(err as Error).message}`)
       }
     }
 
@@ -594,8 +594,8 @@ export default function SeedMaps() {
         log(`  \u2713 ported legacy map_set \u2192 map: ${data.name || d.id} (${d.id})`)
       }
       if (ported === 0) log('  (no extra legacy map_sets to port)')
-    } catch (err: any) {
-      log(`  \u2717 porting legacy map_sets \u2014 ${err.message}`)
+    } catch (err) {
+      log(`  \u2717 porting legacy map_sets \u2014 ${(err as Error).message}`)
     }
 
     log('Maps seeded.')
@@ -644,8 +644,8 @@ export default function SeedMaps() {
         const ids: string[] = d.data().zone_ids || []
         for (const zid of ids) assign(zid, d.id)
       }
-    } catch (err: any) {
-      log(`  \u2717 reading map_sets \u2014 ${err.message}`)
+    } catch (err) {
+      log(`  \u2717 reading map_sets \u2014 ${(err as Error).message}`)
     }
 
     // Pass 2 \u2014 known Manhattan zones
@@ -665,8 +665,8 @@ export default function SeedMaps() {
       try {
         await setDoc(doc(db, 'zones', zoneId), { map_id: mapId }, { merge: true })
         written++
-      } catch (err: any) {
-        log(`  \u2717 ${zoneId} \u2014 ${err.message}`)
+      } catch (err) {
+        log(`  \u2717 ${zoneId} \u2014 ${(err as Error).message}`)
       }
     }
     log(`  \u2713 assigned map_id to ${written} zones`)
