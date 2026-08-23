@@ -33,6 +33,7 @@ import {
 } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
+import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
@@ -187,21 +188,11 @@ export default function GamePage() {
     return (idx !== -1 && myTeam.member_names[idx]) || user.displayName || 'Player'
   })()
 
-  // Load zones from Firestore
+  // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
-    async function loadZones() {
-      const snapshot = await getDocs(collection(db, 'zones'))
-      const loaded = snapshot.docs.map((d) => {
-        const data = d.data()
-        return {
-          ...data,
-          boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary,
-        }
-      })
-      setLocalZones(loaded)
-    }
-    loadZones()
-  }, [])
+    if (!gameId) return
+    loadGameZones(gameId).then(setLocalZones)
+  }, [gameId])
 
  // Unified location — single source of truth for the whole app.
   // Optionally driven by game.settings.gps if present (no Firestore migration

@@ -20,9 +20,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot, collection } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
+import { loadGameZones } from '../lib/gameZones'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
@@ -188,23 +189,11 @@ export default function ResultsPage() {
   // Confetti
   const [showConfetti, setShowConfetti] = useState(true)
 
-  // Load zones from Firestore
+  // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
-    async function loadZones() {
-      const snap = await getDocs(collection(db, 'zones'))
-      const loaded = snap.docs.map((d) => {
-        const data = d.data()
-        return {
-          ...data,
-          boundary: typeof data.boundary === 'string'
-            ? JSON.parse(data.boundary)
-            : data.boundary,
-        }
-      })
-      setAllZoneData(loaded)
-    }
-    loadZones()
-  }, [])
+    if (!gameId) return
+    loadGameZones(gameId).then(setAllZoneData)
+  }, [gameId])
 
   // Listen to game doc
   useEffect(() => {

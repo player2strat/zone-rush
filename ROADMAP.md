@@ -21,7 +21,9 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
 
 - **Verify the `teams` collection-group index exists** in the Firebase console. `App.tsx` `findActiveGameForUser` runs `collectionGroup('teams')` + `array-contains` on `members`, which needs a collection-group-scoped index on `members`; if it's missing, the query fails silently and players are never auto-returned to their game.
 
-- **Snapshot zone names into the game doc** at create time (e.g. `zone_names: {id: name}`) so results/history keep proper names even if the map is later deleted. (Map delete is already blocked while games are in progress and warns about finished games.)
+- **Shipped (2026-08-22): per-game zone snapshot.** `CreateGame` copies every selected zone doc into `games/{id}/zones/{zoneId}` in the same batch as the game. `src/lib/gameZones.ts` `loadGameZones()` is the one reader (GamePage, GMDashboard, ResultsPage, SubmitProof, activity log); it falls back to the global `zones` collection for games created before this. Library edits/merges/splits/deletes can no longer alter a game's history.
+  - Follow-up: a one-off backfill for games created before the snapshot (copy their `game.zones` ids from the library while those zones still exist).
+  - Follow-up: with snapshots in place, the merge/split "blocked while games are in progress" guard is now conservative rather than necessary; could be relaxed.
 
 ## Zone Manager
 

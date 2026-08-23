@@ -84,6 +84,12 @@ service cloud.firestore {
         allow read, write: if signedIn();
       }
 
+      // Per-game zone snapshot, written once at game creation by the GM.
+      match /zones/{zoneId} {
+        allow read: if signedIn();
+        allow write: if isAdminOrGm();
+      }
+
       // Late-join requests (doc id = requesting player's uid). Players create
       // their own; the GM updates status / assigns a team.
       match /join_requests/{requestId} {
