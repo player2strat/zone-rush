@@ -60,6 +60,8 @@ const SRC_ZONE_LABELS = "zb-zone-labels";
 const SRC_BOUNDARY = "zb-map-boundary";
 const SRC_GAP = "zb-coverage-gap";
 const SRC_GAP_SELECTED = "zb-coverage-gap-selected";
+const SRC_TOOL_HL = "zb-tool-highlight";
+const SRC_SPLIT_PREVIEW = "zb-split-preview";
 const SRC_SNAP = "zb-snap-indicator";
 
 // Snap radius in screen pixels: a point being drawn within this distance of an
@@ -306,7 +308,7 @@ export default function ZoneBuilder() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const draw = useRef<MapboxDraw | null>(null);
-  const drawTarget = useRef<"zone" | "boundary" | null>(null);
+  const drawTarget = useRef<"zone" | "boundary" | "split" | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const fittedMapRef = useRef<string>("");
   // Latest startEditZone, so the once-registered map-click handler isn't stale.
@@ -346,6 +348,26 @@ export default function ZoneBuilder() {
   const gapPiecesRef = useRef<GeoJSON.Feature<GeoJSON.Polygon>[]>([]);
   const zonesRef = useRef<Zone[]>([]);
   const fillGapBlockedRef = useRef(false);
+  // Merge / split tools. While a tool is active, clicking a zone selects it
+  // instead of opening it for editing.
+  const [tool, setTool] = useState<"merge" | "split" | null>(null);
+  const toolRef = useRef<"merge" | "split" | null>(null);
+  const toolClickRef = useRef<(zoneId: string) => void>(() => {});
+  const splitLineRef = useRef<(geom: GeoJSON.Geometry) => void>(() => {});
+  const [toolBusy, setToolBusy] = useState(false);
+  // Merge: [keep, absorb] zone ids (0–2 picked so far) + the name to keep.
+  const [mergeSel, setMergeSel] = useState<string[]>([]);
+  const [mergeName, setMergeName] = useState("");
+  // Split: the zone being cut, the phase, the drawn line, and the two pieces.
+  const [splitZoneId, setSplitZoneId] = useState<string | null>(null);
+  const [splitPhase, setSplitPhase] = useState<"pick" | "line" | "preview">("pick");
+  const splitDrawId = useRef<string | null>(null);
+  const [splitPieces, setSplitPieces] = useState<{
+    a: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+    b: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+  } | null>(null);
+  const [splitNameA, setSplitNameA] = useState("");
+  const [splitNameB, setSplitNameB] = useState("");
   const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
@@ -452,8 +474,8 @@ export default function ZoneBuilder() {
   // Don't start a fill while something else is being drawn/edited/confirmed.
   useEffect(() => {
     fillGapBlockedRef.current =
-      !!pendingGeometry || !!pendingBoundary || drawingMode !== null || redrawingBoundary;
-  }, [pendingGeometry, pendingBoundary, drawingMode, redrawingBoundary]);
+      !!pendingGeometry || !!pendingBoundary || drawingMode !== null || redrawingBoundary || tool !== null;
+  }, [pendingGeometry, pendingBoundary, drawingMode, redrawingBoundary, tool]);
 
   // ---- Load maps for the current city ----
   useEffect(() => {
@@ -604,6 +626,37 @@ export default function ZoneBuilder() {
           "line-dasharray": [2, 2],
         },
       });
+      // Zones picked by the merge/split tools.
+      map.current.addSource(SRC_TOOL_HL, { type: "geojson", data: emptyFC() });
+      map.current.addLayer({
+        id: `${SRC_TOOL_HL}-fill`,
+        type: "fill",
+        source: SRC_TOOL_HL,
+        paint: { "fill-color": "#9B5DE5", "fill-opacity": 0.35 },
+      });
+      map.current.addLayer({
+        id: `${SRC_TOOL_HL}-line`,
+        type: "line",
+        source: SRC_TOOL_HL,
+        paint: { "line-color": "#9B5DE5", "line-width": 2.5 },
+      });
+      // Split preview — the two halves in contrasting colors.
+      map.current.addSource(SRC_SPLIT_PREVIEW, { type: "geojson", data: emptyFC() });
+      map.current.addLayer({
+        id: `${SRC_SPLIT_PREVIEW}-fill`,
+        type: "fill",
+        source: SRC_SPLIT_PREVIEW,
+        paint: {
+          "fill-color": ["match", ["get", "side"], "a", "#06D6A0", "#FFD166"],
+          "fill-opacity": 0.4,
+        },
+      });
+      map.current.addLayer({
+        id: `${SRC_SPLIT_PREVIEW}-line`,
+        type: "line",
+        source: SRC_SPLIT_PREVIEW,
+        paint: { "line-color": "#fff", "line-width": 2 },
+      });
       // The sliver picked for filling — solid highlight over the gap layer.
       map.current.addSource(SRC_GAP_SELECTED, { type: "geojson", data: emptyFC() });
       map.current.addLayer({
@@ -674,7 +727,9 @@ export default function ZoneBuilder() {
       // Click a saved zone's shape to edit it (ref keeps the handler current).
       map.current.on("click", `${SRC_ZONES}-fill`, (e) => {
         const id = e.features?.[0]?.properties?.id;
-        if (id) startEditZoneRef.current(String(id));
+        if (!id) return;
+        if (toolRef.current) toolClickRef.current(String(id));
+        else startEditZoneRef.current(String(id));
       });
       map.current.on("mouseenter", `${SRC_ZONES}-fill`, () => {
         if (map.current) map.current.getCanvas().style.cursor = "pointer";
@@ -726,6 +781,11 @@ export default function ZoneBuilder() {
     drawTarget.current = null;
     justCreated.current = true; // tell the follow-up modechange this completed
     setDrawingMode(null);
+    if (target === "split") {
+      splitDrawId.current = f.id != null ? String(f.id) : null;
+      splitLineRef.current(f.geometry);
+      return;
+    }
     if (target === "boundary") {
       pendingBoundaryDrawId.current = f.id != null ? String(f.id) : null;
       setPendingBoundary(f.geometry);
@@ -742,12 +802,17 @@ export default function ZoneBuilder() {
   // we disarm and restore any boundary we'd hidden for the redraw.
   function handleDrawModeChange(e: { mode: string }) {
     if (e.mode !== "simple_select") return;
+    const wasSplit = drawTarget.current === "split";
     setDrawingMode(null);
     drawTarget.current = null;
     if (justCreated.current) {
       justCreated.current = false;
     } else {
       setRedrawingBoundary(false);
+      if (wasSplit) {
+        setSplitPhase("pick");
+        setMessage("Split cancelled. Click a zone to try again.");
+      }
     }
   }
 
@@ -855,9 +920,37 @@ export default function ZoneBuilder() {
     );
   }, [fillGap, mapReady]);
 
-  // Keep the map-click handler pointing at the current startEditZone closure.
+  useEffect(() => {
+    if (!mapReady || !map.current) return;
+    const ids = tool === "merge" ? mergeSel : splitZoneId ? [splitZoneId] : [];
+    const feats: GeoJSON.Feature[] = [];
+    for (const id of ids) {
+      const z = zones.find((zz) => zz.id === id);
+      const g = z ? parseGeometry(z.boundary) : null;
+      if (g) feats.push({ type: "Feature", properties: { id }, geometry: g });
+    }
+    (map.current.getSource(SRC_TOOL_HL) as mapboxgl.GeoJSONSource)?.setData({
+      type: "FeatureCollection",
+      // Hide the highlight once a split preview is showing (it covers the zone).
+      features: splitPieces ? [] : feats,
+    });
+    (map.current.getSource(SRC_SPLIT_PREVIEW) as mapboxgl.GeoJSONSource)?.setData({
+      type: "FeatureCollection",
+      features: splitPieces
+        ? [
+            { ...splitPieces.a, properties: { side: "a" } },
+            { ...splitPieces.b, properties: { side: "b" } },
+          ]
+        : [],
+    });
+  }, [tool, mergeSel, splitZoneId, splitPieces, zones, mapReady]);
+
+  // Keep the map-click handlers pointing at the current closures.
   useEffect(() => {
     startEditZoneRef.current = startEditZone;
+    toolClickRef.current = handleToolClick;
+    splitLineRef.current = handleSplitLine;
+    toolRef.current = tool;
   });
 
   // ---- Drawing + saving zones ----
@@ -879,6 +972,7 @@ export default function ZoneBuilder() {
     }
     cancelPending();
     cancelPendingBoundary();
+    cancelTool();
     drawTarget.current = "zone";
     justCreated.current = false;
     setDrawingMode("zone");
@@ -896,6 +990,7 @@ export default function ZoneBuilder() {
     }
     cancelPending();
     cancelPendingBoundary();
+    cancelTool();
     drawTarget.current = "boundary";
     justCreated.current = false;
     setRedrawingBoundary(true); // hide the old frame while drawing the new one
@@ -1419,6 +1514,231 @@ export default function ZoneBuilder() {
       setMessage("Error filling gap: " + (err as Error).message);
     }
     setFillBusy(false);
+  }
+
+  // ---- Merge / split tools ----
+
+  // Count games on this map that are still in progress. Changing zone ids
+  // under a live game would break it, so merge/split refuse while any exist.
+  async function liveGamesOnMap(mapId: string): Promise<number> {
+    const snap = await getDocs(query(collection(db, "games"), where("map_id", "==", mapId)));
+    let n = 0;
+    snap.forEach((g) => {
+      if (g.data().status !== "ended") n++;
+    });
+    return n;
+  }
+
+  function startMergeTool() {
+    cancelPending();
+    cancelPendingBoundary();
+    cancelTool();
+    setFillGap(null);
+    setTool("merge");
+    setMergeSel([]);
+    setMessage("Click the zone to keep, then a neighboring zone to merge into it.");
+  }
+
+  function startSplitTool() {
+    cancelPending();
+    cancelPendingBoundary();
+    cancelTool();
+    setFillGap(null);
+    setTool("split");
+    setSplitZoneId(null);
+    setSplitPhase("pick");
+    setMessage("Click the zone you want to split.");
+  }
+
+  function cancelTool() {
+    if (splitDrawId.current) {
+      try {
+        draw.current?.delete(splitDrawId.current);
+      } catch {
+        /* already gone */
+      }
+      splitDrawId.current = null;
+    }
+    if (drawTarget.current === "split") {
+      drawTarget.current = null;
+      try {
+        draw.current?.changeMode("simple_select");
+      } catch {
+        /* not in a draw mode */
+      }
+    }
+    setTool(null);
+    setMergeSel([]);
+    setMergeName("");
+    setSplitZoneId(null);
+    setSplitPhase("pick");
+    setSplitPieces(null);
+    setSplitNameA("");
+    setSplitNameB("");
+  }
+
+  // A zone was clicked while a tool is active.
+  function handleToolClick(zoneId: string) {
+    const z = zones.find((zz) => zz.id === zoneId);
+    if (!z) return;
+    if (tool === "merge") {
+      if (mergeSel.length === 0) {
+        setMergeSel([zoneId]);
+        setMergeName(z.name || "");
+        setMessage(`Keeping "${z.name}". Now click a neighboring zone to merge into it.`);
+        return;
+      }
+      if (mergeSel.length >= 2 || zoneId === mergeSel[0]) return;
+      const keep = zones.find((zz) => zz.id === mergeSel[0]);
+      const kg = keep ? parseGeometry(keep.boundary) : null;
+      const zg = parseGeometry(z.boundary);
+      if (!kg || !zg || !touches(kg, zg)) {
+        setMessage(`"${z.name}" doesn't share a border with "${keep?.name}". Pick an adjacent zone.`);
+        return;
+      }
+      setMergeSel([mergeSel[0], zoneId]);
+      setMessage("");
+      return;
+    }
+    if (tool === "split") {
+      if (splitPhase !== "pick") return;
+      setSplitZoneId(zoneId);
+      setSplitPhase("line");
+      drawTarget.current = "split";
+      justCreated.current = false;
+      try {
+        draw.current?.changeMode("draw_line_string");
+      } catch {
+        setMessage("Error: couldn't start the line tool.");
+        setSplitPhase("pick");
+        return;
+      }
+      setMessage(
+        `Draw a line all the way across "${z.name}". Double-click (or Enter) to finish, Esc to cancel.`
+      );
+    }
+  }
+
+  // The split line was finished — cut the zone and show a preview.
+  function handleSplitLine(lineGeom: GeoJSON.Geometry) {
+    const z = zones.find((zz) => zz.id === splitZoneId);
+    const zg = z ? parseGeometry(z.boundary) : null;
+    const retry = (why: string) => {
+      if (splitDrawId.current) {
+        try {
+          draw.current?.delete(splitDrawId.current);
+        } catch {
+          /* gone */
+        }
+        splitDrawId.current = null;
+      }
+      setSplitPhase("pick");
+      setMessage(why + " Click the zone to try again.");
+    };
+    if (!z || !zg || lineGeom.type !== "LineString") {
+      retry("Couldn't read the line.");
+      return;
+    }
+    const pieces = splitPolygonByLine(zg, lineGeom);
+    if (!pieces) {
+      retry("The line must cross the whole zone, leaving a piece on each side.");
+      return;
+    }
+    setSplitPieces(pieces);
+    setSplitNameA(z.name || "");
+    setSplitNameB(`${z.name || "Zone"} 2`);
+    setSplitPhase("preview");
+    setMessage("");
+  }
+
+  // Merge: keep := keep ∪ absorb, then delete absorb. One atomic batch.
+  async function confirmMerge() {
+    if (mergeSel.length !== 2 || !selectedMapId) return;
+    const keep = zones.find((z) => z.id === mergeSel[0]);
+    const absorb = zones.find((z) => z.id === mergeSel[1]);
+    const kf = keep ? toPolyFeature(parseGeometry(keep.boundary) as GeoJSON.Geometry) : null;
+    const af = absorb ? toPolyFeature(parseGeometry(absorb.boundary) as GeoJSON.Geometry) : null;
+    if (!keep || !absorb || !kf || !af) return;
+    setToolBusy(true);
+    try {
+      const live = await liveGamesOnMap(selectedMapId);
+      if (live > 0) {
+        setMessage(`Can't merge: ${live} game(s) in progress on this map. End them first.`);
+        setToolBusy(false);
+        return;
+      }
+      const merged = union({ type: "FeatureCollection", features: [kf, af] });
+      if (!merged) throw new Error("could not merge shapes");
+      const c = center(merged);
+      const uniq = (arr: string[]) => Array.from(new Set(arr));
+      const update = {
+        name: mergeName.trim() || keep.name,
+        boundary: JSON.stringify(merged.geometry),
+        center_lat: Math.round(c.geometry.coordinates[1] * 1e6) / 1e6,
+        center_lng: Math.round(c.geometry.coordinates[0] * 1e6) / 1e6,
+        culture_tags: uniq([...(keep.culture_tags || []), ...(absorb.culture_tags || [])]),
+        transit_lines: uniq([...(keep.transit_lines || []), ...(absorb.transit_lines || [])]),
+        landmarks: uniq([...(keep.landmarks || []), ...(absorb.landmarks || [])]),
+      };
+      const batch = writeBatch(db);
+      batch.set(doc(db, "zones", keep.id), update, { merge: true });
+      batch.delete(doc(db, "zones", absorb.id));
+      await batch.commit();
+      setZones((prev) =>
+        prev
+          .filter((z) => z.id !== absorb.id)
+          .map((z) => (z.id === keep.id ? { ...z, ...update } : z))
+      );
+      setMessage(`Merged "${absorb.name}" into "${update.name}".`);
+      cancelTool();
+    } catch (err) {
+      setMessage("Error merging: " + (err as Error).message);
+    }
+    setToolBusy(false);
+  }
+
+  // Split: original zone keeps piece A; piece B becomes a new zone doc that
+  // copies the original's metadata. One atomic batch.
+  async function confirmSplit() {
+    if (!splitPieces || !splitZoneId || !selectedMapId) return;
+    const z = zones.find((zz) => zz.id === splitZoneId);
+    if (!z) return;
+    setToolBusy(true);
+    try {
+      const live = await liveGamesOnMap(selectedMapId);
+      if (live > 0) {
+        setMessage(`Can't split: ${live} game(s) in progress on this map. End them first.`);
+        setToolBusy(false);
+        return;
+      }
+      const ca = center(splitPieces.a);
+      const cb = center(splitPieces.b);
+      const updateA = {
+        name: splitNameA.trim() || z.name,
+        boundary: JSON.stringify(splitPieces.a.geometry),
+        center_lat: Math.round(ca.geometry.coordinates[1] * 1e6) / 1e6,
+        center_lng: Math.round(ca.geometry.coordinates[0] * 1e6) / 1e6,
+      };
+      const newId = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+      const newZone: Zone = {
+        ...z,
+        id: newId,
+        name: splitNameB.trim() || `${z.name} 2`,
+        boundary: JSON.stringify(splitPieces.b.geometry),
+        center_lat: Math.round(cb.geometry.coordinates[1] * 1e6) / 1e6,
+        center_lng: Math.round(cb.geometry.coordinates[0] * 1e6) / 1e6,
+      };
+      const batch = writeBatch(db);
+      batch.set(doc(db, "zones", z.id), updateA, { merge: true });
+      batch.set(doc(db, "zones", newId), newZone);
+      await batch.commit();
+      setZones((prev) => [...prev.map((zz) => (zz.id === z.id ? { ...zz, ...updateA } : zz)), newZone]);
+      setMessage(`Split "${z.name}" into "${updateA.name}" and "${newZone.name}".`);
+      cancelTool();
+    } catch (err) {
+      setMessage("Error splitting: " + (err as Error).message);
+    }
+    setToolBusy(false);
   }
 
   // Remove the pending drawn/edited feature and reset the form. Covers both a
@@ -2338,12 +2658,126 @@ export default function ZoneBuilder() {
           </div>
         )}
 
+        {/* Merge / split tool panel */}
+        {selectedMap && tool && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              background: "rgba(155,93,229,0.1)",
+              border: "1px solid rgba(155,93,229,0.5)",
+              borderRadius: 10,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>
+              {tool === "merge" ? "⧈ Merge zones" : "✂ Split zone"}
+            </div>
+            {tool === "merge" && (
+              <>
+                <div style={{ color: "#999", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
+                  {mergeSel.length === 0 && "Click the zone to keep."}
+                  {mergeSel.length === 1 && (
+                    <>
+                      Keeping <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
+                      Now click a neighboring zone to merge into it.
+                    </>
+                  )}
+                  {mergeSel.length === 2 && (
+                    <>
+                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[1])?.name}</strong>{" "}
+                      will be removed and its area added to{" "}
+                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
+                      Tags, transit and landmarks are combined.
+                    </>
+                  )}
+                </div>
+                {mergeSel.length === 2 && (
+                  <>
+                    <label style={{ color: "#888", fontSize: "0.75rem" }}>Merged zone name</label>
+                    <input
+                      value={mergeName}
+                      onChange={(e) => setMergeName(e.target.value)}
+                      disabled={toolBusy}
+                      style={toolInputStyle}
+                    />
+                  </>
+                )}
+              </>
+            )}
+            {tool === "split" && (
+              <>
+                <div style={{ color: "#999", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
+                  {splitPhase === "pick" && "Click the zone you want to split."}
+                  {splitPhase === "line" && (
+                    <>
+                      Draw a line all the way across{" "}
+                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === splitZoneId)?.name}</strong>.
+                      Double-click (or Enter) to finish, Esc to cancel.
+                    </>
+                  )}
+                  {splitPhase === "preview" && "Name the two pieces (green and yellow on the map), then confirm."}
+                </div>
+                {splitPhase === "preview" && splitPieces && (
+                  <>
+                    <label style={{ color: "#06D6A0", fontSize: "0.75rem" }}>
+                      Green piece (keeps this zone's id) — {Math.round(area(splitPieces.a)).toLocaleString()} m²
+                    </label>
+                    <input value={splitNameA} onChange={(e) => setSplitNameA(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
+                    <label style={{ color: "#FFD166", fontSize: "0.75rem" }}>
+                      Yellow piece (new zone) — {Math.round(area(splitPieces.b)).toLocaleString()} m²
+                    </label>
+                    <input value={splitNameB} onChange={(e) => setSplitNameB(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
+                  </>
+                )}
+              </>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              {tool === "merge" && mergeSel.length === 2 && (
+                <button
+                  onClick={confirmMerge}
+                  disabled={toolBusy}
+                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#9B5DE5", color: "#fff" }}
+                >
+                  {toolBusy ? "Merging…" : "Merge zones"}
+                </button>
+              )}
+              {tool === "split" && splitPhase === "preview" && (
+                <button
+                  onClick={confirmSplit}
+                  disabled={toolBusy}
+                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#9B5DE5", color: "#fff" }}
+                >
+                  {toolBusy ? "Splitting…" : "Split zone"}
+                </button>
+              )}
+              <button onClick={cancelTool} disabled={toolBusy} style={{ ...secondaryBtnStyle, flex: 1 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Draw actions */}
-        {selectedMap && !drawingMode && !pendingGeometry && !pendingBoundary && (
+        {selectedMap && !drawingMode && !pendingGeometry && !pendingBoundary && !tool && (
           <>
             <button onClick={startDrawZone} style={primaryBtnStyle}>
               ✏️ Draw a zone
             </button>
+            {zones.length >= 2 && (
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={startMergeTool} style={{ ...secondaryBtnStyle, flex: 1 }}>
+                  ⧈ Merge zones
+                </button>
+                <button onClick={startSplitTool} style={{ ...secondaryBtnStyle, flex: 1 }}>
+                  ✂ Split zone
+                </button>
+              </div>
+            )}
+            {zones.length === 1 && (
+              <button onClick={startSplitTool} style={secondaryFullBtnStyle}>
+                ✂ Split zone
+              </button>
+            )}
             <button onClick={startDrawBoundary} style={secondaryFullBtnStyle}>
               {selectedMap.boundary
                 ? "↺ Redraw map boundary"
@@ -2829,6 +3263,75 @@ function computeGap(
   }
 }
 
+// Cut a polygon with a polyline. Builds a "half-plane" polygon on one side of
+// the (far-extended) line, then A = zone ∩ side, B = zone − A. Returns null
+// unless both pieces are real (bigger than a sliver).
+function splitPolygonByLine(
+  zoneGeom: GeoJSON.Geometry,
+  line: GeoJSON.LineString
+): {
+  a: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+  b: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>;
+} | null {
+  const zf = toPolyFeature(zoneGeom);
+  const pts = line.coordinates.map((c) => [c[0], c[1]] as [number, number]);
+  if (!zf || pts.length < 2) return null;
+
+  const [minX, minY, maxX, maxY] = bbox(zf);
+  const size = Math.max(maxX - minX, maxY - minY) || 0.001;
+  const far = size * 100;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  // Extend the first and last segments far beyond the zone.
+  const extend = (from: [number, number], to: [number, number]): [number, number] => {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const L = Math.hypot(dx, dy) || 1;
+    return [to[0] + (dx / L) * far, to[1] + (dy / L) * far];
+  };
+  const p0 = extend(pts[1], pts[0]);
+  const pn = extend(pts[pts.length - 2], pts[pts.length - 1]);
+  const path: [number, number][] = [p0, ...pts, pn];
+
+  // Close the path with a far point perpendicular to the chord p0→pn, on
+  // whichever side is farther from the zone so the closing edges stay clear.
+  const mx = (p0[0] + pn[0]) / 2;
+  const my = (p0[1] + pn[1]) / 2;
+  const chx = pn[0] - p0[0];
+  const chy = pn[1] - p0[1];
+  const cl = Math.hypot(chx, chy) || 1;
+  const nx = -chy / cl;
+  const ny = chx / cl;
+  const f1: [number, number] = [mx + nx * far, my + ny * far];
+  const f2: [number, number] = [mx - nx * far, my - ny * far];
+  const d1 = Math.hypot(f1[0] - cx, f1[1] - cy);
+  const d2 = Math.hypot(f2[0] - cx, f2[1] - cy);
+  const F = d1 >= d2 ? f1 : f2;
+  const ring: [number, number][] = [...path, F, p0];
+  const side: GeoJSON.Feature<GeoJSON.Polygon> = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [ring] },
+  };
+
+  let a: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
+  let b: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
+  try {
+    a = intersect({ type: "FeatureCollection", features: [zf, side] });
+    if (!a) return null;
+    b = difference({ type: "FeatureCollection", features: [zf, a] });
+  } catch {
+    return null;
+  }
+  if (!a || !b) return null;
+  if (area(a) < OVERLAP_TOLERANCE_SQM || area(b) < OVERLAP_TOLERANCE_SQM) return null;
+  return {
+    a: { type: "Feature", properties: {}, geometry: a.geometry },
+    b: { type: "Feature", properties: {}, geometry: b.geometry },
+  };
+}
+
 // True when two polygons share a border (or overlap): their union has fewer
 // parts than the two of them laid side by side. Cheap and dependency-free.
 function touches(a: GeoJSON.Geometry, b: GeoJSON.Geometry): boolean {
@@ -3088,6 +3591,19 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: "0.9rem",
   cursor: "pointer",
   fontFamily: "inherit",
+};
+
+const toolInputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#111",
+  color: "#eee",
+  border: "1px solid #333",
+  borderRadius: 6,
+  padding: "8px 10px",
+  fontFamily: "inherit",
+  fontSize: "0.85rem",
+  margin: "4px 0 10px",
+  boxSizing: "border-box",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
