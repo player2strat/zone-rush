@@ -326,6 +326,13 @@ export default function ZoneBuilder() {
   const pendingDrawId = useRef<string | null>(null);
   // Set when editing an existing saved zone (its doc id). null for a new zone.
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  // Delete-map confirmation: null = not asked; otherwise the zone count we
+  // looked up when the admin first clicked Delete, shown in the confirm box.
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    zoneCount: number;
+    liveGames: number;   // games in lobby/strategy/active/paused — block delete
+    endedGames: number;  // finished games — allow, but warn
+  } | null>(null);
   const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
@@ -1212,6 +1219,7 @@ export default function ZoneBuilder() {
     setEmName(selectedMap.name || "");
     setEmBorough(selectedMap.borough || "");
     setEmDesc(selectedMap.description || "");
+    setDeleteConfirm(null);
     setEditMapOpen(true);
   }
 
@@ -1245,26 +1253,39 @@ export default function ZoneBuilder() {
   }
 
   // Delete the whole map and every zone that belongs to it. Destructive and
-  // irreversible, so it re-reads the zones for an accurate count and requires a
-  // typed-out confirm naming the map.
-  async function deleteMap() {
+  // irreversible, so it's a two-step flow: the first click looks up an accurate
+  // zone count and shows an inline confirm box; nothing is deleted until the
+  // admin explicitly clicks the confirm button.
+  async function askDeleteMap() {
     if (!selectedMap) return;
     setEmBusy(true);
     try {
+      const [zoneSnap, gameSnap] = await Promise.all([
+        getDocs(query(collection(db, "zones"), where("map_id", "==", selectedMap.id))),
+        getDocs(query(collection(db, "games"), where("map_id", "==", selectedMap.id))),
+      ]);
+      let liveGames = 0;
+      let endedGames = 0;
+      gameSnap.forEach((g) => {
+        if (g.data().status === "ended") endedGames++;
+        else liveGames++;
+      });
+      setDeleteConfirm({ zoneCount: zoneSnap.size, liveGames, endedGames });
+    } catch (err) {
+      setMessage("Error checking map zones: " + (err as Error).message);
+    }
+    setEmBusy(false);
+  }
+
+  async function confirmDeleteMap() {
+    if (!selectedMap || !deleteConfirm || deleteConfirm.liveGames > 0) return;
+    setEmBusy(true);
+    try {
+      // Re-read so we delete exactly what exists now, not a stale list.
       const zoneSnap = await getDocs(
         query(collection(db, "zones"), where("map_id", "==", selectedMap.id))
       );
       const zoneCount = zoneSnap.size;
-      const ok = window.confirm(
-        `Delete map "${selectedMap.name}"${
-          selectedMap.is_active ? " (PUBLISHED)" : ""
-        } and its ${zoneCount} zone${zoneCount === 1 ? "" : "s"}? ` +
-          `This permanently removes them and can't be undone.`
-      );
-      if (!ok) {
-        setEmBusy(false);
-        return;
-      }
 
       const batch = writeBatch(db);
       zoneSnap.docs.forEach((d) => batch.delete(d.ref));
@@ -1274,6 +1295,8 @@ export default function ZoneBuilder() {
       const deletedName = selectedMap.name;
       setMaps((prev) => prev.filter((m) => m.id !== selectedMap.id));
       setSelectedMapId("");
+      setDeleteConfirm(null);
+      setEditMapOpen(false);
       setMessage(`Deleted map "${deletedName}" and ${zoneCount} zone(s).`);
     } catch (err) {
       setMessage("Error deleting map: " + (err as Error).message);
@@ -1903,7 +1926,7 @@ export default function ZoneBuilder() {
                   {emBusy ? "Saving…" : "Save details"}
                 </button>
                 <button
-                  onClick={() => setEditMapOpen(false)}
+                  onClick={() => { setEditMapOpen(false); setDeleteConfirm(null); }}
                   disabled={emBusy}
                   style={secondaryBtnStyle}
                 >
@@ -1918,27 +1941,96 @@ export default function ZoneBuilder() {
                   borderTop: "1px solid #1a1a1a",
                 }}
               >
-                <button
-                  onClick={deleteMap}
-                  disabled={emBusy}
-                  style={{
-                    width: "100%",
-                    background: "rgba(239,71,111,0.1)",
-                    color: "#EF476F",
-                    border: "1px solid rgba(239,71,111,0.3)",
-                    borderRadius: 8,
-                    padding: "9px 16px",
-                    fontWeight: 700,
-                    fontSize: "0.85rem",
-                    cursor: emBusy ? "not-allowed" : "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  Delete this map &amp; its zones
-                </button>
-                <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 6 }}>
-                  Permanent — removes the map and every zone on it.
-                </p>
+                {deleteConfirm === null ? (
+                  <>
+                    <button
+                      onClick={askDeleteMap}
+                      disabled={emBusy}
+                      style={{
+                        width: "100%",
+                        background: "rgba(239,71,111,0.1)",
+                        color: "#EF476F",
+                        border: "1px solid rgba(239,71,111,0.3)",
+                        borderRadius: 8,
+                        padding: "9px 16px",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        cursor: emBusy ? "not-allowed" : "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      Delete this map &amp; its zones
+                    </button>
+                    <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 6 }}>
+                      Permanent — removes the map and every zone on it.
+                    </p>
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      background: "rgba(239,71,111,0.08)",
+                      border: "1px solid rgba(239,71,111,0.4)",
+                      borderRadius: 8,
+                      padding: 12,
+                    }}
+                  >
+                    <p style={{ color: "#EF476F", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                      Delete "{selectedMap?.name}"{selectedMap?.is_active ? " (PUBLISHED)" : ""}?
+                    </p>
+                    {deleteConfirm.liveGames > 0 ? (
+                      <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                        <strong style={{ color: "#EF476F" }}>Can't delete:</strong>{" "}
+                        {deleteConfirm.liveGames} game{deleteConfirm.liveGames === 1 ? " is" : "s are"}{" "}
+                        in progress on this map. End {deleteConfirm.liveGames === 1 ? "it" : "them"} first.
+                      </p>
+                    ) : (
+                      <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                        This permanently removes the map and its{" "}
+                        <strong>{deleteConfirm.zoneCount} zone{deleteConfirm.zoneCount === 1 ? "" : "s"}</strong>.
+                        It can't be undone.
+                        {deleteConfirm.endedGames > 0 && (
+                          <>
+                            {" "}
+                            <strong style={{ color: "#FFD166" }}>
+                              {deleteConfirm.endedGames} finished game{deleteConfirm.endedGames === 1 ? "" : "s"}
+                            </strong>{" "}
+                            used this map — {deleteConfirm.endedGames === 1 ? "its" : "their"} scores stay, but
+                            zone names and the map view on the results page will be lost.
+                          </>
+                        )}
+                      </p>
+                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {deleteConfirm.liveGames === 0 && (
+                      <button
+                        onClick={confirmDeleteMap}
+                        disabled={emBusy}
+                        style={{
+                          flex: 1,
+                          background: "#EF476F",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "9px 12px",
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          cursor: emBusy ? "not-allowed" : "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        {emBusy ? "Deleting…" : "Yes, delete permanently"}
+                      </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        disabled={emBusy}
+                        style={deleteConfirm.liveGames > 0 ? { ...secondaryBtnStyle, flex: 1 } : secondaryBtnStyle}
+                      >
+                        {deleteConfirm.liveGames > 0 ? "OK" : "Cancel"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

@@ -11,7 +11,6 @@ import { useUserRole } from '../hooks/useUserRole'
 // Admin/GM-only tools. These routes are gated by AdminGuard; this list just
 // surfaces them so admins don't have to type URLs.
 const ADMIN_LINKS = [
-  { path: '/admin/zone-builder', label: 'Zone Builder', desc: 'Draw maps & zones' },
   { path: '/admin/zones', label: 'Zone Manager', desc: 'Import & edit zone metadata' },
   { path: '/admin/seed-maps', label: 'Seed Maps', desc: 'Seed starter maps' },
   { path: '/admin/seed', label: 'Seed Challenges', desc: 'Seed challenge cards' },
@@ -108,6 +107,37 @@ export default function HomePage() {
         </button>
         )}
 
+        {/* Zone Builder — GM only. Primary action so admins don't have to
+            dig through the Admin Tools list. */}
+        {isGM && (
+        <button
+          onClick={() => navigate('/admin/zone-builder')}
+          style={{
+            background: 'rgba(155,93,229,0.12)',
+            border: '1px solid rgba(155,93,229,0.3)',
+            color: '#9B5DE5',
+            padding: '18px 24px',
+            borderRadius: 12,
+            fontSize: '1.05rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            transition: 'all 0.15s',
+          }}
+        >
+          Zone Builder
+          <span style={{
+            display: 'block',
+            fontSize: '0.78rem',
+            fontWeight: 400,
+            color: '#6e4a9e',
+            marginTop: 4,
+          }}>
+            Draw maps & zones
+          </span>
+        </button>
+        )}
+
         {/* Join Game — All players */}
         <button
           onClick={() => navigate('/join')}
@@ -156,7 +186,7 @@ export default function HomePage() {
             fontWeight: 700,
             margin: '0 0 12px',
           }}>
-            Admin Tools
+            More Admin Tools
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {ADMIN_LINKS.map((link) => (

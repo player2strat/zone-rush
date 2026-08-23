@@ -587,6 +587,17 @@ export default function CreateGame() {
                 </h1>
                 <p style={{ color: '#555', fontSize: '0.85rem', marginBottom: 24 }}>
                   Choose which area to play in
+                  {' · '}
+                  <button
+                    onClick={() => navigate('/admin/zone-builder')}
+                    style={{
+                      background: 'none', border: 'none', padding: 0,
+                      color: '#9B5DE5', cursor: 'pointer',
+                      fontFamily: 'inherit', fontSize: 'inherit',
+                    }}
+                  >
+                    Build a new map
+                  </button>
                 </p>
 
                 {loadingMaps || loadingZones ? (
