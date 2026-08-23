@@ -59,6 +59,7 @@ const SRC_ZONES = "zb-saved-zones";
 const SRC_ZONE_LABELS = "zb-zone-labels";
 const SRC_BOUNDARY = "zb-map-boundary";
 const SRC_GAP = "zb-coverage-gap";
+const SRC_GAP_SELECTED = "zb-coverage-gap-selected";
 const SRC_SNAP = "zb-snap-indicator";
 
 // Snap radius in screen pixels: a point being drawn within this distance of an
@@ -333,6 +334,18 @@ export default function ZoneBuilder() {
     liveGames: number;   // games in lobby/strategy/active/paused — block delete
     endedGames: number;  // finished games — allow, but warn
   } | null>(null);
+  // Fill-gap flow: a clicked uncovered sliver, the zones that touch it, and
+  // which one the admin picked to absorb it.
+  const [fillGap, setFillGap] = useState<{
+    piece: GeoJSON.Feature<GeoJSON.Polygon>;
+    candidates: { id: string; name: string }[];
+    targetId: string;
+  } | null>(null);
+  const [fillBusy, setFillBusy] = useState(false);
+  // Latest gap pieces + zones, readable from the once-registered click handler.
+  const gapPiecesRef = useRef<GeoJSON.Feature<GeoJSON.Polygon>[]>([]);
+  const zonesRef = useRef<Zone[]>([]);
+  const fillGapBlockedRef = useRef(false);
   const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
@@ -413,6 +426,34 @@ export default function ZoneBuilder() {
     const gapArea = gapFeature ? area(gapFeature) : 0;
     return Math.max(0, Math.min(100, Math.round((gapArea / total) * 100)));
   }, [selectedMap?.boundary, gapFeature, redrawingBoundary]);
+
+  // The gap split into individual polygons so each sliver is clickable on its
+  // own. Each carries an index so the click handler can find it again.
+  const gapPieces = useMemo<GeoJSON.Feature<GeoJSON.Polygon>[]>(() => {
+    if (!gapFeature) return [];
+    const polys: GeoJSON.Polygon[] =
+      gapFeature.geometry.type === "Polygon"
+        ? [gapFeature.geometry]
+        : gapFeature.geometry.coordinates.map((c) => ({ type: "Polygon", coordinates: c }));
+    return polys.map((geometry, idx) => ({
+      type: "Feature",
+      properties: { idx },
+      geometry,
+    }));
+  }, [gapFeature]);
+  useEffect(() => {
+    gapPiecesRef.current = gapPieces;
+    // A recomputed gap invalidates any sliver that was selected before.
+    setFillGap(null);
+  }, [gapPieces]);
+  useEffect(() => {
+    zonesRef.current = zones;
+  }, [zones]);
+  // Don't start a fill while something else is being drawn/edited/confirmed.
+  useEffect(() => {
+    fillGapBlockedRef.current =
+      !!pendingGeometry || !!pendingBoundary || drawingMode !== null || redrawingBoundary;
+  }, [pendingGeometry, pendingBoundary, drawingMode, redrawingBoundary]);
 
   // ---- Load maps for the current city ----
   useEffect(() => {
@@ -563,6 +604,20 @@ export default function ZoneBuilder() {
           "line-dasharray": [2, 2],
         },
       });
+      // The sliver picked for filling — solid highlight over the gap layer.
+      map.current.addSource(SRC_GAP_SELECTED, { type: "geojson", data: emptyFC() });
+      map.current.addLayer({
+        id: `${SRC_GAP_SELECTED}-fill`,
+        type: "fill",
+        source: SRC_GAP_SELECTED,
+        paint: { "fill-color": "#FFD166", "fill-opacity": 0.45 },
+      });
+      map.current.addLayer({
+        id: `${SRC_GAP_SELECTED}-line`,
+        type: "line",
+        source: SRC_GAP_SELECTED,
+        paint: { "line-color": "#FFD166", "line-width": 2 },
+      });
 
       // Zone labels at each zone's stored center.
       map.current.addSource(SRC_ZONE_LABELS, {
@@ -625,6 +680,29 @@ export default function ZoneBuilder() {
         if (map.current) map.current.getCanvas().style.cursor = "pointer";
       });
       map.current.on("mouseleave", `${SRC_ZONES}-fill`, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "";
+      });
+
+      // Click an uncovered sliver to assign it to a neighboring zone.
+      map.current.on("click", `${SRC_GAP}-fill`, (e) => {
+        if (fillGapBlockedRef.current) return;
+        const idx = e.features?.[0]?.properties?.idx;
+        const piece = gapPiecesRef.current[Number(idx)];
+        if (!piece) return;
+        const candidates = zonesRef.current
+          .filter((z) => {
+            const g = parseGeometry(z.boundary);
+            return g ? touches(g, piece.geometry) : false;
+          })
+          .map((z) => ({ id: z.id, name: z.name }));
+        setFillGap({ piece, candidates, targetId: candidates[0]?.id ?? "" });
+        setMessage("");
+      });
+      map.current.on("mouseenter", `${SRC_GAP}-fill`, () => {
+        if (map.current && !fillGapBlockedRef.current)
+          map.current.getCanvas().style.cursor = "pointer";
+      });
+      map.current.on("mouseleave", `${SRC_GAP}-fill`, () => {
         if (map.current) map.current.getCanvas().style.cursor = "";
       });
 
@@ -765,10 +843,17 @@ export default function ZoneBuilder() {
   // ---- Push the coverage gap onto the map whenever it changes ----
   useEffect(() => {
     if (!mapReady || !map.current) return;
-    (map.current.getSource(SRC_GAP) as mapboxgl.GeoJSONSource)?.setData(
-      gapFeature ?? emptyFC()
+    (map.current.getSource(SRC_GAP) as mapboxgl.GeoJSONSource)?.setData({
+      type: "FeatureCollection",
+      features: gapPieces,
+    });
+  }, [gapPieces, mapReady]);
+  useEffect(() => {
+    if (!mapReady || !map.current) return;
+    (map.current.getSource(SRC_GAP_SELECTED) as mapboxgl.GeoJSONSource)?.setData(
+      fillGap ? { type: "FeatureCollection", features: [fillGap.piece] } : emptyFC()
     );
-  }, [gapFeature, mapReady]);
+  }, [fillGap, mapReady]);
 
   // Keep the map-click handler pointing at the current startEditZone closure.
   useEffect(() => {
@@ -1304,6 +1389,38 @@ export default function ZoneBuilder() {
     setEmBusy(false);
   }
 
+  // Absorb the selected gap sliver into the chosen zone: zone := zone ∪ sliver.
+  // One merge-write of boundary + recomputed center; local state updates so the
+  // gap overlay refreshes immediately.
+  async function confirmFillGap() {
+    if (!fillGap || !fillGap.targetId) return;
+    const target = zones.find((z) => z.id === fillGap.targetId);
+    const zg = target ? parseGeometry(target.boundary) : null;
+    const zf = zg ? toPolyFeature(zg) : null;
+    if (!target || !zf) return;
+    setFillBusy(true);
+    try {
+      const merged = union({
+        type: "FeatureCollection",
+        features: [zf, fillGap.piece],
+      });
+      if (!merged) throw new Error("could not merge shapes");
+      const c = center(merged);
+      const update = {
+        boundary: JSON.stringify(merged.geometry),
+        center_lat: Math.round(c.geometry.coordinates[1] * 1e6) / 1e6,
+        center_lng: Math.round(c.geometry.coordinates[0] * 1e6) / 1e6,
+      };
+      await setDoc(doc(db, "zones", target.id), update, { merge: true });
+      setZones((prev) => prev.map((z) => (z.id === target.id ? { ...z, ...update } : z)));
+      setFillGap(null);
+      setMessage(`Filled gap into "${target.name}".`);
+    } catch (err) {
+      setMessage("Error filling gap: " + (err as Error).message);
+    }
+    setFillBusy(false);
+  }
+
   // Remove the pending drawn/edited feature and reset the form. Covers both a
   // new zone in progress and an existing zone being edited.
   function cancelPending() {
@@ -1816,7 +1933,85 @@ export default function ZoneBuilder() {
               >
                 {gapPercent === 0
                   ? "✓ fully covered"
-                  : `~${gapPercent}% uncovered (orange overlay)`}
+                  : `~${gapPercent}% uncovered — click an orange area to fill it`}
+              </div>
+            )}
+            {fillGap && (
+              <div
+                style={{
+                  marginTop: 10,
+                  background: "rgba(255,209,102,0.08)",
+                  border: "1px solid rgba(255,209,102,0.4)",
+                  borderRadius: 8,
+                  padding: 12,
+                }}
+              >
+                <p style={{ color: "#FFD166", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                  Fill gap (~{Math.round(area(fillGap.piece)).toLocaleString()} m²)
+                </p>
+                {fillGap.candidates.length === 0 ? (
+                  <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 10px", lineHeight: 1.5 }}>
+                    No zone touches this area. Draw a new zone over it instead.
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 8px" }}>
+                      Add this area to:
+                    </p>
+                    <select
+                      value={fillGap.targetId}
+                      onChange={(e) => setFillGap({ ...fillGap, targetId: e.target.value })}
+                      disabled={fillBusy}
+                      style={{
+                        width: "100%",
+                        background: "#111",
+                        color: "#eee",
+                        border: "1px solid #333",
+                        borderRadius: 6,
+                        padding: "8px 10px",
+                        fontFamily: "inherit",
+                        fontSize: "0.85rem",
+                        marginBottom: 10,
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {fillGap.candidates.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {fillGap.candidates.length > 0 && (
+                    <button
+                      onClick={confirmFillGap}
+                      disabled={fillBusy || !fillGap.targetId}
+                      style={{
+                        flex: 1,
+                        background: "#FFD166",
+                        color: "#000",
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        cursor: fillBusy ? "not-allowed" : "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {fillBusy ? "Filling…" : "Fill gap"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setFillGap(null)}
+                    disabled={fillBusy}
+                    style={fillGap.candidates.length === 0 ? { ...secondaryBtnStyle, flex: 1 } : secondaryBtnStyle}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
             <div
@@ -2631,6 +2826,23 @@ function computeGap(
     });
   } catch {
     return boundary;
+  }
+}
+
+// True when two polygons share a border (or overlap): their union has fewer
+// parts than the two of them laid side by side. Cheap and dependency-free.
+function touches(a: GeoJSON.Geometry, b: GeoJSON.Geometry): boolean {
+  const fa = toPolyFeature(a);
+  const fb = toPolyFeature(b);
+  if (!fa || !fb) return false;
+  const parts = (g: GeoJSON.Polygon | GeoJSON.MultiPolygon) =>
+    g.type === "Polygon" ? 1 : g.coordinates.length;
+  try {
+    const u = union({ type: "FeatureCollection", features: [fa, fb] });
+    if (!u) return false;
+    return parts(u.geometry) < parts(fa.geometry) + parts(fb.geometry);
+  } catch {
+    return false;
   }
 }
 
