@@ -215,9 +215,9 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
 
       setSubmitted(true)
       onSubmitted()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Submission failed:', err)
-      setError(err.message || 'Upload failed. Please try again.')
+      setError((err as Error).message || 'Upload failed. Please try again.')
     } finally {
       setUploading(false)
     }

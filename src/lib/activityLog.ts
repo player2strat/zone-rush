@@ -401,18 +401,20 @@ function describeEvent(
   switch (e.event_type as EventType) {
     case 'card_discarded':
       return `🗑 ${t} discarded "${c}"`
-    case 'card_drawn':
+    case 'card_drawn': {
       const reason = e.metadata?.reason ?? ''
       return reason === 'replacement'
         ? `🃏 ${t} drew "${c}" (replacement after completion)`
         : reason === 'discard_swap'
         ? `🃏 ${t} drew "${c}" (after discard)`
         : `🃏 ${t} drew "${c}"`
+    }
     case 'zone_claimed':
       return `🏆 ${t} claimed ${z} (+${e.points_delta ?? '?'}pt zone bonus)`
-    case 'zone_stolen':
+    case 'zone_stolen': {
       const from = e.metadata?.previous_owner_name ?? 'previous team'
       return `🔁 ${t} stole ${z} from ${from}`
+    }
     case 'game_paused':
       return `⏸ Game paused`
     case 'game_resumed':
@@ -421,9 +423,10 @@ function describeEvent(
       return `🚫 ${z} closed by GM`
     case 'zone_reopened':
       return `✅ ${z} reopened by GM`
-    case 'side_quests_applied':
+    case 'side_quests_applied': {
       const awards = e.metadata?.awards ?? {}
       return `🏁 Side Quests applied: ${JSON.stringify(awards)}`
+    }
     default:
       return `${e.event_type} (no description)`
   }

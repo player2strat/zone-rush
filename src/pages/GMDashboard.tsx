@@ -487,8 +487,8 @@ export default function GMDashboard() {
       await updateDoc(doc(db, 'submissions', sub.id), {
         highlight: !sub.highlight,
       })
-    } catch (err: any) {
-      alert('Could not update highlight: ' + (err.message || 'Unknown error'))
+    } catch (err) {
+      alert('Could not update highlight: ' + ((err as Error).message || 'Unknown error'))
     }
   }
 
@@ -580,9 +580,9 @@ export default function GMDashboard() {
       if (failed > 0) {
         alert(`Done — but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`)
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Highlight zip failed:', err)
-      alert('Failed to build highlights zip: ' + (err.message || 'Unknown error'))
+      alert('Failed to build highlights zip: ' + ((err as Error).message || 'Unknown error'))
     } finally {
       setZipBusy(false)
       setZipProgress('')
@@ -642,7 +642,7 @@ export default function GMDashboard() {
         actor_id: user?.uid ?? null,
         metadata: { awards: bonusAwards },
       })
-    } catch (err: any) { alert('Failed to apply bonuses: ' + err.message) }
+    } catch (err) { alert('Failed to apply bonuses: ' + (err as Error).message) }
     finally { setApplyingBonuses(false) }
   }
 
@@ -765,9 +765,9 @@ const handleApprove = async (sub: SubmissionData) => {
       } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
 
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
-    } catch (err: any) {
+    } catch (err) {
       console.error('Approve failed:', err)
-      alert('Error approving: ' + (err.message || 'Unknown error'))
+      alert('Error approving: ' + ((err as Error).message || 'Unknown error'))
     } finally { setProcessing(null) }
   }
 
@@ -783,7 +783,7 @@ const handleApprove = async (sub: SubmissionData) => {
         highlight: false, // a rejected submission can't be a highlight
       })
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
-    } catch (err: any) { alert('Error rejecting: ' + (err.message || 'Unknown error')) }
+    } catch (err) { alert('Error rejecting: ' + ((err as Error).message || 'Unknown error')) }
     finally { setProcessing(null) }
   }
 

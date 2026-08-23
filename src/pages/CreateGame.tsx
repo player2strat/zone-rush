@@ -12,15 +12,15 @@
 //     games/{gameId}/teams/team_N AFTER writing the game doc. The seeded doc
 //     shape is IDENTICAL to what LobbyPage's resolveAutoJoinTeam writes, so a
 //     pre-seeded team is indistinguishable from a lobby-created one.
-//   - TEAM_NAMES and TEAM_COLORS are duplicated here to match LobbyPage
-//     exactly so team_N's seeded name/color agrees with the lobby's notion of
-//     team_N. (Longer term these should live in one shared module both import.)
+//   - Team names/colors come from src/lib/teamDefaults.ts, shared with
+//     LobbyPage so team_N's seeded name/color agrees in both places.
 // =============================================================================
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,38 +48,6 @@ interface MapDoc {
   recommended_duration?: number
 }
 
-// ---------------------------------------------------------------------------
-// Team name + color pools
-// IMPORTANT: these MUST stay in sync with the same arrays in LobbyPage so that
-// team_N's seeded name/color matches what the lobby assumes for team_N.
-// ---------------------------------------------------------------------------
-const TEAM_NAMES = [
-  'The Bodega Cats',
-  'Subway Surfers',
-  'Pigeon Squad',
-  'The Jaywalkers',
-  'Borough Bosses',
-  'Street Legends',
-  'The Wanderers',
-  'Zone Runners',
-]
-
-const TEAM_COLORS = [
-  { name: 'Red', hex: '#EF476F' },
-  { name: 'Blue', hex: '#118AB2' },
-  { name: 'Green', hex: '#06D6A0' },
-  { name: 'Purple', hex: '#9B5DE5' },
-  { name: 'Orange', hex: '#F77F00' },
-  { name: 'Yellow', hex: '#FFD166' },
-  { name: 'Pink', hex: '#FF6B8A' },
-  { name: 'Teal', hex: '#2EC4B6' },
-]
-
-// Default name for team at index i (0-based). Falls back to "Team N" if the
-// pool runs out (more teams than named entries).
-function defaultTeamName(index: number): string {
-  return TEAM_NAMES[index] || 'Team ' + (index + 1)
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -204,7 +172,7 @@ export default function CreateGame() {
           list.push({ id: d.id, ...d.data() } as MapDoc)
         })
         setMaps(list)
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to load maps:', err)
       }
       setLoadingMaps(false)
@@ -241,8 +209,8 @@ export default function CreateGame() {
         setZones(zoneDocs)
         setSelectedZones([])
         setSelectedMapId(null)
-      } catch (err: any) {
-        setError('Failed to load zones: ' + err.message)
+      } catch (err) {
+        setError('Failed to load zones: ' + (err as Error).message)
       }
       setLoadingZones(false)
     }
@@ -380,7 +348,7 @@ export default function CreateGame() {
           name,
           members: [],
           member_names: [],
-          color: TEAM_COLORS[i]?.hex || '#888',
+          color: defaultTeamColor(i),
           total_points: 0,
           zones_claimed: 0,
           zones_locked: 0,
@@ -391,8 +359,8 @@ export default function CreateGame() {
       await batch.commit()
 
       navigate('/lobby/' + gameId)
-    } catch (err: any) {
-      setError('Failed to create game: ' + err.message)
+    } catch (err) {
+      setError('Failed to create game: ' + (err as Error).message)
       setCreating(false)
     }
   }
@@ -499,7 +467,7 @@ export default function CreateGame() {
               </p>
               <div style={{ display: 'grid', gap: 8 }}>
                 {teamNames.map((name, i) => {
-                  const color = TEAM_COLORS[i]?.hex || '#888'
+                  const color = defaultTeamColor(i)
                   return (
                     <div
                       key={i}
