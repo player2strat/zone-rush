@@ -38,6 +38,7 @@ import {
   getDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { loadGameZones } from './gameZones'
 
 // --------------- Event type definitions ---------------
 
@@ -140,10 +141,9 @@ export async function getActivityLog(
     })
   })
 
-  const zonesSnap = await getDocs(collection(db, 'zones'))
   const zones = new Map<string, { name: string }>()
-  zonesSnap.forEach((d) => {
-    zones.set(d.id, { name: d.data().name ?? d.id })
+  ;(await loadGameZones(gameId)).forEach((z) => {
+    zones.set(z.id, { name: z.name ?? z.id })
   })
 
   // Build a user lookup from team member_names where available

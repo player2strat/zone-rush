@@ -18,8 +18,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
-import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, storage, auth } from '../lib/firebase'
+import { loadGameZones } from '../lib/gameZones'
 import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
 import { useLocation, isLocationSubmittable, locationStatusLabel } from '../hooks/useLocation'
@@ -84,15 +85,11 @@ export default function SubmitProof({
   useEffect(() => {
     async function loadZones() {
       try {
-        const snapshot = await getDocs(collection(db, 'zones'))
-        const loaded = snapshot.docs
-          .map((d) => {
-            const data = d.data()
-            return { id: d.id, ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
-          })
-          // Only detect against zones the GM selected for this game. Both
-          // boroughs' polygons live in the same collection and overlap, so an
-          // unscoped list would tag submissions to the wrong (out-of-game) zone.
+        // This game's zone snapshot (library fallback for old games). Still
+        // filter to the GM-selected ids — for legacy games the fallback returns
+        // every zone in the library, and overlapping polygons would otherwise
+        // tag submissions to an out-of-game zone.
+        const loaded = (await loadGameZones(gameId))
           .filter((z) => activeZoneIds.includes(z.id))
         setZones(loaded)
         setZonesLoaded(true)

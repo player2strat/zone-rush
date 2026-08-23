@@ -2356,8 +2356,9 @@ export default function ZoneBuilder() {
                             <strong style={{ color: "#FFD166" }}>
                               {deleteConfirm.endedGames} finished game{deleteConfirm.endedGames === 1 ? "" : "s"}
                             </strong>{" "}
-                            used this map — {deleteConfirm.endedGames === 1 ? "its" : "their"} scores stay, but
-                            zone names and the map view on the results page will be lost.
+                            used this map. Games created since zone snapshots (Aug 2026) keep their
+                            own copy of the zones and are unaffected; older games will show zone IDs
+                            instead of names on their results page.
                           </>
                         )}
                       </p>

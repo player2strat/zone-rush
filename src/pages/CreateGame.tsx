@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
+import { snapshotZonesIntoBatch } from '../lib/gameZones'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -356,6 +357,10 @@ export default function CreateGame() {
           hand: [],
         })
       }
+      // Freeze this game's zones: copy each selected zone doc into
+      // games/{id}/zones so later library edits/deletes can't affect it.
+      await snapshotZonesIntoBatch(batch, gameId, selectedZones)
+
       await batch.commit()
 
       navigate('/lobby/' + gameId)

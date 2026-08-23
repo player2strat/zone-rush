@@ -31,6 +31,7 @@ import {
   updateDoc, getDocs, serverTimestamp, writeBatch, arrayUnion,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission } from '../lib/scoring'
 import GameMap from '../components/GameMap'
@@ -264,18 +265,11 @@ export default function GMDashboard() {
   const [zipBusy, setZipBusy] = useState(false)
   const [zipProgress, setZipProgress] = useState('')
 
-  // Load zones
+  // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
-    async function loadZones() {
-      const snapshot = await getDocs(collection(db, 'zones'))
-      const loaded = snapshot.docs.map((d) => {
-        const data = d.data()
-        return { ...data, boundary: typeof data.boundary === 'string' ? JSON.parse(data.boundary) : data.boundary }
-      })
-      setAllZoneData(loaded)
-    }
-    loadZones()
-  }, [])
+    if (!gameId) return
+    loadGameZones(gameId).then(setAllZoneData)
+  }, [gameId])
 
   const zoneDataMap = useMemo(() => new Map(allZoneData.map((z: any) => [z.id, z])), [allZoneData])
 
