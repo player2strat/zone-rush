@@ -5,11 +5,13 @@
 // =============================================================================
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { collection, doc, setDoc, getDocs } from "firebase/firestore";
 import { db, auth } from "../lib/firebase"; // adjust path to your firebase config
 import { challengeSeedData, getChallengeStats } from "../data/challengeSeedData";
 
 export default function AdminSeed() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<"idle" | "seeding" | "done" | "error">("idle");
   const [log, setLog] = useState<string[]>([]);
   const [existingCount, setExistingCount] = useState<number | null>(null);
@@ -73,6 +75,12 @@ export default function AdminSeed() {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#fff", fontFamily: "'DM Sans', sans-serif", padding: 24 }}>
       <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+        >
+          ← Home
+        </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: 8 }}>Admin: Seed Challenges</h1>
         <p style={{ color: "#888", marginBottom: 24, fontSize: "0.9rem" }}>
           Push all {stats.total} challenges into Firestore. Safe to run multiple times — uses set (upsert).

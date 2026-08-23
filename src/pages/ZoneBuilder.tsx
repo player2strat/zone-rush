@@ -368,6 +368,8 @@ export default function ZoneBuilder() {
   } | null>(null);
   const [splitNameA, setSplitNameA] = useState("");
   const [splitNameB, setSplitNameB] = useState("");
+  // Zone whose delete is awaiting explicit confirmation (list row or edit panel).
+  const [confirmZoneDeleteId, setConfirmZoneDeleteId] = useState<string | null>(null);
   const editDrawId = useRef<string | null>(null); // draw-feature id of the zone under edit
   const [zoneName, setZoneName] = useState("");
   const [cultureTags, setCultureTags] = useState("");
@@ -391,6 +393,10 @@ export default function ZoneBuilder() {
   // Set on draw.create so the follow-up modechange knows the draw completed
   // (vs. was cancelled with Escape).
   const justCreated = useRef(false);
+  // True while we're cancelling an armed draw. mapbox-gl-draw fires draw.create
+  // from inside changeMode('simple_select') if enough points were placed, so
+  // handleDrawCreate must discard that feature instead of treating it as done.
+  const cancelling = useRef(false);
 
   // Panel mode: work on an existing map, or create a new one. These are
   // alternatives — only one shows at a time so they don't read as one flow.
@@ -508,6 +514,9 @@ export default function ZoneBuilder() {
       }
     }
     loadMaps();
+    // The previous city's map is no longer valid here.
+    setSelectedMapId("");
+    setZones([]);
     return () => {
       cancelled = true;
     };
@@ -557,6 +566,20 @@ export default function ZoneBuilder() {
     setDuplicatingOpen(false);
     setDupName("");
     setEditMapOpen(false);
+    setDeleteConfirm(null);
+    setConfirmZoneDeleteId(null);
+    setFillGap(null);
+    // Merge/split state must not leak across maps.
+    splitDrawId.current = null;
+    if (drawTarget.current === "split") drawTarget.current = null;
+    setTool(null);
+    setMergeSel([]);
+    setMergeName("");
+    setSplitZoneId(null);
+    setSplitPhase("pick");
+    setSplitPieces(null);
+    setSplitNameA("");
+    setSplitNameB("");
   }, [selectedMapId]);
 
   // ---- Initialize the Mapbox map once ----
@@ -777,6 +800,28 @@ export default function ZoneBuilder() {
   function handleDrawCreate(e: { features: GeoJSON.Feature[] }) {
     const f = e.features?.[0];
     if (!f || !f.geometry) return;
+    if (cancelling.current) {
+      // A cancel forced this create — throw the shape away.
+      if (f.id != null) {
+        try {
+          draw.current?.delete(String(f.id));
+        } catch {
+          /* gone */
+        }
+      }
+      return;
+    }
+    // Only polygons are zones/boundaries; anything else here is a stray.
+    if (drawTarget.current !== "split" && f.geometry.type !== "Polygon" && f.geometry.type !== "MultiPolygon") {
+      if (f.id != null) {
+        try {
+          draw.current?.delete(String(f.id));
+        } catch {
+          /* gone */
+        }
+      }
+      return;
+    }
     const target = drawTarget.current;
     drawTarget.current = null;
     justCreated.current = true; // tell the follow-up modechange this completed
@@ -973,6 +1018,7 @@ export default function ZoneBuilder() {
     cancelPending();
     cancelPendingBoundary();
     cancelTool();
+    setFillGap(null);
     drawTarget.current = "zone";
     justCreated.current = false;
     setDrawingMode("zone");
@@ -991,6 +1037,7 @@ export default function ZoneBuilder() {
     cancelPending();
     cancelPendingBoundary();
     cancelTool();
+    setFillGap(null);
     drawTarget.current = "boundary";
     justCreated.current = false;
     setRedrawingBoundary(true); // hide the old frame while drawing the new one
@@ -1003,11 +1050,13 @@ export default function ZoneBuilder() {
   // Abort an armed draw before it's finished (explicit Cancel button).
   function cancelDrawing() {
     justCreated.current = false;
+    cancelling.current = true;
     try {
       draw.current?.changeMode("simple_select"); // discards the in-progress shape
     } catch {
       /* not in a draw mode */
     }
+    cancelling.current = false;
     drawTarget.current = null;
     setDrawingMode(null);
     setRedrawingBoundary(false);
@@ -1461,6 +1510,13 @@ export default function ZoneBuilder() {
     if (!selectedMap || !deleteConfirm || deleteConfirm.liveGames > 0) return;
     setEmBusy(true);
     try {
+      // A game may have started since the confirm box opened — re-check.
+      const live = await liveGamesOnMap(selectedMap.id);
+      if (live > 0) {
+        setDeleteConfirm({ ...deleteConfirm, liveGames: live });
+        setEmBusy(false);
+        return;
+      }
       // Re-read so we delete exactly what exists now, not a stale list.
       const zoneSnap = await getDocs(
         query(collection(db, "zones"), where("map_id", "==", selectedMap.id))
@@ -1561,11 +1617,13 @@ export default function ZoneBuilder() {
     }
     if (drawTarget.current === "split") {
       drawTarget.current = null;
+      cancelling.current = true;
       try {
         draw.current?.changeMode("simple_select");
       } catch {
         /* not in a draw mode */
       }
+      cancelling.current = false;
     }
     setTool(null);
     setMergeSel([]);
@@ -1656,9 +1714,14 @@ export default function ZoneBuilder() {
     if (mergeSel.length !== 2 || !selectedMapId) return;
     const keep = zones.find((z) => z.id === mergeSel[0]);
     const absorb = zones.find((z) => z.id === mergeSel[1]);
-    const kf = keep ? toPolyFeature(parseGeometry(keep.boundary) as GeoJSON.Geometry) : null;
-    const af = absorb ? toPolyFeature(parseGeometry(absorb.boundary) as GeoJSON.Geometry) : null;
-    if (!keep || !absorb || !kf || !af) return;
+    const kg = keep ? parseGeometry(keep.boundary) : null;
+    const ag = absorb ? parseGeometry(absorb.boundary) : null;
+    const kf = kg ? toPolyFeature(kg) : null;
+    const af = ag ? toPolyFeature(ag) : null;
+    if (!keep || !absorb || !kf || !af) {
+      setMessage("Error: one of the zones has no usable polygon.");
+      return;
+    }
     setToolBusy(true);
     try {
       const live = await liveGamesOnMap(selectedMapId);
@@ -1720,8 +1783,12 @@ export default function ZoneBuilder() {
         center_lng: Math.round(ca.geometry.coordinates[0] * 1e6) / 1e6,
       };
       const newId = `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+      // Copy metadata but not source-specific identifiers (NTA code, district
+      // number, full name) — those described the original shape, not half of it.
+      const { nta_code: _n, district_number: _d, full_name: _f, ...inherit } = z;
+      void _n; void _d; void _f;
       const newZone: Zone = {
-        ...z,
+        ...inherit,
         id: newId,
         name: splitNameB.trim() || `${z.name} 2`,
         boundary: JSON.stringify(splitPieces.b.geometry),
@@ -1769,6 +1836,7 @@ export default function ZoneBuilder() {
     }
     pendingDrawId.current = null;
     editDrawId.current = null;
+    setConfirmZoneDeleteId(null);
     setEditingZoneId(null);
     setPendingGeometry(null);
     setZoneName("");
@@ -1782,7 +1850,8 @@ export default function ZoneBuilder() {
   // Load a saved zone into the draw tool for reshaping, and open its metadata in
   // the form. Ignored while busy with another draw/edit so you don't lose work.
   function startEditZone(zoneId: string) {
-    if (drawingMode || pendingBoundary || pendingGeometry) return;
+    if (drawingMode || pendingBoundary || pendingGeometry || tool) return;
+    setFillGap(null);
     const z = zones.find((zz) => zz.id === zoneId);
     if (!z) return;
     const geom = parseGeometry(z.boundary);
@@ -1847,10 +1916,10 @@ export default function ZoneBuilder() {
   }
 
   // Delete a saved zone from Firestore and the map.
+  // Runs only after the inline confirm (no browser popup).
   async function deleteZone(zoneId: string) {
     const z = zones.find((zz) => zz.id === zoneId);
-    if (!window.confirm(`Delete "${z?.name || "this zone"}"? This can't be undone.`))
-      return;
+    setConfirmZoneDeleteId(null);
     setSaving(true);
     try {
       await deleteDoc(doc(db, "zones", zoneId));
@@ -2065,6 +2134,12 @@ export default function ZoneBuilder() {
           boxSizing: "border-box",
         }}
       >
+        <button
+          onClick={() => navigate('/')}
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+        >
+          ← Home
+        </button>
         <h1 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Builder
         </h1>
@@ -2835,41 +2910,59 @@ export default function ZoneBuilder() {
                         padding: "8px 10px",
                       }}
                     >
-                      <button
-                        onClick={() => startEditZone(z.id)}
-                        title="Edit this zone"
-                        style={{
-                          flex: 1,
-                          textAlign: "left",
-                          background: "none",
-                          border: "none",
-                          color: "#ddd",
-                          fontSize: "0.85rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {z.name || "Untitled zone"}
-                      </button>
-                      <button
-                        onClick={() => deleteZone(z.id)}
-                        title="Delete this zone"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#7a3a48",
-                          cursor: "pointer",
-                          fontSize: "0.9rem",
-                          fontFamily: "inherit",
-                          padding: "0 4px",
-                        }}
-                      >
-                        ✕
-                      </button>
+                      {confirmZoneDeleteId === z.id ? (
+                        <>
+                          <span style={{ flex: 1, color: "#EF476F", fontSize: "0.8rem", fontWeight: 600 }}>
+                            Delete "{z.name || "Untitled zone"}"?
+                          </span>
+                          <button onClick={() => deleteZone(z.id)} disabled={saving} style={zoneRowDangerBtn}>
+                            Delete
+                          </button>
+                          <button onClick={() => setConfirmZoneDeleteId(null)} disabled={saving} style={zoneRowQuietBtn}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => (tool ? handleToolClick(z.id) : startEditZone(z.id))}
+                            title={tool ? "Select this zone" : "Edit this zone"}
+                            style={{
+                              flex: 1,
+                              textAlign: "left",
+                              background: "none",
+                              border: "none",
+                              color: "#ddd",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {z.name || "Untitled zone"}
+                          </button>
+                          {!tool && (
+                          <button
+                            onClick={() => setConfirmZoneDeleteId(z.id)}
+                            title="Delete this zone"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#7a3a48",
+                              cursor: "pointer",
+                              fontSize: "0.9rem",
+                              fontFamily: "inherit",
+                              padding: "0 4px",
+                            }}
+                          >
+                            ✕
+                          </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   ))}
               </div>
@@ -3097,9 +3190,9 @@ export default function ZoneBuilder() {
               </button>
             </div>
 
-            {editingZoneId && (
+            {editingZoneId && confirmZoneDeleteId !== editingZoneId && (
               <button
-                onClick={() => deleteZone(editingZoneId)}
+                onClick={() => setConfirmZoneDeleteId(editingZoneId)}
                 disabled={saving}
                 style={{
                   marginTop: 10,
@@ -3117,6 +3210,47 @@ export default function ZoneBuilder() {
               >
                 Delete zone
               </button>
+            )}
+            {editingZoneId && confirmZoneDeleteId === editingZoneId && (
+              <div
+                style={{
+                  marginTop: 10,
+                  background: "rgba(239,71,111,0.08)",
+                  border: "1px solid rgba(239,71,111,0.4)",
+                  borderRadius: 8,
+                  padding: 12,
+                }}
+              >
+                <p style={{ color: "#EF476F", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                  Delete "{zoneName.trim() || "this zone"}"?
+                </p>
+                <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                  This permanently removes the zone. It can't be undone.
+                </p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => deleteZone(editingZoneId)}
+                    disabled={saving}
+                    style={{
+                      flex: 1,
+                      background: "#EF476F",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      fontWeight: 700,
+                      fontSize: "0.85rem",
+                      cursor: saving ? "not-allowed" : "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {saving ? "Deleting…" : "Yes, delete zone"}
+                  </button>
+                  <button onClick={() => setConfirmZoneDeleteId(null)} disabled={saving} style={secondaryBtnStyle}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -3589,6 +3723,30 @@ const primaryBtnStyle: React.CSSProperties = {
   padding: "11px 16px",
   fontWeight: 700,
   fontSize: "0.9rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
+
+const zoneRowDangerBtn: React.CSSProperties = {
+  background: "#EF476F",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  padding: "4px 10px",
+  fontWeight: 700,
+  fontSize: "0.75rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
+
+const zoneRowQuietBtn: React.CSSProperties = {
+  background: "none",
+  color: "#888",
+  border: "1px solid #333",
+  borderRadius: 6,
+  padding: "4px 10px",
+  fontWeight: 600,
+  fontSize: "0.75rem",
   cursor: "pointer",
   fontFamily: "inherit",
 };

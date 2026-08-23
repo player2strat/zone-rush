@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 
@@ -505,6 +506,7 @@ const CANONICAL_MAPS: CanonicalMap[] = [
 ]
 
 export default function SeedMaps() {
+  const navigate = useNavigate()
   const [status, setStatus] = useState<string[]>([])
   const [running, setRunning] = useState(false)
 
@@ -727,6 +729,12 @@ export default function SeedMaps() {
       padding: '32px 24px',
     }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
+        <button
+          onClick={() => navigate('/')}
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+        >
+          ← Home
+        </button>
         <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 4 }}>
           Seed Maps & Zones
         </h1>

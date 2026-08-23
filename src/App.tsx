@@ -8,6 +8,7 @@ import AuthPage from './pages/AuthPage'
 import HomePage from './pages/HomePage'
 import CreateGame from './pages/CreateGame'
 import JoinGame from './pages/JoinGame'
+import LateJoinPage from './pages/LateJoinPage'
 import LobbyPage from './pages/LobbyPage'
 import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
@@ -28,10 +29,11 @@ async function findActiveGameForUser(uid: string): Promise<string | null> {
     // Check if user is a GM of an active game
     // (games where created_by == uid and status == 'active' or 'strategy')
     const gamesRef = collection(db, 'games')
-    const gmQuery = query(gamesRef, where('created_by', '==', uid), where('status', 'in', ['active', 'strategy', 'paused']))
+    const gmQuery = query(gamesRef, where('created_by', '==', uid), where('status', 'in', ['lobby', 'active', 'strategy', 'paused']))
     const gmSnap = await getDocs(gmQuery)
     if (!gmSnap.empty) {
-      return `/gm/${gmSnap.docs[0].id}`
+      const g = gmSnap.docs[0]
+      return g.data().status === 'lobby' ? `/lobby/${g.id}` : `/gm/${g.id}`
     }
 
     // Check if user is a player on a team in an active game
@@ -75,10 +77,12 @@ function ActiveGameRedirect({ uid }: { uid: string }) {
   const navigate = useNavigate()
 
   useEffect(() => {
+    let cancelled = false
     findActiveGameForUser(uid).then((path) => {
-      if (path) navigate(path, { replace: true })
+      if (path && !cancelled) navigate(path, { replace: true })
     })
-  }, [uid])
+    return () => { cancelled = true }
+  }, [uid, navigate])
 
   return null
 }
@@ -128,6 +132,8 @@ export default function App() {
         {/* Only GMs/admins can create games; players are sent home. */}
         <Route path="/create" element={<AdminGuard><CreateGame /></AdminGuard>} />
         <Route path="/join" element={<JoinGame />} />
+        {/* Player asking to join a game that already started; GM approves from the dashboard. */}
+        <Route path="/late-join/:gameId" element={<LateJoinPage />} />
 <Route
           path="/lobby/:gameId"
           element={
