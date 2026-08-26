@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Activity Log (NEW FILE)
+// Foray — Activity Log (NEW FILE)
 //
 // Purpose:
 //   Captures game events that aren't already preserved elsewhere in Firestore.

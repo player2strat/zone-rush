@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Location Status Pill
+// Foray — Location Status Pill
 // Always-visible indicator showing whether GPS is working for the player.
 // Tap it to see details and platform-specific troubleshooting steps.
 // =============================================================================
@@ -199,8 +199,8 @@ function DetailsBody({
         {platform === 'ios' && (
           <Para>
             <strong style={{ color: '#fff' }}>On iPhone:</strong> open Settings → Safari → Location →
-            choose "Ask" or "Allow." If you installed Zone Rush to your home screen, also check
-            Settings → Zone Rush → Location.
+            choose "Ask" or "Allow." If you installed Foray to your home screen, also check
+            Settings → Foray → Location.
           </Para>
         )}
         {platform === 'android' && (

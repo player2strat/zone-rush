@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Game Map
+// Foray — Game Map
 //
 // CHANGES:
 // - Zone coloring: dashed border for "in progress" zones (visually distinct

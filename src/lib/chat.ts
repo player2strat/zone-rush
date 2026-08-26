@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Chat System (Sprint 2)
+// Foray — Chat System (Sprint 2)
 //
 // Channel types:
 //  - team_internal: Player → their team room. Teammates + GM can see.

@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Game Page
+// Foray — Game Page
 // Player's 5-tab view: Home, Hand, Map, Chat, History
 //
 // CHANGES (sequential cards):

@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Challenge Dealing Logic
+// Foray — Challenge Dealing Logic
 //
 // Two exported functions:
 //   dealChallenges()       — deals initial hands to all teams at game start

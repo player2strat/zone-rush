@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — useGameRoute Hook
+// Foray — useGameRoute Hook
 //
 // Single source of truth for "where should this user be right now,
 // given the state of their game?"

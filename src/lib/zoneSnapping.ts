@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Zone Builder snapping
+// Foray — Zone Builder snapping
 //
 // Draw-time and edit-time snapping for mapbox-gl-draw: points placed while
 // drawing, and vertices dragged while editing, snap onto nearby zone borders /

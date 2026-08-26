@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Home Page
+// Foray — Home Page
 // First screen after login. Navigate to create or join a game.
 // =============================================================================
 
@@ -49,7 +49,7 @@ export default function HomePage() {
           letterSpacing: 2,
           marginBottom: 8,
         }}>
-          Zone Rush
+          Foray
         </p>
         <h1 style={{
           fontSize: '2rem',

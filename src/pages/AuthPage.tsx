@@ -100,7 +100,7 @@ export default function AuthPage() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontSize: '3rem', marginBottom: 12 }}>🏙️</div>
           <h1 style={{ color: '#FFD166', fontWeight: 800, fontSize: '2rem', margin: 0, letterSpacing: -1 }}>
-            Zone Rush
+            Foray
           </h1>
           <p style={{ color: '#555', marginTop: 8, fontSize: '0.9rem' }}>
             Urban Scavenger Hunt

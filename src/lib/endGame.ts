@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — End-Game Bonus Logic (Side Quests)
+// Foray — End-Game Bonus Logic (Side Quests)
 //
 // Side Quest rules (stored in game settings, never hardcoded):
 //   +8  Most zones claimed               (auto-calculated from zone_scores)
