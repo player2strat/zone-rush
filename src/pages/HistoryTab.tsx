@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — History Tab
+// Foray — History Tab
 // Shows a team's completed (approved) challenges in reverse chronological order.
 // Query: submissions where team_id == teamId && status == 'approved'
 // =============================================================================

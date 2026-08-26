@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Late Join Page
+// Foray — Late Join Page
 //
 // A player entered the code for a game that has already started and isn't on
 // a team. They pick a name and ask to join; the request lands in

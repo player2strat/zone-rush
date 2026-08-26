@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — zone geometry helpers (pure functions, no React / Mapbox)
+// Foray — zone geometry helpers (pure functions, no React / Mapbox)
 //
 // Shared polygon math used by the Zone Builder: overlap detection, coverage
 // gap, polygon-by-line split, adjacency, and GeoJSON parsing. Kept separate so

@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Create Game Page (v5)
+// Foray — Create Game Page (v5)
 // 3-step flow: Basics → Pick Map → Settings & Create
 // Step 2 is two-stage: pick a map set first, THEN see zones with toggles.
 // All settings stored in Firestore — never hardcoded.

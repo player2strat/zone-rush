@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — useLocation Hook
+// Foray — useLocation Hook
 // Single source of truth for player GPS state.
 //
 // Why this exists:

@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — GeoJSON → zone import parser
+// Foray — GeoJSON → zone import parser
 //
 // Turns an uploaded GeoJSON (FeatureCollection / Feature / bare geometry) into
 // ParsedZone records, reading names, codes, tags, transit and difficulty from

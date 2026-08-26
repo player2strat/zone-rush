@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Core Types
+// Foray — Core Types
 // Single source of truth for all Firestore document shapes.
 // Keep this in sync with the data model — if you add a field in Firestore,
 // add it here too.

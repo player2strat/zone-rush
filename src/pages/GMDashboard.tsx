@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — GM Dashboard (v5)
+// Foray — GM Dashboard (v5)
 // CHANGES (v5 — media highlights):
 // - "Highlight" star toggle on APPROVED asset submissions. Writes a `highlight`
 //   boolean to the submission doc; the live listener re-renders the card.
@@ -385,7 +385,7 @@ export default function GMDashboard() {
           !alreadySent.includes(milestone.key)
         ) {
           try {
-            await sendGMBroadcast(gameId, user.uid, 'Zone Rush', milestone.message)
+            await sendGMBroadcast(gameId, user.uid, 'Foray', milestone.message)
             await updateDoc(doc(db, 'games', gameId), {
               milestone_broadcasts_sent: [...alreadySent, milestone.key],
             })
@@ -466,7 +466,7 @@ export default function GMDashboard() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `zone-rush-activity-${game?.name?.replace(/\s+/g, '-') ?? gameId}-${new Date().toISOString().split('T')[0]}.csv`
+    a.download = `foray-activity-${game?.name?.replace(/\s+/g, '-') ?? gameId}-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -700,7 +700,7 @@ const handleApprove = async (sub: SubmissionData) => {
 
       if (result.zoneLocked) {
         // Zone locked — broadcast to all teams
-        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Foray',
           `🔒 ${zoneName || 'A zone'} has been LOCKED by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,
@@ -712,7 +712,7 @@ const handleApprove = async (sub: SubmissionData) => {
         })
       } else if (result.zoneStolen && previousOwner && previousOwner.teamId !== sub.team_id) {
         // Zone stolen — broadcast to all teams
-        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Foray',
           `🔁 ${zoneName} was just stolen by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,
@@ -727,7 +727,7 @@ const handleApprove = async (sub: SubmissionData) => {
         })
       } else if (result.zoneClaimed) {
         // Zone claimed — broadcast to all teams
-        await sendGMBroadcast(gameId, user?.uid ?? '', 'Zone Rush',
+        await sendGMBroadcast(gameId, user?.uid ?? '', 'Foray',
           `🏴 ${zoneName} has been CLAIMED by ${approvedTeam?.name ?? 'a team'}!`)
         await logEvent(gameId, {
           team_id: sub.team_id,

@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Challenge Seed Data
+// Foray — Challenge Seed Data
 // Source: PROMPTS V1 spreadsheet (40 challenges)
 // Points: Easy = 1, Medium = 3, Hard = 5
 //

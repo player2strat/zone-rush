@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Join Game Page
+// Foray — Join Game Page
 // Player enters a 6-character join code to find and enter a game lobby.
 // =============================================================================
 

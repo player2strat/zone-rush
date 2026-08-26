@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — per-game zone snapshot
+// Foray — per-game zone snapshot
 //
 // When a game is created, every zone it uses is copied into
 // games/{gameId}/zones/{zoneId}. Gameplay and results pages read THAT copy, so

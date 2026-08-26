@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Game Lobby
+// Foray — Game Lobby
 // GM can start the game. On start, GM routes to /gm-dashboard/:gameId, players route to /game/:gameId.
 // Real-time updates via Firestore listeners.
 //

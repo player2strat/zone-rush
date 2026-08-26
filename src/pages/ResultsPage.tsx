@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Results Page
+// Foray — Results Page
 // Shown to all players and GM when game.status === 'ended'.
 //
 // CHANGES (endgame v17 work):
@@ -400,7 +400,7 @@ export default function ResultsPage() {
             fontSize: '0.72rem', color: '#FFD166',
             textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
           }}>
-            Zone Rush · Game Over
+            Foray · Game Over
           </p>
           <h1 style={{
             fontSize: '1.8rem', fontWeight: 800,
@@ -600,7 +600,7 @@ export default function ResultsPage() {
           fontSize: '0.72rem', color: '#FFD166',
           textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
         }}>
-          Zone Rush · Game Over
+          Foray · Game Over
         </p>
         <h1 style={{
           fontSize: '1.8rem', fontWeight: 800,

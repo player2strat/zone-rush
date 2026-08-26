@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — GameRouteGuard
+// Foray — GameRouteGuard
 //
 // Wraps routes that depend on game state. Reads the canonical expected path
 // from useGameRoute. If the user is on the wrong URL for the game's current

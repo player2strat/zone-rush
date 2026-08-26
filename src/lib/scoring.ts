@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Scoring Engine
+// Foray — Scoring Engine
 //
 // Handles all point calculation and zone ownership logic:
 //  - approveSubmission()      Points calc + zone claim/lock/steal on GM approval

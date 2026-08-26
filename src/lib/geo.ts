@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Geo Utilities
+// Foray — Geo Utilities
 // Point-in-polygon check for GPS proximity warnings
 // =============================================================================
 

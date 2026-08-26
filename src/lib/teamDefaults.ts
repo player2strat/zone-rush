@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — default team names + colors
+// Foray — default team names + colors
 //
 // Single source of truth used by CreateGame (pre-seeding team docs) and
 // LobbyPage (creating a team on the fly). team_N's seeded name/color must agree

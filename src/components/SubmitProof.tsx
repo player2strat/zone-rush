@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Submit Proof Component
+// Foray — Submit Proof Component
 // Full-screen overlay for photo/video submission with GPS capture.
 //
 // CHANGES (this version):

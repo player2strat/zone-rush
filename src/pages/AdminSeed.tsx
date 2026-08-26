@@ -1,5 +1,5 @@
 // =============================================================================
-// Zone Rush — Admin Seed Page
+// Foray — Admin Seed Page
 // Route: /admin/seed (only accessible by admin/gm role users)
 // Purpose: One-click seeding of challenges into Firestore
 // =============================================================================
