@@ -33,7 +33,7 @@ import {
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
-import { approveSubmission } from '../lib/scoring'
+import { approveSubmission, runZoneSchedules } from '../lib/scoring'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
@@ -226,6 +226,24 @@ export default function GMDashboard() {
     }
     setJoinBusy(null)
   }
+
+  // Zone open/close schedules also run from the GM's screen — it's the one
+  // most likely to stay awake all game, so schedules fire even when every
+  // player's phone is asleep. Immediate + foreground + once a minute.
+  useEffect(() => {
+    if (game?.status !== 'active' || !gameId) return
+    const run = () => runZoneSchedules(gameId)
+    run()
+    const interval = setInterval(run, 60000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') run()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [game?.status, gameId])
 
   // Smallest team with room (or just the smallest if all are full).
   const defaultTeamFor = (): string => {

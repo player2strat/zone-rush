@@ -18,7 +18,7 @@
 
 import {
   collection, doc, getDoc, getDocs,
-  updateDoc, query, where, serverTimestamp, writeBatch,
+  updateDoc, query, where, serverTimestamp, writeBatch, arrayRemove, arrayUnion,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { isPointInPolygon } from './geo'
@@ -342,12 +342,75 @@ export async function checkZoneClosures(gameId: string): Promise<string[]> {
   }
 
   if (newlyClosed.length > 0) {
+    // Atomic per element — concurrent checks (or a scheduled opening in the
+    // same minute) merge instead of overwriting each other.
     await updateDoc(doc(db, 'games', gameId), {
-      closed_zones: [...alreadyClosed, ...newlyClosed],
+      closed_zones: arrayUnion(...newlyClosed),
     })
   }
 
   return newlyClosed
+}
+
+/**
+ * Run both time-based schedules (closures then openings). Safe to call from
+ * any client at any time: both checks are idempotent, atomic, and no-ops for
+ * games without schedules. Called on an interval AND on screen load / app
+ * foreground so a schedule can't be missed just because phones were asleep.
+ */
+export async function runZoneSchedules(gameId: string): Promise<void> {
+  try {
+    await checkZoneClosures(gameId)
+    await checkZoneOpenings(gameId)
+  } catch (err) {
+    console.warn('Zone schedule check failed:', err)
+  }
+}
+
+// ─── Zone Openings (time-based, minutes elapsed) ─────────────────────────────
+//
+// Counterpart to checkZoneClosures. Zones on the opening schedule start the
+// game inside closed_zones (CreateGame seeds them there); once their time
+// arrives they're removed. Each entry is applied exactly once, tracked in
+// zone_openings_applied — so a GM who manually closes such a zone later
+// won't have the scheduler silently reopen it.
+
+export async function checkZoneOpenings(gameId: string): Promise<string[]> {
+  const gameSnap = await getDoc(doc(db, 'games', gameId))
+  if (!gameSnap.exists()) return []
+
+  const gameData = gameSnap.data()
+  const settings = gameData.settings as GameSettings
+
+  const schedule: { zone_id: string; open_at_minutes: number }[] =
+    settings?.zone_open_schedule ?? []
+
+  if (schedule.length === 0) return []
+
+  const startedAt: number | null = gameData.started_at?.toMillis?.() ?? null
+  if (!startedAt) return []
+
+  const minutesElapsed = (Date.now() - startedAt) / 60000
+  const applied: string[] = gameData.zone_openings_applied ?? []
+  const newlyOpened: string[] = []
+
+  for (const entry of schedule) {
+    if (applied.includes(entry.zone_id)) continue
+    if (minutesElapsed < entry.open_at_minutes) continue
+    newlyOpened.push(entry.zone_id)
+  }
+
+  if (newlyOpened.length > 0) {
+    // arrayRemove/arrayUnion are atomic per element, so several players'
+    // clients running this check in the same minute can't clobber each other
+    // (or a concurrent scheduled closure writing closed_zones).
+    await updateDoc(doc(db, 'games', gameId), {
+      closed_zones: arrayRemove(...newlyOpened),
+      zone_openings_applied: arrayUnion(...newlyOpened),
+    })
+  }
+
+  return newlyOpened
 }
 
 /**

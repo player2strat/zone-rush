@@ -62,6 +62,15 @@ function generateJoinCode(): string {
   return code
 }
 
+const OPENING_PRESETS = [
+  { label: 'At start', value: '' },
+  { label: '15 min', value: '15' },
+  { label: '30 min', value: '30' },
+  { label: '45 min', value: '45' },
+  { label: '60 min', value: '60' },
+  { label: '90 min', value: '90' },
+]
+
 const CLOSURE_PRESETS = [
   { label: 'Never', value: '' },
   { label: '30 min', value: '30' },
@@ -96,6 +105,7 @@ export default function CreateGame() {
 
   // Closure schedule
   const [zoneCloseMinutes, setZoneCloseMinutes] = useState<Record<string, string>>({})
+  const [zoneOpenMinutes, setZoneOpenMinutes] = useState<Record<string, string>>({})
 
   // Step 1: Basics
   const [gameName, setGameName] = useState('')
@@ -267,6 +277,31 @@ export default function CreateGame() {
     (p) => p.value === '' || parseInt(p.value) < durationMinutes
   )
 
+  const availableOpenPresets = OPENING_PRESETS.filter(
+    (p) => p.value === '' || parseInt(p.value) < durationMinutes
+  )
+
+  const buildOpenSchedule = () => {
+    const schedule: { zone_id: string; open_at_minutes: number }[] = []
+    for (const [zoneId, val] of Object.entries(zoneOpenMinutes)) {
+      const mins = parseInt(val)
+      if (isNaN(mins) || mins <= 0 || !selectedZones.includes(zoneId)) continue
+      // A zone that would open at or after its own closing time never plays;
+      // drop the opening and flag it in the UI (scheduleConflicts).
+      const closeVal = parseInt(zoneCloseMinutes[zoneId] ?? '')
+      if (!isNaN(closeVal) && mins >= closeVal) continue
+      schedule.push({ zone_id: zoneId, open_at_minutes: mins })
+    }
+    return schedule
+  }
+
+  // Zones whose opening time is at/after their closing time (opening ignored).
+  const scheduleConflicts = selectedZones.filter((zoneId) => {
+    const o = parseInt(zoneOpenMinutes[zoneId] ?? '')
+    const c = parseInt(zoneCloseMinutes[zoneId] ?? '')
+    return !isNaN(o) && o > 0 && !isNaN(c) && o >= c
+  })
+
   const buildCloseSchedule = () => {
     const schedule: { zone_id: string; close_at_minutes: number }[] = []
     for (const [zoneId, val] of Object.entries(zoneCloseMinutes)) {
@@ -312,7 +347,9 @@ export default function CreateGame() {
         join_code: joinCode,
         max_teams: maxTeams,
         zones: selectedZones,
-        closed_zones: [],
+        // Zones with a scheduled opening start the game closed; the opening
+        // check releases them once their time arrives.
+        closed_zones: buildOpenSchedule().map((e) => e.zone_id),
         map_id: selectedMapId,
         started_at: null,
         ends_at: null,
@@ -336,6 +373,7 @@ export default function CreateGame() {
           most_zones_claimed_bonus: 8,
           most_zones_with_challenges_bonus: 8,
           zone_close_schedule: buildCloseSchedule(),
+          zone_open_schedule: buildOpenSchedule(),
         },
       })
 
@@ -807,6 +845,111 @@ export default function CreateGame() {
               Set zone closure times and review before creating
             </p>
 
+            {/* Zone opening schedule */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>Zone Opening Schedule</label>
+              <p style={{ color: '#666', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+                Hold zones back at the start — they begin closed and open at the
+                set time. Good for saving a zone for later in the game.
+              </p>
+
+              <div style={{
+                border: '1px solid #1e1e1e',
+                borderRadius: 10,
+                overflow: 'hidden',
+              }}>
+                {zones
+                  .filter((z) => selectedZones.includes(z.id))
+                  .map((zone, i, arr) => {
+                    const val = zoneOpenMinutes[zone.id] || ''
+                    return (
+                      <div
+                        key={zone.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 16px',
+                          borderBottom: i < arr.length - 1 ? '1px solid #111' : 'none',
+                          background: val ? 'rgba(6,214,160,0.04)' : 'transparent',
+                        }}
+                      >
+                        <span style={{ color: '#ccc', fontSize: '0.88rem', fontWeight: 600 }}>
+                          {zone.name}
+                        </span>
+                        <select
+                          value={val}
+                          onChange={(e) =>
+                            setZoneOpenMinutes((prev) => ({
+                              ...prev,
+                              [zone.id]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            background: '#111',
+                            border: `1px solid ${val ? 'rgba(6,214,160,0.35)' : '#333'}`,
+                            borderRadius: 6,
+                            color: val ? '#06D6A0' : '#555',
+                            padding: '7px 10px',
+                            fontSize: '0.85rem',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            minWidth: 110,
+                          }}
+                        >
+                          {availableOpenPresets.map((p) => (
+                            <option key={p.value} value={p.value}>
+                              {p.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+                  })}
+              </div>
+
+              {buildOpenSchedule().length > 0 && (
+                <div style={{
+                  marginTop: 12,
+                  padding: '10px 14px',
+                  background: 'rgba(6,214,160,0.06)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(6,214,160,0.15)',
+                }}>
+                  {buildOpenSchedule()
+                    .sort((a, b) => a.open_at_minutes - b.open_at_minutes)
+                    .map((entry) => {
+                      const zone = zones.find((z) => z.id === entry.zone_id)
+                      return (
+                        <p key={entry.zone_id} style={{ color: '#06D6A0', fontSize: '0.82rem', marginBottom: 3 }}>
+                          🔓 {zone?.name} opens at {entry.open_at_minutes} min
+                        </p>
+                      )
+                    })}
+                </div>
+              )}
+
+              {scheduleConflicts.length > 0 && (
+                <div style={{
+                  marginTop: 12,
+                  padding: '10px 14px',
+                  background: 'rgba(239,71,111,0.06)',
+                  borderRadius: 8,
+                  border: '1px solid rgba(239,71,111,0.2)',
+                }}>
+                  {scheduleConflicts.map((zoneId) => {
+                    const zone = zones.find((z) => z.id === zoneId)
+                    return (
+                      <p key={zoneId} style={{ color: '#EF476F', fontSize: '0.82rem', marginBottom: 3 }}>
+                        ⚠ {zone?.name} would open at or after it closes — its opening time will be ignored.
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Zone closure schedule */}
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Zone Closure Schedule</label>
@@ -974,6 +1117,9 @@ export default function CreateGame() {
                   { label: 'Teams', value: `${maxTeams} teams × ${teamSize} players` },
                   { label: 'Duration', value: `${durationMinutes} min` },
                   { label: 'Claim / Lock', value: `${claimThreshold}pts / ${lockThreshold}pts` },
+                  buildOpenSchedule().length > 0
+                    ? { label: 'Zone openings', value: `${buildOpenSchedule().length} scheduled` }
+                    : null,
                   buildCloseSchedule().length > 0
                     ? { label: 'Zone closures', value: `${buildCloseSchedule().length} scheduled` }
                     : null,
