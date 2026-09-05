@@ -228,6 +228,19 @@ export default function HomePage() {
         fontSize: '0.82rem',
       }}>
         <button
+          onClick={() => navigate('/forays')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#555',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontSize: 'inherit',
+          }}
+        >
+          Past Forays
+        </button>
+        <button
           onClick={handleSignOut}
           style={{
             background: 'none',
