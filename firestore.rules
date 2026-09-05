@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // =============================================================================
-// Zone Rush — Firestore security rules
+// Foray — Firestore security rules
 //
 // Source of truth for these rules. To deploy: paste into the Firebase console
 // (Firestore Database → Rules → Publish), or `firebase deploy --only
@@ -14,7 +14,11 @@ rules_version = '2';
 //   - GAMEPLAY collections (games and their subcollections, submissions) stay
 //     writable by any signed-in user, because players legitimately write them
 //     during a game (joining teams, submitting proof, messaging, etc.).
-//   - users/{uid}: each user manages only their own doc.
+//   - users/{uid}: each user manages their own doc, BUT can never set or
+//     change their own "role" field. New accounts must start as "player".
+//     Roles are changed in the Firebase console (which bypasses these rules)
+//     or by an admin/GM. This closes the hole where a player could write
+//     role: "gm" to their own doc and unlock game creation + admin tools.
 // =============================================================================
 
 service cloud.firestore {
@@ -31,9 +35,30 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Each user manages only their own profile/role doc.
+    // ---- Users: own doc only, and the role field is frozen -----------------
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // You can read your own doc; admins/GMs can read anyone's.
+      allow read: if (request.auth != null && request.auth.uid == userId)
+        || isAdminOrGm();
+
+      // Creating your own doc is fine, but it must start as role "player".
+      // (This is exactly what the signup flow in AuthPage.tsx writes.)
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.get('role', 'player') == 'player';
+
+      // Updating your own doc is fine (display name, stats, profile...),
+      // but the role field must come out of the write unchanged.
+      // Admins/GMs may update anyone (e.g. promoting a GM from a future
+      // admin screen).
+      allow update: if (
+          request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.get('role', 'player') == resource.data.get('role', 'player')
+        ) || isAdminOrGm();
+
+      // Nobody deletes user docs from the app.
+      allow delete: if false;
     }
 
     // ---- Content: read by any signed-in user, write only by admin/GM --------
