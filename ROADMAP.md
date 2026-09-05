@@ -25,6 +25,20 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
   - Follow-up: a one-off backfill for games created before the snapshot (copy their `game.zones` ids from the library while those zones still exist).
   - Follow-up: with snapshots in place, the merge/split "blocked while games are in progress" guard is now conservative rather than necessary; could be relaxed.
 
+## Playtest checklist (features shipped but not yet verified in a real game)
+
+- [ ] **Zone opening schedule** — create a game with one zone set to "opens at 15 min"; confirm it starts closed on all maps, rejects submissions, and flips open on schedule (check from both GM screen and a player phone; also try backgrounding all phones past the minute and reopening).
+- [ ] **Zone closure schedule** — still fires correctly alongside an opening (set both on different zones in one game).
+- [ ] **Teammates on map** — two players on one team; each sees the other's dot (team color, first name) on the Map tab; dot disappears ~5 min after a phone goes dark.
+- [ ] **Withdraw pending submission** — submit a photo, cancel via expanded card and via the ↺ chip on the collapsed card; card returns to Submit; GM's pending queue updates live; resubmit works.
+- [ ] **Player post-game view** — finished game shows final zone map + team submissions gallery (photos open, videos play, deleted-media placeholder shows).
+- [ ] **Past Forays page** — home → Past Forays lists finished games with team name/color, GM badge, date; rows open the right results.
+- [ ] **Late join** — enter code for an in-progress game on a fresh account → name → waiting screen → GM approves from dashboard banner → player lands in game on the right team. Also test Deny and Cancel request.
+- [ ] **GM/player home split** — player account sees only Join Game; typing /create redirects home; player creating a game via console is rejected by rules.
+- [ ] **Leave Lobby** — player leaves an unstarted lobby, home no longer bounces them back; rejoining via code works.
+- [ ] **Per-game zone snapshot** — create a game, then edit/split one of its zones in Zone Builder; the live game's map is unchanged.
+- [ ] **Zone Builder tools** — fill-gap, merge, split on a scratch map (duplicate a real one first); map delete blocked while a game is live.
+
 ## Zone schedules
 
 - **Server-side schedule guarantee** — zone open/close schedules are client-driven (GM + player screens run the check on load, foreground, and once a minute; writes are atomic). If nobody has the app open, a change lands when the first screen wakes. A Cloud Functions scheduled job would make timing exact, but needs the Blaze plan.
