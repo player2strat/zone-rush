@@ -135,6 +135,9 @@ export interface GameSettings {
   // Zone closure schedule
   zone_close_schedule?: { zone_id: string; close_at_minutes: number }[]
 
+  // Zone opening schedule — these zones start closed and open mid-game.
+  zone_open_schedule?: { zone_id: string; open_at_minutes: number }[]
+
   // Legacy fields (kept for compatibility, may be removed later)
   taxi_limit?: number             // Taxi/rideshare uses allowed per team
   zone_schedule?: { zone_id: string; lock_at_pct: number }[]

@@ -38,7 +38,7 @@ import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import HistoryTab from './HistoryTab'
-import { checkZoneLockouts, checkZoneClosures } from '../lib/scoring'
+import { checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
 import {
   sendTeamMessage,
   subscribeToPlayerMessages,
@@ -252,14 +252,25 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId])
 
-  // Zone lockout timer
+  // Zone lockout + schedule timer. Schedules also run immediately and when
+  // the app returns to the foreground, so a closure/opening isn't missed just
+  // because every phone was asleep when its minute arrived.
   useEffect(() => {
-  if (game?.status !== 'active') return
-  const interval = setInterval(() => {
-    checkZoneLockouts(gameId!)
-    checkZoneClosures(gameId!)
-  }, 60000)
-  return () => clearInterval(interval)
+  if (game?.status !== 'active' || !gameId) return
+  const run = () => {
+    checkZoneLockouts(gameId)
+    runZoneSchedules(gameId)
+  }
+  run()
+  const interval = setInterval(run, 60000)
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') run()
+  }
+  document.addEventListener('visibilitychange', onVisible)
+  return () => {
+    clearInterval(interval)
+    document.removeEventListener('visibilitychange', onVisible)
+  }
 }, [game?.status, gameId])
 
   // Find player's team and listen for updates

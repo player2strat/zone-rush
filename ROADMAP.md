@@ -25,6 +25,10 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
   - Follow-up: a one-off backfill for games created before the snapshot (copy their `game.zones` ids from the library while those zones still exist).
   - Follow-up: with snapshots in place, the merge/split "blocked while games are in progress" guard is now conservative rather than necessary; could be relaxed.
 
+## Zone schedules
+
+- **Server-side schedule guarantee** — zone open/close schedules are client-driven (GM + player screens run the check on load, foreground, and once a minute; writes are atomic). If nobody has the app open, a change lands when the first screen wakes. A Cloud Functions scheduled job would make timing exact, but needs the Blaze plan.
+
 ## Zone Manager
 
 - **City-filter the zone load** — currently loads every zone in the DB (no city filter), which won't scale as more zones/cities are added. Filter the load by selected city; the per-map filter already exists in the UI.
