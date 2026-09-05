@@ -27,6 +27,7 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
 
 ## Playtest checklist (features shipped but not yet verified in a real game)
 
+- [ ] **Side quests** — create a game with the Pothole Reporting preset; players submit photos from the home tab (tally shows approved/pending); GM approves/rejects in the Submissions tab's Side Quests box; team totals unchanged during play; post-game bonus card pre-picks the leader and Apply adds the points; per-game and all-time (Side Quest Explorer) CSV exports open with correct GPS links.
 - [ ] **Zone opening schedule** — create a game with one zone set to "opens at 15 min"; confirm it starts closed on all maps, rejects submissions, and flips open on schedule (check from both GM screen and a player phone; also try backgrounding all phones past the minute and reopening).
 - [ ] **Zone closure schedule** — still fires correctly alongside an opening (set both on different zones in one game).
 - [ ] **Teammates on map** — two players on one team; each sees the other's dot (team color, first name) on the Map tab; dot disappears ~5 min after a phone goes dark.

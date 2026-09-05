@@ -22,6 +22,8 @@ import { db } from './firebase'
 export interface BonusAwards {
   mostZonesClaimed: string | null        // team with most claimed zones
   mostZonesWithChallenges: string | null // team with most zones where ≥1 challenge completed
+  // Photo side quests: quest id → winning team id (most approved submissions).
+  sideQuests?: Record<string, string | null>
 }
 
 export interface TeamBonusSummary {
@@ -153,6 +155,13 @@ export async function applyEndGameBonuses(
 
   addBonus(awards.mostZonesClaimed, mostZonesClaimedBonus)
   addBonus(awards.mostZonesWithChallenges, mostZonesWithChallengesBonus)
+
+  // Photo side quests — each quest's bonus_points go to the team the GM picked.
+  const sideQuestDefs: { id: string; bonus_points?: number }[] = settings.side_quests ?? []
+  for (const [questId, teamId] of Object.entries(awards.sideQuests ?? {})) {
+    const quest = sideQuestDefs.find((q) => q.id === questId)
+    addBonus(teamId, quest?.bonus_points ?? 0)
+  }
 
   const bonusRecord: Record<string, number> = {}
   bonusMap.forEach((pts, teamId) => {

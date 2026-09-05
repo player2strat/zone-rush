@@ -12,6 +12,7 @@ import { useUserRole } from '../hooks/useUserRole'
 // surfaces them so admins don't have to type URLs.
 const ADMIN_LINKS = [
   { path: '/admin/zones', label: 'Zone Manager', desc: 'Import & edit zone metadata' },
+  { path: '/admin/side-quests', label: 'Side Quest Explorer', desc: 'All-time submissions & partner export' },
   { path: '/admin/seed-maps', label: 'Seed Maps', desc: 'Seed starter maps' },
   { path: '/admin/seed', label: 'Seed Challenges', desc: 'Seed challenge cards' },
 ]
