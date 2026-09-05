@@ -1,73 +1,42 @@
-# React + TypeScript + Vite
+# Foray
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Team-based urban scavenger hunt. A Game Master builds a map of zones, players
+join by code, and teams race to claim zones by completing photo/video
+challenges on the ground. Side quests (like pothole reporting) run as
+photo tallies across the whole game.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React + TypeScript + Vite** — single-page app in `src/`
+- **Firebase** — Auth, Firestore, Storage (project `zonerush-9f2db`, console
+  name "zone-rush-alpha"). Config comes from `.env.local` (`VITE_FIREBASE_*`),
+  which is not committed — ask a teammate for a copy.
+- **Mapbox GL** — maps and the Zone Builder (`VITE_MAPBOX_TOKEN` in `.env.local`)
+- **Vercel** — hosting; SPA rewrite in `vercel.json`
 
-## React Compiler
+## Run it
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Key places
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Path | What it is |
+| --- | --- |
+| `src/pages/` | One file per screen (home, create/join, lobby, game, GM dashboard, results, admin tools) |
+| `src/lib/` | Game logic: scoring, end-game bonuses, zone geometry, dealing, activity log |
+| `src/components/` | Shared UI (game map, proof submission, side quests) |
+| `firestore.rules` | **Source of truth for security rules** — paste into the Firebase console (Firestore → Rules → Publish) after every change; there is no CLI auto-deploy |
+| `ROADMAP.md` | Deferred work + the playtest checklist |
+| `data/` | Raw GeoJSON used to seed maps/zones |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Things to know
+
+- Roles live on `users/{uid}.role` (`player` / `gm` / `admin`), set from the
+  Firebase console. The rules prevent self-promotion.
+- Firestore rules and indexes are managed **manually in the console** — the
+  repo file is canonical, but publishing is a manual step.
+- Each game snapshots its zones into `games/{id}/zones` at creation, so
+  editing the zone library never breaks past games.

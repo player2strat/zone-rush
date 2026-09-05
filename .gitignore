@@ -25,3 +25,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local env (Firebase config) — never commit
+.env.local
+*.local
+
+# Scratch dumps
+dump*.txt
+*-dump*.txt
