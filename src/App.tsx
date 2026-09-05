@@ -9,6 +9,7 @@ import HomePage from './pages/HomePage'
 import CreateGame from './pages/CreateGame'
 import JoinGame from './pages/JoinGame'
 import LateJoinPage from './pages/LateJoinPage'
+import PastForaysPage from './pages/PastForaysPage'
 import LobbyPage from './pages/LobbyPage'
 import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
@@ -134,6 +135,7 @@ export default function App() {
         <Route path="/join" element={<JoinGame />} />
         {/* Player asking to join a game that already started; GM approves from the dashboard. */}
         <Route path="/late-join/:gameId" element={<LateJoinPage />} />
+        <Route path="/forays" element={<PastForaysPage />} />
 <Route
           path="/lobby/:gameId"
           element={

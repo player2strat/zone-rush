@@ -25,19 +25,18 @@
 // - Home tab rules updated with new copy + Side Quests info
 // =============================================================================
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, collection,
-  updateDoc, getDocs, query, where,
-} from 'firebase/firestore'
+  updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
-import type { ZoneOwner } from '../components/GameMap'
+import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import HistoryTab from './HistoryTab'
 import { checkZoneLockouts, checkZoneClosures } from '../lib/scoring'
 import {
@@ -82,6 +81,9 @@ interface TeamData {
   taxi_used: boolean
   discard_used: number
   discarded_challenges?: string[]
+  member_locations?: Record<string, {
+    lat: number; lng: number; name?: string; updated_at?: number
+  }>
 }
 
 interface Challenge {
@@ -104,6 +106,7 @@ interface Challenge {
 }
 
 interface SubmissionStatus {
+  id: string
   challenge_id: string
   status: 'pending' | 'approved' | 'rejected'
   gm_notes?: string
@@ -168,6 +171,8 @@ export default function GamePage() {
   const [submittingChallenge, setSubmittingChallenge] = useState<number | null>(null)
 
   const [submissions, setSubmissions] = useState<Map<string, SubmissionStatus>>(new Map())
+  // Challenge id whose pending submission is one tap from being withdrawn.
+  const [confirmCancelSubId, setConfirmCancelSubId] = useState<string | null>(null)
   const [allTeams, setAllTeams] = useState<TeamData[]>([])
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
   const [localZones, setLocalZones] = useState<any[]>([])
@@ -187,6 +192,21 @@ export default function GamePage() {
     const idx = myTeam.members.indexOf(user.uid)
     return (idx !== -1 && myTeam.member_names[idx]) || user.displayName || 'Player'
   })()
+
+  // Teammates' live positions from the team doc (written by each player every
+  // ~15s). Same freshness window as the GM map; excludes yourself — the map's
+  // geolocate dot already shows you.
+  const teammateLocations = useMemo<PlayerLocation[]>(() => {
+    if (!myTeam?.member_locations || !user) return []
+    const out: PlayerLocation[] = []
+    Object.entries(myTeam.member_locations).forEach(([uid, loc]) => {
+      if (uid === user.uid) return
+      if (!loc?.lat || !loc?.lng) return
+      if (Date.now() - (loc.updated_at ?? 0) > 300000) return
+      out.push({ uid, lat: loc.lat, lng: loc.lng, name: loc.name || 'Teammate', teamColor: myTeam.color })
+    })
+    return out
+  }, [myTeam?.member_locations, myTeam?.color, user])
 
   // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
@@ -318,6 +338,7 @@ export default function GamePage() {
           (data.status === 'pending' && existing.status === 'rejected')
         ) {
           statusMap.set(data.challenge_id, {
+            id: d.id,
             challenge_id: data.challenge_id,
             status: data.status,
             gm_notes: data.gm_notes,
@@ -887,6 +908,31 @@ export default function GamePage() {
                             {badge.icon} {badge.label}
                           </span>
                         )}
+                        {/* ↺ on a collapsed pending card: expand it with the
+                            withdraw confirm pre-armed (still two taps total). */}
+                        {sub?.status === 'pending' && !isExpanded && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedCard(index)
+                              setConfirmCancelSubId(ch.id)
+                            }}
+                            title="Withdraw this submission"
+                            style={{
+                              background: 'none',
+                              border: '1px solid rgba(255,209,102,0.3)',
+                              borderRadius: 20,
+                              color: '#FFD166',
+                              fontSize: '0.8rem',
+                              lineHeight: 1,
+                              padding: '3px 8px',
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            ↺
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: '0.9rem' }}>
@@ -975,14 +1021,46 @@ export default function GamePage() {
                             ✅ Challenge Complete — {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
                           </div>
                         ) : sub?.status === 'pending' ? (
-                          <div style={{
-                            width: '100%', boxSizing: 'border-box', background: 'rgba(255,209,102,0.08)',
-                            border: '1px solid rgba(255,209,102,0.2)',
-                            padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#FFD166', fontSize: '0.88rem', fontWeight: 600,
-                            animation: 'pendingPulse 2s ease-in-out infinite',
-                          }}>
-                            ⏳ Waiting for GM review...
+                          <div style={{ width: '100%' }}>
+                            <div style={{
+                              width: '100%', boxSizing: 'border-box', background: 'rgba(255,209,102,0.08)',
+                              border: '1px solid rgba(255,209,102,0.2)',
+                              padding: '12px 20px', borderRadius: 8,
+                              textAlign: 'center', color: '#FFD166', fontSize: '0.88rem', fontWeight: 600,
+                              animation: 'pendingPulse 2s ease-in-out infinite',
+                            }}>
+                              ⏳ Waiting for GM review...
+                            </div>
+                            {/* Withdraw a pending submission (wrong photo/video).
+                                Two taps: the first arms the confirm. */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                if (confirmCancelSubId !== ch.id) {
+                                  setConfirmCancelSubId(ch.id)
+                                  return
+                                }
+                                setConfirmCancelSubId(null)
+                                try {
+                                  await deleteDoc(doc(db, 'submissions', sub.id))
+                                } catch (err) {
+                                  console.error('Cancel submission failed:', err)
+                                }
+                              }}
+                              style={{
+                                width: '100%', boxSizing: 'border-box', marginTop: 8,
+                                background: confirmCancelSubId === ch.id ? 'rgba(239,71,111,0.15)' : 'none',
+                                border: `1px solid ${confirmCancelSubId === ch.id ? 'rgba(239,71,111,0.5)' : '#2a2a2a'}`,
+                                padding: '9px 16px', borderRadius: 8,
+                                color: confirmCancelSubId === ch.id ? '#EF476F' : '#777',
+                                fontSize: '0.8rem', fontWeight: 600,
+                                cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              {confirmCancelSubId === ch.id
+                                ? 'Tap again to withdraw this submission'
+                                : 'Wrong photo? Cancel submission'}
+                            </button>
                           </div>
                         ) : game?.status === 'ended' ? (
                           <div style={{
@@ -1035,6 +1113,7 @@ export default function GamePage() {
                 zoneOwnership={zoneOwnership.size > 0 ? zoneOwnership : undefined}
                 closedZones={game?.closed_zones ?? []}
                 claimThreshold={claimThreshold}
+                playerLocations={teammateLocations}
               />
             ) : (
               <div style={{ textAlign: 'center', marginTop: 60, color: '#555', padding: '0 20px' }}>

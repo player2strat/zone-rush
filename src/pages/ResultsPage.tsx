@@ -20,7 +20,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, collection } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, getDocs, getDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
@@ -246,6 +246,57 @@ export default function ResultsPage() {
   // no team. We only trust this once teams are present, to avoid flashing the
   // GM view before the teams snapshot arrives.
   const isGM = !!user && teams.length > 0 && !myTeam
+
+  // ---- The viewer's team submissions (post-game gallery) ----
+  interface TeamSub {
+    id: string
+    challengeTitle: string
+    media_url: string
+    media_type: string
+    status: string
+    zone_id: string | null
+    submitted_at?: { seconds?: number }
+  }
+  const [teamSubs, setTeamSubs] = useState<TeamSub[]>([])
+  // Submissions whose media failed to load (file deleted from Storage, or no
+  // URL at all) — shown as a placeholder tile instead of a broken image.
+  const [deadMedia, setDeadMedia] = useState<Set<string>>(new Set())
+  const markDeadMedia = (id: string) =>
+    setDeadMedia((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  const myTeamId = myTeam?.id
+  useEffect(() => {
+    if (!gameId || !myTeamId) return
+    let cancelled = false
+    async function load() {
+      const snap = await getDocs(query(
+        collection(db, 'submissions'),
+        where('game_id', '==', gameId),
+        where('team_id', '==', myTeamId),
+      ))
+      const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown> & { id: string }))
+      // Resolve challenge titles in parallel
+      const ids = Array.from(new Set(subs.map((s) => s.challenge_id as string).filter(Boolean)))
+      const chDocs = await Promise.all(ids.map((cid) => getDoc(doc(db, 'challenges', cid))))
+      const titles = new Map<string, string>()
+      chDocs.forEach((c) => { if (c.exists()) titles.set(c.id, (c.data().title as string) ?? c.id) })
+      if (cancelled) return
+      setTeamSubs(
+        subs
+          .map((s) => ({
+            id: s.id,
+            challengeTitle: titles.get(s.challenge_id as string) ?? 'Challenge',
+            media_url: (s.media_url as string) ?? '',
+            media_type: (s.media_type as string) ?? 'photo',
+            status: (s.status as string) ?? 'pending',
+            zone_id: (s.zone_id as string) ?? null,
+            submitted_at: s.submitted_at as { seconds?: number } | undefined,
+          }))
+          .sort((a, b) => (b.submitted_at?.seconds ?? 0) - (a.submitted_at?.seconds ?? 0))
+      )
+    }
+    load()
+    return () => { cancelled = true }
+  }, [gameId, myTeamId])
 
   // Subscribe to the player's broadcast feed (player view only) and keep the
   // latest gm_broadcast for the meetup banner. Reuses the same plumbing as
@@ -494,6 +545,92 @@ export default function ResultsPage() {
               </p>
             )}
           </div>
+
+          {/* ====== FINAL MAP ====== */}
+          {activeZones.length > 0 && (
+            <div className="results-section" style={{ animationDelay: '0.15s', marginBottom: 28 }}>
+              <p style={{
+                fontSize: '0.72rem', color: '#FFD166',
+                textTransform: 'uppercase', letterSpacing: 1.5,
+                fontWeight: 700, marginBottom: 14,
+              }}>
+                Final Zone Map
+              </p>
+              <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a' }}>
+                <GameMap
+                  zones={activeZones}
+                  zoneOwnership={zoneOwnership.size > 0 ? zoneOwnership : undefined}
+                  closedZones={game?.closed_zones ?? []}
+                  claimThreshold={claimThreshold}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ====== YOUR TEAM'S SUBMISSIONS ====== */}
+          {teamSubs.length > 0 && (
+            <div className="results-section" style={{ animationDelay: '0.18s', marginBottom: 28 }}>
+              <p style={{
+                fontSize: '0.72rem', color: '#FFD166',
+                textTransform: 'uppercase', letterSpacing: 1.5,
+                fontWeight: 700, marginBottom: 14,
+              }}>
+                Your Team's Submissions ({teamSubs.length})
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {teamSubs.map((sub) => (
+                  <div key={sub.id} style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid #1a1a1a',
+                    borderRadius: 12, overflow: 'hidden',
+                  }}>
+                    <div style={{ height: 130, background: '#111' }}>
+                      {!sub.media_url || deadMedia.has(sub.id) ? (
+                        <div style={{
+                          width: '100%', height: '100%', display: 'flex',
+                          flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 6, color: '#444',
+                        }}>
+                          <span style={{ fontSize: '1.4rem' }}>🖼️</span>
+                          <span style={{ fontSize: '0.7rem' }}>Media no longer available</span>
+                        </div>
+                      ) : sub.media_type === 'video' ? (
+                        <video src={sub.media_url} controls playsInline preload="metadata"
+                          onError={() => markDeadMedia(sub.id)}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <a href={sub.media_url} target="_blank" rel="noreferrer">
+                          <img src={sub.media_url} alt="" loading="lazy"
+                            onError={() => markDeadMedia(sub.id)}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        </a>
+                      )}
+                    </div>
+                    <div style={{ padding: '8px 10px' }}>
+                      <p style={{
+                        margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#ddd',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {sub.challengeTitle}
+                      </p>
+                      <p style={{ margin: '3px 0 0', fontSize: '0.7rem' }}>
+                        <span style={{
+                          color: sub.status === 'approved' ? '#06D6A0'
+                            : sub.status === 'rejected' ? '#EF476F' : '#FFD166',
+                          fontWeight: 700,
+                        }}>
+                          {sub.status === 'approved' ? '✓ Approved' : sub.status === 'rejected' ? '✕ Rejected' : '⏳ Pending'}
+                        </span>
+                        {sub.zone_id && (
+                          <span style={{ color: '#555' }}> · {formatZoneLabel(sub.zone_id)}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Gentle note: final results announced in person */}
           <div
