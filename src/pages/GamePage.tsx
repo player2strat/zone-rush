@@ -34,6 +34,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
+import SideQuestPanel from '../components/SideQuestPanel'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
@@ -741,6 +742,19 @@ export default function GamePage() {
                 </div>
               </div>
             </div>
+
+            {/* Side quests — running photo tallies, points only at the end */}
+            {(game?.settings?.side_quests?.length ?? 0) > 0 && user && (
+              <SideQuestPanel
+                gameId={gameId!}
+                teamId={myTeam.id}
+                uid={user.uid}
+                submitterName={myDisplayName}
+                quests={game!.settings.side_quests!}
+                gameActive={game?.status === 'active'}
+                location={{ lat: location.lat, lng: location.lng }}
+              />
+            )}
 
             {/* Game Rules */}
             <div style={{

@@ -22,6 +22,7 @@ import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/fir
 import { db, auth } from '../lib/firebase'
 import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
 import { snapshotZonesIntoBatch } from '../lib/gameZones'
+import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,6 +107,7 @@ export default function CreateGame() {
   // Closure schedule
   const [zoneCloseMinutes, setZoneCloseMinutes] = useState<Record<string, string>>({})
   const [zoneOpenMinutes, setZoneOpenMinutes] = useState<Record<string, string>>({})
+  const [sideQuests, setSideQuests] = useState<{ id: string; title: string; description: string; bonus_points: number }[]>([])
 
   // Step 1: Basics
   const [gameName, setGameName] = useState('')
@@ -374,6 +376,9 @@ export default function CreateGame() {
           most_zones_with_challenges_bonus: 8,
           zone_close_schedule: buildCloseSchedule(),
           zone_open_schedule: buildOpenSchedule(),
+          side_quests: sideQuests
+            .filter((q) => q.title.trim())
+            .map((q) => ({ ...q, title: q.title.trim(), description: q.description.trim() })),
         },
       })
 
@@ -845,6 +850,90 @@ export default function CreateGame() {
               Set zone closure times and review before creating
             </p>
 
+            {/* Side quests */}
+            <div style={{ marginBottom: 24 }}>
+              <label style={labelStyle}>Side Quests</label>
+              <p style={{ color: '#666', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+                Running photo tallies (unlimited submissions, GM-reviewed).
+                Worth no points during the game — the team with the most
+                approved wins the bonus at the end.
+              </p>
+
+              {sideQuests.map((q, i) => (
+                <div key={q.id} style={{
+                  border: '1px solid rgba(155,93,229,0.25)',
+                  background: 'rgba(155,93,229,0.04)',
+                  borderRadius: 10, padding: 14, marginBottom: 10,
+                }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input
+                      value={q.title}
+                      onChange={(e) => setSideQuests((prev) => prev.map((x, j) => j === i ? { ...x, title: e.target.value } : x))}
+                      placeholder="Quest title"
+                      style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => setSideQuests((prev) => prev.filter((_, j) => j !== i))}
+                      title="Remove side quest"
+                      style={{
+                        background: 'none', border: 'none', color: '#7a3a48',
+                        cursor: 'pointer', fontSize: '1rem', fontFamily: 'inherit', padding: '0 4px',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <input
+                    value={q.description}
+                    onChange={(e) => setSideQuests((prev) => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                    placeholder="What should players photograph?"
+                    style={{ ...inputStyle, marginBottom: 8 }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#888', fontSize: '0.8rem' }}>Bonus for most approved:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={q.bonus_points}
+                      onChange={(e) => setSideQuests((prev) => prev.map((x, j) => j === i ? { ...x, bonus_points: Math.max(1, parseInt(e.target.value) || 1) } : x))}
+                      style={{ ...inputStyle, marginBottom: 0, width: 70, textAlign: 'center' }}
+                    />
+                    <span style={{ color: '#888', fontSize: '0.8rem' }}>pts</span>
+                  </div>
+                </div>
+              ))}
+
+              <select
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!v) return
+                  if (v === '__custom__') {
+                    setSideQuests((prev) => [...prev, {
+                      id: 'sq_custom_' + Date.now().toString(36),
+                      title: '', description: '', bonus_points: 8,
+                    }])
+                  } else {
+                    const preset = SIDE_QUEST_PRESETS.find((p) => p.id === v)
+                    if (preset) setSideQuests((prev) => [...prev, { ...preset }])
+                  }
+                }}
+                style={{
+                  background: '#111', border: '1px solid rgba(155,93,229,0.35)',
+                  color: '#c9a6f5', borderRadius: 8, padding: '10px 12px',
+                  fontSize: '0.85rem', fontWeight: 600, fontFamily: 'inherit',
+                  cursor: 'pointer', outline: 'none', width: '100%', boxSizing: 'border-box',
+                }}
+              >
+                <option value="">+ Add a side quest…</option>
+                {SIDE_QUEST_PRESETS.filter((p) => !sideQuests.some((q) => q.id === p.id)).map((p) => (
+                  <option key={p.id} value={p.id}>{p.title} (recurring)</option>
+                ))}
+                <option value="__custom__">Custom side quest (this game only)</option>
+              </select>
+            </div>
+
             {/* Zone opening schedule */}
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Zone Opening Schedule</label>
@@ -1119,6 +1208,9 @@ export default function CreateGame() {
                   { label: 'Claim / Lock', value: `${claimThreshold}pts / ${lockThreshold}pts` },
                   buildOpenSchedule().length > 0
                     ? { label: 'Zone openings', value: `${buildOpenSchedule().length} scheduled` }
+                    : null,
+                  sideQuests.filter((q) => q.title.trim()).length > 0
+                    ? { label: 'Side quests', value: `${sideQuests.filter((q) => q.title.trim()).length}` }
                     : null,
                   buildCloseSchedule().length > 0
                     ? { label: 'Zone closures', value: `${buildCloseSchedule().length} scheduled` }

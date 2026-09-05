@@ -101,6 +101,12 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    // Side quest submissions (photo tallies, e.g. pothole reporting). Kept as
+    // a separate top-level collection so the data can be exported for partners.
+    match /side_quest_submissions/{submissionId} {
+      allow read, write: if signedIn();
+    }
+
     // Collection-group read for teams (cross-game team lookups).
     match /{path=**}/teams/{teamId} {
       allow read: if signedIn();

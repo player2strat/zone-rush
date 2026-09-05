@@ -138,6 +138,10 @@ export interface GameSettings {
   // Zone opening schedule — these zones start closed and open mid-game.
   zone_open_schedule?: { zone_id: string; open_at_minutes: number }[]
 
+  // Side quests — running photo tallies (e.g. pothole reporting), reviewed
+  // like challenges but worth 0 points until the post-game bonus is awarded.
+  side_quests?: SideQuest[]
+
   // Legacy fields (kept for compatibility, may be removed later)
   taxi_limit?: number             // Taxi/rideshare uses allowed per team
   zone_schedule?: { zone_id: string; lock_at_pct: number }[]
@@ -195,6 +199,34 @@ export interface ZoneScore {
   // 'locked'      = team has locked this zone (reached lock_threshold)
   // 'locked_out'  = zone was time-locked; this team's record is frozen
   challenges_completed: string[]  // Challenge IDs approved in this zone
+}
+
+// ─── Side Quests ──────────────────────────────────────────────────────────────
+
+export interface SideQuest {
+  id: string                      // e.g. "sq_potholes"
+  title: string                   // "Pothole Reporting"
+  description: string             // "Take a picture of every pothole you see"
+  bonus_points: number            // Awarded post-game to the team with the most approved
+}
+
+// Stored in the top-level `side_quest_submissions` collection — deliberately
+// separate from challenge submissions so the data (photo, submitter, GPS) can
+// be exported for external partners.
+export interface SideQuestSubmission {
+  id: string
+  game_id: string
+  quest_id: string
+  team_id: string
+  submitted_by: string            // Firebase Auth UID
+  submitter_name: string
+  media_url: string
+  gps_lat: number | null
+  gps_lng: number | null
+  status: 'pending' | 'approved' | 'rejected'
+  reviewed_by: string | null
+  reviewed_at: unknown            // Firestore Timestamp
+  submitted_at: unknown           // Firestore Timestamp
 }
 
 // ─── Submission ───────────────────────────────────────────────────────────────

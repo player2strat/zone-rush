@@ -34,6 +34,7 @@ import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission, runZoneSchedules } from '../lib/scoring'
+import type { SideQuest, SideQuestSubmission } from '../types/game'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
@@ -166,6 +167,9 @@ export default function GMDashboard() {
   const [joinRequests, setJoinRequests] = useState<{ uid: string; name: string }[]>([])
   const [joinTeamPick, setJoinTeamPick] = useState<Record<string, string>>({})
   const [joinBusy, setJoinBusy] = useState<string | null>(null)
+  // Side quest submissions for this game (live) + which one is being reviewed.
+  const [sideQuestSubs, setSideQuestSubs] = useState<SideQuestSubmission[]>([])
+  const [sqProcessing, setSqProcessing] = useState<string | null>(null)
   const [submissions, setSubmissions] = useState<SubmissionData[]>([])
   const [challenges, setChallenges] = useState<Map<string, ChallengeData>>(new Map())
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
@@ -188,6 +192,71 @@ export default function GMDashboard() {
     })
     return unsub
   }, [gameId])
+
+  // Subscribe to side quest submissions (only when the game has side quests)
+  useEffect(() => {
+    if (!gameId || (game?.settings?.side_quests?.length ?? 0) === 0) return
+    const q = query(collection(db, 'side_quest_submissions'), where('game_id', '==', gameId))
+    const unsub = onSnapshot(q, (snap) => {
+      const subs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as SideQuestSubmission))
+      const secs = (v: unknown) => (v as { seconds?: number } | null)?.seconds ?? 0
+      subs.sort((a, b) => secs(b.submitted_at) - secs(a.submitted_at))
+      setSideQuestSubs(subs)
+    })
+    return unsub
+  }, [gameId, game?.settings?.side_quests?.length])
+
+  const handleReviewSideQuest = async (subId: string, status: 'approved' | 'rejected') => {
+    if (!gameId || sqProcessing) return
+    setSqProcessing(subId)
+    try {
+      await updateDoc(doc(db, 'side_quest_submissions', subId), {
+        status,
+        reviewed_by: user?.uid ?? null,
+        reviewed_at: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('Side quest review failed:', err)
+    }
+    setSqProcessing(null)
+  }
+
+  // Approved side quest counts: quest id → team id → count. Drives both the
+  // player-facing fairness (GM sees the same tally) and the bonus auto-pick.
+  const sideQuestTallies = useMemo(() => {
+    const m = new Map<string, Map<string, number>>()
+    for (const s of sideQuestSubs) {
+      if (s.status !== 'approved') continue
+      const byTeam = m.get(s.quest_id) ?? new Map<string, number>()
+      byTeam.set(s.team_id, (byTeam.get(s.team_id) ?? 0) + 1)
+      m.set(s.quest_id, byTeam)
+    }
+    return m
+  }, [sideQuestSubs])
+
+  // CSV for external partners: every submission with photo URL, submitter, GPS.
+  const exportSideQuestCsv = () => {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [
+      ['quest', 'status', 'team', 'submitter', 'gps_lat', 'gps_lng', 'photo_url', 'submitted_at'].join(','),
+      ...sideQuestSubs.map((s) => [
+        esc((s as unknown as { quest_title?: string }).quest_title ?? s.quest_id),
+        esc(s.status),
+        esc(teams.find((t) => t.id === s.team_id)?.name ?? s.team_id),
+        esc(s.submitter_name),
+        esc(s.gps_lat ?? ''),
+        esc(s.gps_lng ?? ''),
+        esc(s.media_url),
+        esc((() => { const t = (s.submitted_at as { seconds?: number } | null)?.seconds; return t ? new Date(t * 1000).toISOString() : '' })()),
+      ].join(',')),
+    ]
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `foray-side-quests-${game?.name?.replace(/\s+/g, '-') ?? gameId}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
 
   // Approve: add to the chosen team + mark the request. One atomic batch.
   const handleApproveJoin = async (uid: string, name: string) => {
@@ -450,12 +519,37 @@ export default function GMDashboard() {
       setBonusSummaries(summaries)
       const autoZones = autoSelectMostZonesClaimed(summaries)
       const autoZonesWithChallenges = autoSelectMostZonesWithChallenges(summaries)
-      setBonusAwards({
+      setBonusAwards((prev) => ({
+        ...prev,
         mostZonesClaimed: autoZones,
         mostZonesWithChallenges: autoZonesWithChallenges,
-      })
+      }))
     })
   }, [game?.status, game?.bonuses_applied, gameId])
+
+  // Side quest bonus auto-pick: track the leader per quest as approvals come
+  // in, but never override a pick the GM has made by hand.
+  const manualSqPicks = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (game?.status !== 'ended' || game?.bonuses_applied) return
+    const quests: SideQuest[] = game?.settings?.side_quests ?? []
+    if (quests.length === 0) return
+    setBonusAwards((prev) => {
+      const sq = { ...(prev.sideQuests ?? {}) }
+      let changed = false
+      for (const quest of quests) {
+        if (manualSqPicks.current.has(quest.id)) continue
+        const byTeam = sideQuestTallies.get(quest.id)
+        let auto: string | null = null
+        if (byTeam && byTeam.size > 0) {
+          const sorted = [...byTeam.entries()].sort((a, b) => b[1] - a[1])
+          auto = sorted.length > 1 && sorted[0][1] === sorted[1][1] ? null : sorted[0][0]
+        }
+        if (sq[quest.id] !== auto) { sq[quest.id] = auto; changed = true }
+      }
+      return changed ? { ...prev, sideQuests: sq } : prev
+    })
+  }, [game?.status, game?.bonuses_applied, game?.settings?.side_quests, sideQuestTallies])
 
   // Load activity log when the Activity tab is opened
   const refreshActivityLog = async () => {
@@ -1041,6 +1135,42 @@ const handleApprove = async (sub: SubmissionData) => {
                     </div>
                   </div>
 
+                  {/* Photo side quests — most approved submissions each */}
+                  {(game.settings?.side_quests ?? []).map((quest: SideQuest) => {
+                    const byTeam = sideQuestTallies.get(quest.id)
+                    const picked = bonusAwards.sideQuests?.[quest.id] ?? null
+                    const pick = (teamId: string | null) => {
+                      manualSqPicks.current.add(quest.id)
+                      setBonusAwards((p) => ({ ...p, sideQuests: { ...(p.sideQuests ?? {}), [quest.id]: teamId } }))
+                    }
+                    return (
+                      <div key={quest.id} style={{ background: 'rgba(155,93,229,0.04)', border: '1px solid rgba(155,93,229,0.25)', borderRadius: 10, padding: '12px 14px' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
+                          🧩 {quest.title}
+                          <span style={{ color: '#FFD166', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
+                        </p>
+                        <p style={{ fontSize: '0.68rem', color: '#444', marginBottom: 8 }}>Most approved photo submissions — confirm below</p>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => pick(null)}
+                            style={{ ...smallBtnStyle, background: picked === null ? 'rgba(239,71,111,0.12)' : 'rgba(255,255,255,0.03)', border: `1px solid ${picked === null ? 'rgba(239,71,111,0.3)' : '#222'}`, color: picked === null ? '#EF476F' : '#555' }}
+                          >
+                            None
+                          </button>
+                          {teams.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => pick(t.id)}
+                              style={{ ...smallBtnStyle, background: picked === t.id ? `${t.color}20` : 'rgba(255,255,255,0.03)', border: `1px solid ${picked === t.id ? t.color + '50' : '#222'}`, color: picked === t.id ? t.color : '#666' }}
+                            >
+                              {t.name} ({byTeam?.get(t.id) ?? 0})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+
                   {/* Most Zones With Challenges */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: '#aaa', fontWeight: 600, marginBottom: 4 }}>
@@ -1175,6 +1305,109 @@ const handleApprove = async (sub: SubmissionData) => {
         {/* SUBMISSIONS TAB */}
         {activeTab === 'submissions' && (
           <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 20px 40px' }}>
+
+            {/* SIDE QUEST REVIEW — separate from challenge submissions */}
+            {(game.settings?.side_quests?.length ?? 0) > 0 && (
+              <div style={{
+                background: 'rgba(155,93,229,0.04)',
+                border: '1px solid rgba(155,93,229,0.25)',
+                borderRadius: 12, padding: 16, marginBottom: 24,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <p style={{ fontSize: '0.72rem', color: '#9B5DE5', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0 }}>
+                    🧩 Side Quests
+                    {sideQuestSubs.filter((s) => s.status === 'pending').length > 0 && (
+                      <span style={{ background: '#9B5DE5', color: '#fff', fontSize: '0.65rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10, marginLeft: 8 }}>
+                        {sideQuestSubs.filter((s) => s.status === 'pending').length} pending
+                      </span>
+                    )}
+                  </p>
+                  {sideQuestSubs.length > 0 && (
+                    <button
+                      onClick={exportSideQuestCsv}
+                      style={{ background: 'none', border: '1px solid rgba(155,93,229,0.35)', color: '#c9a6f5', borderRadius: 8, padding: '5px 12px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      ⬇ Export CSV
+                    </button>
+                  )}
+                </div>
+                <p style={{ color: '#666', fontSize: '0.75rem', margin: '0 0 12px' }}>
+                  Approvals count toward the running tally only — points come from the post-game bonus.
+                </p>
+
+                {/* Approved tallies per quest */}
+                {(game.settings?.side_quests ?? []).map((quest: SideQuest) => {
+                  const byTeam = sideQuestTallies.get(quest.id)
+                  return (
+                    <p key={quest.id} style={{ margin: '0 0 6px', fontSize: '0.8rem', color: '#aaa' }}>
+                      <strong style={{ color: '#ddd' }}>{quest.title}</strong>
+                      {' — '}
+                      {byTeam && byTeam.size > 0
+                        ? teams
+                            .filter((t) => byTeam.has(t.id))
+                            .map((t) => `${t.name}: ${byTeam.get(t.id)}`)
+                            .join(' · ')
+                        : 'no approvals yet'}
+                    </p>
+                  )
+                })}
+
+                {/* Pending queue */}
+                {sideQuestSubs.filter((s) => s.status === 'pending').length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 12 }}>
+                    {sideQuestSubs.filter((s) => s.status === 'pending').map((s) => {
+                      const team = teams.find((t) => t.id === s.team_id)
+                      const busy = sqProcessing === s.id
+                      return (
+                        <div key={s.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #222', borderRadius: 10, overflow: 'hidden' }}>
+                          <a href={s.media_url} target="_blank" rel="noreferrer">
+                            <img src={s.media_url} alt="" loading="lazy" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', background: '#111' }} />
+                          </a>
+                          <div style={{ padding: '8px 10px' }}>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#ddd', fontWeight: 600 }}>
+                              {(s as unknown as { quest_title?: string }).quest_title ?? s.quest_id}
+                            </p>
+                            <p style={{ margin: '2px 0 8px', fontSize: '0.7rem', color: '#777' }}>
+                              <span style={{ color: team?.color ?? '#888' }}>{team?.name ?? s.team_id}</span>
+                              {' · '}{s.submitter_name}
+                              {s.gps_lat != null && s.gps_lng != null && (
+                                <>
+                                  {' · '}
+                                  <a
+                                    href={`https://www.google.com/maps?q=${s.gps_lat},${s.gps_lng}`}
+                                    target="_blank" rel="noreferrer"
+                                    style={{ color: '#4C9AFF', textDecoration: 'none' }}
+                                  >
+                                    📍 GPS
+                                  </a>
+                                </>
+                              )}
+                            </p>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button
+                                onClick={() => handleReviewSideQuest(s.id, 'approved')}
+                                disabled={busy}
+                                style={{ flex: 1, background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)', color: '#06D6A0', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={() => handleReviewSideQuest(s.id, 'rejected')}
+                                disabled={busy}
+                                style={{ flex: 1, background: 'rgba(239,71,111,0.1)', border: '1px solid rgba(239,71,111,0.3)', color: '#EF476F', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                              >
+                                ✕ Reject
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {([
                 { id: 'pending', label: `Pending (${pendingCount})`, color: '#FFD166' },
