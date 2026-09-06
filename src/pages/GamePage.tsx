@@ -1495,9 +1495,9 @@ export default function GamePage() {
                 (m.channel_type === 'team_internal' && m.from_uid !== user?.uid)) &&
               !m.read_by?.includes(user?.uid)
           ).length
-          const showDot =
-            (tab.id === 'history' && pendingCount > 0 && activeTab !== 'history') ||
-            (tab.id === 'chat' && unreadChatCount > 0 && activeTab !== 'chat')
+          // Only Chat gets an unread dot. Pending submissions are shown as
+          // badges on the Hand tab cards and announced in the banner.
+          const showDot = tab.id === 'chat' && unreadChatCount > 0 && activeTab !== 'chat'
 
           return (
             <button
