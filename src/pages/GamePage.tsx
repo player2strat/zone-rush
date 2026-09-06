@@ -39,7 +39,7 @@ import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import HistoryTab from './HistoryTab'
-import { checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
+import { runZoneSchedules } from '../lib/scoring'
 import {
   sendTeamMessage,
   subscribeToPlayerMessages,
@@ -281,13 +281,14 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId])
 
-  // Zone lockout + schedule timer. Schedules also run immediately and when
+  // Zone open/close schedule timer. Schedules also run immediately and when
   // the app returns to the foreground, so a closure/opening isn't missed just
   // because every phone was asleep when its minute arrived.
+  // Zone LOCKOUTS are not run here: they award points, and security rules
+  // only let the GM/admin write scores. The GM dashboard runs them.
   useEffect(() => {
   if (game?.status !== 'active' || !gameId) return
   const run = () => {
-    checkZoneLockouts(gameId)
     runZoneSchedules(gameId)
   }
   run()

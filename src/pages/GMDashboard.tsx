@@ -33,7 +33,7 @@ import {
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
-import { approveSubmission, runZoneSchedules } from '../lib/scoring'
+import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
 import type { SideQuest, SideQuestSubmission } from '../types/game'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
@@ -299,9 +299,14 @@ export default function GMDashboard() {
   // Zone open/close schedules also run from the GM's screen — it's the one
   // most likely to stay awake all game, so schedules fire even when every
   // player's phone is asleep. Immediate + foreground + once a minute.
+  // Timed zone LOCKOUTS run only here: they award points, and security rules
+  // restrict score writes to the GM/admin.
   useEffect(() => {
     if (game?.status !== 'active' || !gameId) return
-    const run = () => runZoneSchedules(gameId)
+    const run = () => {
+      checkZoneLockouts(gameId).catch((err) => console.error('Zone lockout check failed:', err))
+      runZoneSchedules(gameId)
+    }
     run()
     const interval = setInterval(run, 60000)
     const onVisible = () => {

@@ -11,9 +11,13 @@ rules_version = '2';
 //   - CONTENT collections (cities, zones, maps, map_sets, challenges) are
 //     readable by any signed-in user but writable ONLY by admin/GM. These hold
 //     the game library and are edited from admin tools.
-//   - GAMEPLAY collections (games and their subcollections, submissions) stay
-//     writable by any signed-in user, because players legitimately write them
-//     during a game (joining teams, submitting proof, messaging, etc.).
+//   - GAMEPLAY collections (games and their subcollections, submissions) are
+//     writable by signed-in players ONLY for the things players legitimately
+//     do (join teams, submit proof, withdraw a pending submission, message,
+//     discard a card). Anything that changes points or verdicts — approving
+//     or rejecting a submission, zone scores, team totals, game settings,
+//     the clock — is restricted to admin/GM. This closes the hole where any
+//     signed-in player could approve their own submission or edit scores.
 //   - users/{uid}: each user manages their own doc, BUT can never set or
 //     change their own "role" field. New accounts must start as "player".
 //     Roles are changed in the Firebase console (which bypasses these rules)
@@ -33,6 +37,19 @@ service cloud.firestore {
 
     function signedIn() {
       return request.auth != null;
+    }
+
+    // Keys this write changes (update only).
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // True when the signed-in user is on the given team of the given game.
+    function isOnTeam(gameId, teamId) {
+      return request.auth != null
+        && teamId != null
+        && exists(/databases/$(database)/documents/games/$(gameId)/teams/$(teamId))
+        && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamId)).data.members;
     }
 
     // ---- Users: own doc only, and the role field is frozen -----------------
@@ -85,20 +102,42 @@ service cloud.firestore {
 
     // ---- Gameplay: any signed-in user (players write these mid-game) --------
     match /games/{gameId} {
-      allow read, update, delete: if signedIn();
-      // Only Game Masters / admins can create a game. Players join via code.
-      allow create: if isAdminOrGm();
+      allow read: if signedIn();
+      // Only Game Masters / admins can create or delete a game. Players join via code.
+      allow create, delete: if isAdminOrGm();
+      // GM/admin can update anything. Player clients only touch the zone
+      // schedule bookkeeping (closed/opened zones) and may flip the game to
+      // 'ended' when the clock runs out. Settings, timers, pause state and
+      // bonus records are GM-only.
+      allow update: if isAdminOrGm()
+        || (signedIn()
+            && changedKeys().hasOnly(['status', 'closed_zones', 'zone_openings_applied'])
+            && (!('status' in changedKeys()) || request.resource.data.status == 'ended'));
 
       match /teams/{teamId} {
-        allow read, write: if signedIn();
+        allow read: if signedIn();
+        // Players create teams from the lobby (auto-join), starting at zero.
+        allow create: if isAdminOrGm()
+          || (signedIn()
+              && request.resource.data.get('total_points', 0) == 0
+              && request.resource.data.get('zones_claimed', 0) == 0
+              && request.resource.data.get('zones_locked', 0) == 0);
+        // Players may edit roster, name, hand, discards, locations — never scores.
+        allow update: if isAdminOrGm()
+          || (signedIn()
+              && !changedKeys().hasAny(['total_points', 'zones_claimed', 'zones_locked']));
+        allow delete: if isAdminOrGm();
 
         match /sequential_progress/{progressId} {
           allow read, write: if signedIn();
         }
       }
 
+      // Zone points and claim/lock status. Written only by approval and
+      // lockout logic, which runs on the GM dashboard.
       match /zone_scores/{scoreId} {
-        allow read, write: if signedIn();
+        allow read: if signedIn();
+        allow write: if isAdminOrGm();
       }
 
       match /messages/{messageId} {
@@ -122,14 +161,37 @@ service cloud.firestore {
       }
     }
 
+    // Proof submissions. Players create their own (always pending, no
+    // verdict fields set) and may withdraw a still-pending submission from
+    // their own team. Only the GM/admin can approve, reject or edit.
     match /submissions/{submissionId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if isAdminOrGm()
+        || (signedIn()
+            && request.resource.data.submitted_by == request.auth.uid
+            && request.resource.data.status == 'pending'
+            && request.resource.data.get('reviewed_by', null) == null
+            && request.resource.data.get('tier2_approved', false) == false
+            && isOnTeam(request.resource.data.game_id, request.resource.data.team_id));
+      allow update: if isAdminOrGm();
+      allow delete: if isAdminOrGm()
+        || (signedIn()
+            && resource.data.status == 'pending'
+            && (resource.data.submitted_by == request.auth.uid
+                || isOnTeam(resource.data.game_id, resource.data.team_id)));
     }
 
     // Side quest submissions (photo tallies, e.g. pothole reporting). Kept as
     // a separate top-level collection so the data can be exported for partners.
+    // Same shape as submissions: players create pending ones, GM reviews.
     match /side_quest_submissions/{submissionId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if isAdminOrGm()
+        || (signedIn()
+            && request.resource.data.submitted_by == request.auth.uid
+            && request.resource.data.status == 'pending'
+            && request.resource.data.get('reviewed_by', null) == null);
+      allow update, delete: if isAdminOrGm();
     }
 
     // Collection-group read for teams (cross-game team lookups).
