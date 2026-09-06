@@ -24,6 +24,7 @@ import { loadGameZones } from '../lib/gameZones'
 import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
 import { useLocation, isLocationSubmittable, locationStatusLabel } from '../hooks/useLocation'
+import { compressImage } from '../lib/imageCompress'
 
 interface SubmitProofProps {
   gameId: string
@@ -154,10 +155,12 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
 
       const timestamp = Date.now()
       const mediaType = getMediaType(file)
-      const ext = file.name.split('.').pop() || 'jpg'
+      // Photos are downscaled on the phone before upload (videos untouched).
+      const upload = mediaType === 'photo' ? await compressImage(file) : file
+      const ext = upload.name.split('.').pop() || 'jpg'
       const storagePath = `submissions/${gameId}/${teamId}/${challenge.id}_${timestamp}.${ext}`
       const storageRef = ref(storage, storagePath)
-      const uploadTask = uploadBytesResumable(storageRef, file)
+      const uploadTask = uploadBytesResumable(storageRef, upload)
 
       const downloadURL: string = await new Promise((resolve, reject) => {
         uploadTask.on(

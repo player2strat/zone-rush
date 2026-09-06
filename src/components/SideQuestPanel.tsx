@@ -16,6 +16,7 @@ import {
   collection, addDoc, onSnapshot, query, where, serverTimestamp,
 } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { compressImage } from '../lib/imageCompress'
 import { db, storage } from '../lib/firebase'
 import type { SideQuest } from '../types/game'
 
@@ -79,8 +80,9 @@ export default function SideQuestPanel({
     setUploadProgress(0)
     setError('')
     try {
-      const ext = file.name.split('.').pop() || 'jpg'
-      const task = uploadBytesResumable(ref(storage, uploadPath(gameId, teamId, quest.id, ext)), file)
+      const upload = await compressImage(file)
+      const ext = upload.name.split('.').pop() || 'jpg'
+      const task = uploadBytesResumable(ref(storage, uploadPath(gameId, teamId, quest.id, ext)), upload)
       const url: string = await new Promise((resolve, reject) => {
         task.on(
           'state_changed',
