@@ -38,6 +38,7 @@ import type { SideQuest, SideQuestSubmission } from '../types/game'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
 import { createTestSubmissions, type TestSubmissionZone } from '../lib/testMode'
+import { useToast } from '../hooks/useToast'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
   sendGMBroadcast,
@@ -181,6 +182,7 @@ export default function GMDashboard() {
   interface ReviewState { tier2Approved: boolean; phoneFreeBonus: number; notes: string }
   const [reviewState, setReviewState] = useState<Map<string, ReviewState>>(new Map())
   const [processing, setProcessing] = useState<string | null>(null)
+  const toast = useToast()
 
   // Deferred verdicts. Approve/Reject doesn't fire immediately: the card
   // shows "Approving in 15s… Undo" and the real write happens when the
@@ -266,6 +268,7 @@ export default function GMDashboard() {
       })
     } catch (err) {
       console.error('Side quest review failed:', err)
+      toast.error(`Could not ${status === 'approved' ? 'approve' : 'reject'} that side quest photo.`, { retry: () => handleReviewSideQuest(subId, status) })
     }
     setSqProcessing(null)
   }
@@ -327,6 +330,7 @@ export default function GMDashboard() {
       await batch.commit()
     } catch (err) {
       console.error('Approve join failed:', err)
+      toast.error(`Could not add ${name} to the team.`, { retry: () => handleApproveJoin(uid, name) })
     }
     setJoinBusy(null)
   }
@@ -341,6 +345,7 @@ export default function GMDashboard() {
       })
     } catch (err) {
       console.error('Deny join failed:', err)
+      toast.error('Could not deny that join request.', { retry: () => handleDenyJoin(uid) })
     }
     setJoinBusy(null)
   }
@@ -525,13 +530,19 @@ export default function GMDashboard() {
           secs === 0 &&
           !alreadySent.includes(milestone.key)
         ) {
-          try {
+          const send = async () => {
             await sendGMBroadcast(gameId, user.uid, 'Foray', milestone.message)
             await updateDoc(doc(db, 'games', gameId), {
-              milestone_broadcasts_sent: [...alreadySent, milestone.key],
+              milestone_broadcasts_sent: arrayUnion(milestone.key),
             })
+          }
+          try {
+            await send()
           } catch (err) {
             console.error('Milestone broadcast failed:', err, milestone.key)
+            toast.error(`The ${milestone.key === 'halfway' ? 'halfway' : milestone.minsRemaining + ' minute'} broadcast didn't send.`, {
+              retry: () => send().catch((e) => toast.error('Still couldn\'t send: ' + (e as Error).message)),
+            })
           }
           break // Only one milestone per tick
         }
@@ -614,6 +625,7 @@ export default function GMDashboard() {
       setActivityRows(rows)
     } catch (err) {
       console.error('Failed to load activity log:', err)
+      toast.error('Could not load the activity log.', { retry: () => refreshActivityLog() })
     } finally {
       setActivityLoading(false)
     }
@@ -648,7 +660,7 @@ export default function GMDashboard() {
         highlight: !sub.highlight,
       })
     } catch (err) {
-      alert('Could not update highlight: ' + ((err as Error).message || 'Unknown error'))
+      toast.error('Could not update highlight: ' + ((err as Error).message || 'Unknown error'), { retry: () => handleToggleHighlight(sub) })
     }
   }
 
@@ -666,7 +678,7 @@ export default function GMDashboard() {
     )
 
     if (flagged.length === 0) {
-      alert('No flagged assets to pull. Star some approved assets first.')
+      toast.info('No flagged assets to pull. Star some approved assets first.')
       return
     }
 
@@ -716,9 +728,9 @@ export default function GMDashboard() {
 
       if (Object.keys(zip.files).length === 0) {
         // Everything failed to fetch — almost always a CORS issue on Storage.
-        alert(
-          'Could not download any assets. This is usually a Firebase Storage CORS setting. ' +
-          'Tell me if you see this and I will walk you through the one-time fix.'
+        toast.error(
+          'Could not download any assets. This is usually a Firebase Storage CORS setting that needs a one-time fix.',
+          { duration: 12000 }
         )
         return
       }
@@ -738,11 +750,11 @@ export default function GMDashboard() {
       URL.revokeObjectURL(url)
 
       if (failed > 0) {
-        alert(`Done — but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`)
+        toast.info(`Done — but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`, { duration: 9000 })
       }
     } catch (err) {
       console.error('Highlight zip failed:', err)
-      alert('Failed to build highlights zip: ' + ((err as Error).message || 'Unknown error'))
+      toast.error('Failed to build highlights zip: ' + ((err as Error).message || 'Unknown error'))
     } finally {
       setZipBusy(false)
       setZipProgress('')
@@ -756,7 +768,7 @@ export default function GMDashboard() {
     try {
       await sendGMReply(gameId, user.uid, user.displayName || 'GM', selectedTeamId, chatInput.trim())
       setChatInput('')
-    } catch { alert('Failed to send. Try again.') }
+    } catch { toast.error('Message didn\'t send.', { retry: () => handleGMReply() }) }
     finally { setChatSending(false) }
   }
 
@@ -766,7 +778,7 @@ export default function GMDashboard() {
     try {
       await sendGMBroadcast(gameId, user.uid, user.displayName || 'GM', broadcastInput.trim())
       setBroadcastInput('')
-    } catch { alert('Failed to broadcast. Try again.') }
+    } catch { toast.error('Broadcast didn\'t send.', { retry: () => handleBroadcast() }) }
     finally { setBroadcasting(false) }
   }
 
@@ -802,7 +814,7 @@ export default function GMDashboard() {
         actor_id: user?.uid ?? null,
         metadata: { awards: bonusAwards },
       })
-    } catch (err) { alert('Failed to apply bonuses: ' + (err as Error).message) }
+    } catch (err) { toast.error('Failed to apply bonuses: ' + (err as Error).message, { retry: () => handleApplyBonuses() }) }
     finally { setApplyingBonuses(false) }
   }
 
@@ -863,7 +875,7 @@ export default function GMDashboard() {
     // Reads lock status from zone_scores (same source as the map).
     const lockedZoneIds = zoneScores.filter((zs) => zs.status === 'locked').map((zs) => zs.zone_id)
     if (sub.zone_id && lockedZoneIds.includes(sub.zone_id)) {
-      alert(
+      toast.info(
         `${sub.zone_id.replace('zone_district_', 'District ').replace('zone_mn_', '')} is LOCKED. ` +
         `Submissions in a locked zone can't be approved — reject this one instead.`
       )
@@ -881,7 +893,7 @@ export default function GMDashboard() {
   const handleReject = (sub: SubmissionData) => {
     if (!gameId) return
     const review = getReviewState(sub.id)
-    if (!review.notes.trim()) { alert('Please add a note explaining why you are rejecting this.'); return }
+    if (!review.notes.trim()) { toast.info('Add a note explaining why you are rejecting this first.'); return }
     scheduleVerdict('reject', sub)
   }
 
@@ -947,12 +959,12 @@ export default function GMDashboard() {
       }
 
  // Card replacement — draw a new card using shared utility
+      const compositionRules = {
+        minEasy: game.settings.hand_min_easy ?? 1,
+        minHard: game.settings.hand_min_hard ?? 1,
+        maxHard: game.settings.hand_max_hard ?? 2,
+      }
       try {
-        const compositionRules = {
-          minEasy: game.settings.hand_min_easy ?? 1,
-          minHard: game.settings.hand_min_hard ?? 1,
-          maxHard: game.settings.hand_max_hard ?? 2,
-        }
         const drawnCardId = await drawReplacementCard(gameId, sub.team_id, sub.challenge_id, compositionRules)
 
         if (drawnCardId) {
@@ -964,12 +976,19 @@ export default function GMDashboard() {
             metadata: { reason: 'replacement', completed_challenge_id: sub.challenge_id },
           })
         }
-      } catch (dealErr) { console.error('Replacement card dealing failed:', dealErr) }
+      } catch (dealErr) {
+        console.error('Replacement card dealing failed:', dealErr)
+        toast.error(`Approved, but no replacement card could be dealt to ${getTeam(sub.team_id)?.name ?? 'the team'}.`, {
+          retry: () => drawReplacementCard(gameId, sub.team_id, sub.challenge_id, compositionRules)
+            .then((id) => { if (id) toast.success('Replacement card dealt.'); else toast.info('No replacement card available.') })
+            .catch((e) => toast.error('Still couldn\'t deal a card: ' + (e as Error).message)),
+        })
+      }
 
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
     } catch (err) {
       console.error('Approve failed:', err)
-      alert('Error approving: ' + ((err as Error).message || 'Unknown error'))
+      toast.error('Approval failed: ' + ((err as Error).message || 'Unknown error'), { retry: () => commitApprove(sub, review) })
     } finally { setProcessing(null) }
   }
 
@@ -983,7 +1002,7 @@ export default function GMDashboard() {
         highlight: false, // a rejected submission can't be a highlight
       })
       setReviewState((prev) => { const next = new Map(prev); next.delete(sub.id); return next })
-    } catch (err) { alert('Error rejecting: ' + ((err as Error).message || 'Unknown error')) }
+    } catch (err) { toast.error('Rejection failed: ' + ((err as Error).message || 'Unknown error'), { retry: () => commitReject(sub, review) }) }
     finally { setProcessing(null) }
   }
   commitRef.current = { approve: commitApprove, reject: commitReject }
@@ -998,10 +1017,10 @@ export default function GMDashboard() {
       const liveZones = (allZoneData as TestSubmissionZone[]).filter((z) => game.zones?.includes(z.id))
       const made = await createTestSubmissions(gameId, user.uid, teams, liveZones, 3)
       if (made === 0) {
-        alert('No test submissions created: need at least one team holding cards and one live zone with a boundary.')
+        toast.info('No test submissions created: need at least one team holding cards and one live zone with a boundary.')
       }
     } catch (err) {
-      alert('Failed to create test submissions: ' + (err as Error).message)
+      toast.error('Failed to create test submissions: ' + (err as Error).message)
     } finally {
       setAddingTestSubs(false)
     }
@@ -1012,7 +1031,7 @@ export default function GMDashboard() {
   try {
     await updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() })
   } catch (err) {
-    alert('Failed to end the game: ' + (err as Error).message)
+    toast.error('Failed to end the game: ' + (err as Error).message, { retry: () => updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() }) })
   }
   // Bonuses are applied by the "game ended" effect below, which also covers
   // the clock running out and a GM opening the dashboard after the fact.
@@ -1024,6 +1043,7 @@ export default function GMDashboard() {
   // category. Runs once per dashboard session and is guarded server-side by
   // the bonuses_applied flag, so a second dashboard can't double-award.
   const autoApplyStartedRef = useRef(false)
+  const [bonusRetryNonce, setBonusRetryNonce] = useState(0)
   const sideQuestTalliesRef = useRef(sideQuestTallies)
   sideQuestTalliesRef.current = sideQuestTallies
   useEffect(() => {
@@ -1063,11 +1083,14 @@ export default function GMDashboard() {
         const msg = (err as Error).message || ''
         if (/already applied/i.test(msg)) { setBonusesApplied(true); return }
         console.error('Auto side quest application failed:', err)
-        alert('Side quest points could not be applied automatically. Use "Apply Side Quest Points" in the Side Quests panel.')
         autoApplyStartedRef.current = false
+        toast.error('Side quest points could not be applied automatically.', {
+          retry: () => setBonusRetryNonce((n) => n + 1),
+          duration: 15000,
+        })
       }
     })()
-  }, [gameId, user, game?.status, game?.bonuses_applied, game?.settings?.side_quests, sideQuestSubsLoaded])
+  }, [gameId, user, game?.status, game?.bonuses_applied, game?.settings?.side_quests, sideQuestSubsLoaded, bonusRetryNonce, toast])
 
   const handlePauseResume = async () => {
   if (!gameId || !game) return

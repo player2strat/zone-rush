@@ -49,6 +49,7 @@ import {
 import { logEvent } from '../lib/activityLog'
 import { useLocation } from '../hooks/useLocation'
 import LocationStatusPill from '../components/LocationStatusPill'
+import { useToast } from '../hooks/useToast'
 
 // --------------- Types ---------------
 
@@ -183,6 +184,7 @@ export default function GamePage() {
   const [chatInput, setChatInput] = useState('')
   const [chatSending, setChatSending] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const toast = useToast()
 
   // Broadcast banner. Dismissing (✕) marks the message read in Firestore so
   // it stays gone across reloads; dismissedBroadcastIds hides it instantly
@@ -487,7 +489,7 @@ export default function GamePage() {
       setChatInput('')
     } catch (err) {
       console.error('Failed to send message:', err)
-      alert('Failed to send. Try again.')
+      toast.error('Message didn\'t send.', { retry: () => handleSendMessage(toGM) })
     } finally {
       setChatSending(false)
     }
@@ -501,7 +503,7 @@ export default function GamePage() {
     const discardsUsed = myTeam.discard_used ?? 0
 
     if (discardsUsed >= discardLimit) {
-      alert(`You've already used your ${discardLimit === 1 ? 'discard' : `${discardLimit} discards`}.`)
+      toast.info(`You've already used your ${discardLimit === 1 ? 'discard' : `${discardLimit} discards`}.`)
       return
     }
 
@@ -536,7 +538,7 @@ export default function GamePage() {
       })
 
       if (available.length === 0) {
-        alert('No replacement challenges available.')
+        toast.info('No replacement challenges available.')
         setDiscarding(false)
         return
       }
@@ -575,7 +577,7 @@ export default function GamePage() {
       setSelectedCard(null)
     } catch (err) {
       console.error('Discard failed:', err)
-      alert('Something went wrong. Try again.')
+      toast.error('The discard didn\'t go through. Try again.')
     } finally {
       setDiscarding(false)
     }
@@ -1189,6 +1191,7 @@ export default function GamePage() {
                                   await deleteDoc(doc(db, 'submissions', sub.id))
                                 } catch (err) {
                                   console.error('Cancel submission failed:', err)
+                                  toast.error('Could not withdraw that submission. Try again.')
                                 }
                               }}
                               style={{
