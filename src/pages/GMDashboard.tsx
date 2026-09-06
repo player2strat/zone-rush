@@ -37,7 +37,7 @@ import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/s
 import type { SideQuest, SideQuestSubmission } from '../types/game'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
-import { createTestSubmissions } from '../lib/testMode'
+import { createTestSubmissions, type TestSubmissionZone } from '../lib/testMode'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
   sendGMBroadcast,
@@ -995,7 +995,7 @@ export default function GMDashboard() {
     if (!gameId || !user || !game || addingTestSubs) return
     setAddingTestSubs(true)
     try {
-      const liveZones = allZoneData.filter((z: any) => game.zones?.includes(z.id))
+      const liveZones = (allZoneData as TestSubmissionZone[]).filter((z) => game.zones?.includes(z.id))
       const made = await createTestSubmissions(gameId, user.uid, teams, liveZones, 3)
       if (made === 0) {
         alert('No test submissions created: need at least one team holding cards and one live zone with a boundary.')

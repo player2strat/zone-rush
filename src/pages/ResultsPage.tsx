@@ -248,15 +248,19 @@ export default function ResultsPage() {
   // see every team's score, while real players only see their own. The
   // viewer qualifies if they created this game or their account role is
   // gm/admin (mirrors the Firestore rules' isAdminOrGm).
-  const [viewerRole, setViewerRole] = useState<string | null>(null)
+  // Role is stored together with the uid it was fetched for, so a signed-out
+  // or switched account never reads a stale role.
+  const [roleInfo, setRoleInfo] = useState<{ uid: string; role: string } | null>(null)
   useEffect(() => {
-    if (!user) { setViewerRole(null); return }
+    if (!user) return
+    const uid = user.uid
     let cancelled = false
-    getDoc(doc(db, 'users', user.uid))
-      .then((snap) => { if (!cancelled) setViewerRole(snap.exists() ? (snap.data().role || 'player') : 'player') })
-      .catch(() => { if (!cancelled) setViewerRole('player') })
+    getDoc(doc(db, 'users', uid))
+      .then((snap) => { if (!cancelled) setRoleInfo({ uid, role: snap.exists() ? (snap.data().role || 'player') : 'player' }) })
+      .catch(() => { if (!cancelled) setRoleInfo({ uid, role: 'player' }) })
     return () => { cancelled = true }
-  }, [user?.uid])
+  }, [user])
+  const viewerRole = user && roleInfo?.uid === user.uid ? roleInfo.role : null
 
   const isGM = !!user && !myTeam && !!game && (
     game.created_by === user.uid || viewerRole === 'gm' || viewerRole === 'admin'

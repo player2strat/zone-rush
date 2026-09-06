@@ -251,7 +251,7 @@ export default function GamePage() {
       })
     }
     return items.sort((a, b) => b.at - a.at)
-  }, [outcomeNotices, unreadBroadcasts, gameId, user?.uid])
+  }, [outcomeNotices, unreadBroadcasts, gameId, user])
   const topBanner = bannerItems[0] ?? null
 
   // The player's display name for THIS game comes from their team's
