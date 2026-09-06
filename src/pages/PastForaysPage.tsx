@@ -57,7 +57,7 @@ async function loadPastForays(uid: string): Promise<PastForay[]> {
           id: g.id,
           name: g.data().name || 'Untitled game',
           teamName: (rows[i].team.name as string) || 'Team',
-          teamColor: (rows[i].team.color as string) || '#55544E',
+          teamColor: (rows[i].team.color as string) || 'var(--ink-muted)',
           created_at: g.data().created_at,
         })
       }
@@ -87,8 +87,8 @@ export default function PastForaysPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: 24,
     }}>
@@ -96,7 +96,7 @@ export default function PastForaysPage() {
         <button
           onClick={() => navigate('/')}
           style={{
-            background: 'none', border: 'none', color: '#6F6E66',
+            background: 'none', border: 'none', color: 'var(--ink-faint)',
             cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem',
             padding: 0, marginBottom: 24,
           }}
@@ -105,7 +105,7 @@ export default function PastForaysPage() {
         </button>
 
         <p style={{
-          fontSize: '0.75rem', color: '#FFD626', textTransform: 'uppercase',
+          fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase',
           letterSpacing: 2, margin: '0 0 4px',
         }}>
           Foray
@@ -113,17 +113,17 @@ export default function PastForaysPage() {
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 6px' }}>
           Past Forays
         </h1>
-        <p style={{ color: '#5F5E57', fontSize: '0.88rem', margin: '0 0 28px' }}>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: '0 0 28px' }}>
           Every game you've played — tap one to revisit the score, your team's
           submissions, and the final map.
         </p>
 
         {forays === null ? (
-          <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>Loading…</p>
+          <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading…</p>
         ) : forays.length === 0 ? (
           <div style={{
-            border: '1px solid #E6E5DA', borderRadius: 12,
-            padding: '32px 24px', textAlign: 'center', color: '#6F6E66',
+            border: '1px solid var(--line)', borderRadius: 12,
+            padding: '32px 24px', textAlign: 'center', color: 'var(--ink-faint)',
           }}>
             <p style={{ fontSize: '1.5rem', margin: '0 0 8px' }}>🧭</p>
             <p style={{ margin: 0, fontSize: '0.9rem' }}>
@@ -137,8 +137,8 @@ export default function PastForaysPage() {
                 key={g.id}
                 onClick={() => navigate('/results/' + g.id)}
                 style={{
-                  background: 'rgba(32,33,34,0.02)',
-                  border: '1px solid #E6E5DA',
+                  background: 'rgba(var(--ink-rgb), 0.02)',
+                  border: '1px solid var(--line)',
                   borderRadius: 12,
                   padding: '14px 16px',
                   textAlign: 'left',
@@ -151,13 +151,13 @@ export default function PastForaysPage() {
                   alignItems: 'baseline', gap: 10,
                 }}>
                   <span style={{
-                    color: '#2A2B2C', fontWeight: 700, fontSize: '0.95rem',
+                    color: 'var(--ink-soft)', fontWeight: 700, fontSize: '0.95rem',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {g.name}
                   </span>
                   {g.created_at?.seconds && (
-                    <span style={{ color: '#6F6E66', fontSize: '0.75rem', flexShrink: 0 }}>
+                    <span style={{ color: 'var(--ink-faint)', fontSize: '0.75rem', flexShrink: 0 }}>
                       {new Date(g.created_at.seconds * 1000).toLocaleDateString(undefined, {
                         month: 'short', day: 'numeric', year: 'numeric',
                       })}
@@ -171,15 +171,15 @@ export default function PastForaysPage() {
                     <>
                       <span style={{
                         width: 9, height: 9, borderRadius: 2, flexShrink: 0,
-                        background: g.teamColor ?? '#55544E',
+                        background: g.teamColor ?? 'var(--ink-muted)',
                       }} />
-                      <span style={{ color: '#4A4944', fontSize: '0.8rem' }}>
+                      <span style={{ color: 'var(--ink-muted)', fontSize: '0.8rem' }}>
                         {g.teamName}
                       </span>
                     </>
                   ) : (
                     <span style={{
-                      color: '#FFD626', fontSize: '0.7rem', fontWeight: 700,
+                      color: 'var(--marigold)', fontSize: '0.7rem', fontWeight: 700,
                       textTransform: 'uppercase', letterSpacing: 1,
                     }}>
                       Game Master

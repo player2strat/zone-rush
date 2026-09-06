@@ -1,18 +1,35 @@
 /* =============================================================================
-   Foray — brand tokens (Beginner Brand Guide, Sept 2026)
-   Hero: Marigold. Light neutral: Off-white. Dark neutral: Charcoal.
-   Accents: Rich Blue, Pink, Green. Highlight: Light Blue. Warning: Red.
-   Header font: Martian Mono (bold, caps). Body: Helvetica Neue (bold).
+   Foray — design tokens (Beginner Brand Guide, Sept 2026)
+   THIS IS THE SINGLE SOURCE OF TRUTH FOR COLORS. Screens use var(--name).
+   The only copy of these values outside CSS is src/lib/brand.ts, which exists
+   for Mapbox paint properties (they can't read CSS variables); a test keeps
+   the two in sync.
    ========================================================================== */
 :root {
-  --brand-marigold: #FFD626;
-  --brand-blue: #1EB2F2;
-  --brand-pink: #E67DD1;
-  --brand-red: #FF4443;
-  --brand-lightblue: #67DAF5;
-  --brand-green: #28B770;
-  --brand-ink: #202122;
-  --brand-paper: #FDFFF1;
+  /* Brand colors */
+  --marigold: #FFD626;   --marigold-rgb: 255, 214, 38;   /* hero */
+  --blue: #1EB2F2;       --blue-rgb: 30, 178, 242;
+  --pink: #E67DD1;       --pink-rgb: 230, 125, 209;
+  --red: #FF4443;        --red-rgb: 255, 68, 67;         /* warnings only */
+  --lightblue: #67DAF5;  --lightblue-rgb: 103, 218, 245; /* main highlight */
+  --green: #28B770;      --green-rgb: 40, 183, 112;
+
+  /* Darker accent variants, for small text on the paper background */
+  --marigold-deep: #7A6400;
+  --green-deep: #1E7A4C;
+  --pink-deep: #9B4F8C;
+  --red-deep: #B02F2E;
+
+  /* Neutrals */
+  --paper: #FDFFF1;      --paper-rgb: 253, 255, 241;     /* page background */
+  --surface: #FFFFFF;                                    /* cards, inputs */
+  --line: #E6E5DA;                                       /* borders, dividers */
+  --line-strong: #D6D5CA;
+  --ink: #202122;        --ink-rgb: 32, 33, 34;          /* primary text */
+  --ink-soft: #3A3935;
+  --ink-muted: #55544E;                                  /* secondary text */
+  --ink-faint: #6F6E66;                                  /* tertiary text */
+  --ink-ghost: #8F8E85;                                  /* placeholders, disabled */
 
   --font-head: 'Martian Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --font-body: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -22,8 +39,8 @@
   font-weight: 400;
 
   color-scheme: light;
-  color: var(--brand-ink);
-  background-color: var(--brand-paper);
+  color: var(--ink);
+  background-color: var(--paper);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -33,10 +50,10 @@
 
 a {
   font-weight: 500;
-  color: var(--brand-blue);
+  color: var(--blue);
   text-decoration: inherit;
 }
-a:hover { color: var(--brand-ink); }
+a:hover { color: var(--ink); }
 
 html, body {
   margin: 0;
@@ -44,7 +61,7 @@ html, body {
   min-height: 100vh;
   overflow-x: hidden;
   width: 100%;
-  background: var(--brand-paper);
+  background: var(--paper);
 }
 
 /* Headers: Martian Mono, bold, capitalized per the brand guide */
@@ -64,13 +81,13 @@ button {
   font-weight: 700;
   font-family: inherit;
   background-color: #202122;
-  color: var(--brand-ink);
+  color: var(--ink);
   cursor: pointer;
   transition: border-color 0.25s;
 }
-button:hover { border-color: var(--brand-ink); }
+button:hover { border-color: var(--ink); }
 button:focus,
-button:focus-visible { outline: 3px solid var(--brand-blue); outline-offset: 2px; }
+button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
-input, textarea, select { color: var(--brand-ink); }
-::placeholder { color: #8F8E85; }
+input, textarea, select { color: var(--ink); }
+::placeholder { color: var(--ink-ghost); }

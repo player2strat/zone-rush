@@ -32,8 +32,8 @@ export default function HomePage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       display: 'flex',
       flexDirection: 'column',
@@ -56,7 +56,7 @@ export default function HomePage() {
           {isGM ? 'Game Master' : 'Ready to explore?'}
         </h1>
         <p style={{
-          color: '#5F5E57',
+          color: 'var(--ink-muted)',
           fontSize: '0.9rem',
           marginTop: 8,
         }}>
@@ -78,9 +78,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/create')}
           style={{
-            background: 'rgba(255,214,38,0.12)',
-            border: '1px solid rgba(255,214,38,0.3)',
-            color: '#FFD626',
+            background: 'rgba(var(--marigold-rgb), 0.12)',
+            border: '1px solid rgba(var(--marigold-rgb), 0.3)',
+            color: 'var(--marigold)',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -95,7 +95,7 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#7A6400',
+            color: 'var(--marigold-deep)',
             marginTop: 4,
           }}>
             Set up zones, invite players
@@ -109,9 +109,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/admin/zone-builder')}
           style={{
-            background: 'rgba(230,125,209,0.12)',
-            border: '1px solid rgba(230,125,209,0.3)',
-            color: '#E67DD1',
+            background: 'rgba(var(--pink-rgb), 0.12)',
+            border: '1px solid rgba(var(--pink-rgb), 0.3)',
+            color: 'var(--pink)',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -126,7 +126,7 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#9B4F8C',
+            color: 'var(--pink-deep)',
             marginTop: 4,
           }}>
             Draw maps & zones
@@ -138,9 +138,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/join')}
           style={{
-            background: '#FFD626',
+            background: 'var(--marigold)',
             border: 'none',
-            color: '#202122',
+            color: 'var(--ink)',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -155,7 +155,7 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#202122',
+            color: 'var(--ink)',
             opacity: 0.75,
             marginTop: 4,
           }}>
@@ -171,13 +171,13 @@ export default function HomePage() {
           marginTop: 32,
           width: '100%',
           maxWidth: 320,
-          border: '1px solid #E6E5DA',
+          border: '1px solid var(--line)',
           borderRadius: 12,
           padding: 16,
         }}>
           <p style={{
             fontSize: '0.7rem',
-            color: '#5F5E57',
+            color: 'var(--ink-muted)',
             textTransform: 'uppercase',
             letterSpacing: 1.5,
             fontWeight: 700,
@@ -191,8 +191,8 @@ export default function HomePage() {
                 key={link.path}
                 onClick={() => navigate(link.path)}
                 style={{
-                  background: 'rgba(32,33,34,0.02)',
-                  border: '1px solid #E6E5DA',
+                  background: 'rgba(var(--ink-rgb), 0.02)',
+                  border: '1px solid var(--line)',
                   borderRadius: 8,
                   padding: '10px 12px',
                   textAlign: 'left',
@@ -200,12 +200,12 @@ export default function HomePage() {
                   fontFamily: 'inherit',
                 }}
               >
-                <span style={{ color: '#2A2B2C', fontWeight: 600, fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--ink-soft)', fontWeight: 600, fontSize: '0.9rem' }}>
                   {link.label}
                 </span>
                 <span style={{
                   display: 'block',
-                  color: '#5F5E57',
+                  color: 'var(--ink-muted)',
                   fontSize: '0.75rem',
                   marginTop: 2,
                 }}>
@@ -245,7 +245,7 @@ const secondaryButtonStyle: React.CSSProperties = {
   flex: 1,
   background: 'none',
   border: 'none',
-  color: '#5F5E57',
+  color: 'var(--ink-muted)',
   padding: '12px 8px',
   fontSize: '0.9rem',
   fontWeight: 500,

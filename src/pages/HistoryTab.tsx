@@ -17,9 +17,9 @@ import { db } from '../lib/firebase'
 
 // Difficulty badge colors — must match the rest of the app
 const DIFF_COLORS: Record<string, { bg: string; text: string }> = {
-  easy:   { bg: 'rgba(40,183,112,0.12)',   text: '#28B770' },
-  medium: { bg: 'rgba(255,214,38,0.12)', text: '#FFD626' },
-  hard:   { bg: 'rgba(255,68,67,0.12)',  text: '#FF4443' },
+  easy:   { bg: 'rgba(var(--green-rgb), 0.12)',   text: 'var(--green)' },
+  medium: { bg: 'rgba(var(--marigold-rgb), 0.12)', text: 'var(--marigold)' },
+  hard:   { bg: 'rgba(var(--red-rgb), 0.12)',  text: 'var(--red)' },
 }
 
 interface Submission {
@@ -133,7 +133,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
     type === 'video' ? '🎥' : type === 'audio' ? '🎙️' : '📷'
 
   const diffStyle = (diff?: string) =>
-    DIFF_COLORS[diff?.toLowerCase() ?? ''] ?? { bg: 'rgba(32,33,34,0.05)', text: '#55544E' }
+    DIFF_COLORS[diff?.toLowerCase() ?? ''] ?? { bg: 'rgba(var(--ink-rgb), 0.05)', text: 'var(--ink-muted)' }
 
   // ------------------------------------------------------------------
   // Empty / loading states
@@ -153,10 +153,10 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
       <div style={outerWrap}>
         <div style={emptyState}>
           <span style={{ fontSize: '2.4rem', marginBottom: 14 }}>🗂️</span>
-          <p style={{ color: '#2A2B2C', fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>
+          <p style={{ color: 'var(--ink-soft)', fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>
             No completed challenges yet
           </p>
-          <p style={{ color: '#6F6E66', fontSize: '0.85rem', lineHeight: 1.6, textAlign: 'center', maxWidth: 240 }}>
+          <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', lineHeight: 1.6, textAlign: 'center', maxWidth: 240 }}>
             Get out there and complete your first challenge — it'll show up here once the GM approves it.
           </p>
         </div>
@@ -173,12 +173,12 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
       {/* ── Summary bar ── */}
       <div style={summaryBar}>
         <div style={summaryItem}>
-          <span style={{ ...summaryValue, color: '#28B770' }}>{submissions.length}</span>
+          <span style={{ ...summaryValue, color: 'var(--green)' }}>{submissions.length}</span>
           <span style={summaryLabel}>Completed</span>
         </div>
         <div style={divider} />
         <div style={summaryItem}>
-          <span style={{ ...summaryValue, color: '#FFD626' }}>{totalPoints}</span>
+          <span style={{ ...summaryValue, color: 'var(--marigold)' }}>{totalPoints}</span>
           <span style={summaryLabel}>Total pts</span>
         </div>
         {/* Tier 2 hits summary item removed — re-enable when the tier 2 mechanic
@@ -199,8 +199,8 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
               key={sub.id}
               onClick={() => setExpandedId(isExpanded ? null : sub.id)}
               style={{
-                background: 'rgba(32,33,34,0.025)',
-                border: `1px solid ${isNewest ? 'rgba(40,183,112,0.25)' : '#E6E5DA'}`,
+                background: 'rgba(var(--ink-rgb), 0.025)',
+                border: `1px solid ${isNewest ? 'rgba(var(--green-rgb), 0.25)' : 'var(--line)'}`,
                 borderRadius: 12,
                 overflow: 'hidden',
                 cursor: 'pointer',
@@ -213,7 +213,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                 {/* Media type icon */}
                 <div style={{
                   width: 38, height: 38, borderRadius: 8, flexShrink: 0,
-                  background: 'rgba(32,33,34,0.04)',
+                  background: 'rgba(var(--ink-rgb), 0.04)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '1.2rem',
                 }}>
@@ -223,7 +223,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                 {/* Challenge text + meta */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{
-                    color: '#2A2B2C', fontSize: '0.88rem', lineHeight: 1.5,
+                    color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.5,
                     marginBottom: 8,
                     // Clamp to 2 lines when collapsed
                     display: '-webkit-box',
@@ -237,7 +237,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                   {/* Badges row */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                     {/* Zone */}
-                    <span style={badge('#1EB2F2', 'rgba(17,138,178,0.12)')}>
+                    <span style={badge('var(--blue)', 'rgba(17,138,178,0.12)')}>
                       📍 {zoneName(sub.zone_id)}
                     </span>
 
@@ -250,14 +250,14 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
 
                     {/* CYOA locked choices */}
                     {sub.step_choices && sub.step_choices.length > 0 && (
-                      <span style={badge('#E67DD1', 'rgba(230,125,209,0.12)')}>
+                      <span style={badge('var(--pink)', 'rgba(var(--pink-rgb), 0.12)')}>
                         🎲 {sub.step_choices.join(' · ')}
                       </span>
                     )}
 
                     {/* Phone-free */}
                     {sub.phone_free_approved && (
-                      <span style={badge('#28B770', 'rgba(40,183,112,0.12)')}>
+                      <span style={badge('var(--green)', 'rgba(var(--green-rgb), 0.12)')}>
                         📵 Phone-free
                       </span>
                     )}
@@ -268,19 +268,19 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
                   <p style={{
                     fontFamily: "'Martian Mono', monospace",
-                    color: '#28B770', fontWeight: 700, fontSize: '1.1rem',
+                    color: 'var(--green)', fontWeight: 700, fontSize: '1.1rem',
                     lineHeight: 1,
                   }}>
                     +{sub.points_awarded ?? '?'}
                   </p>
                   <p style={{
                     fontFamily: "'Martian Mono', monospace",
-                    color: '#8F8E85', fontSize: '0.7rem', marginTop: 5,
+                    color: 'var(--ink-ghost)', fontSize: '0.7rem', marginTop: 5,
                   }}>
                     {formatTime(sub.submitted_at)}
                   </p>
                   <p style={{
-                    color: '#A3A298', fontSize: '0.72rem', marginTop: 6,
+                    color: 'var(--ink-ghost)', fontSize: '0.72rem', marginTop: 6,
                     transform: isExpanded ? 'rotate(180deg)' : 'none',
                     transition: 'transform 0.2s',
                   }}>
@@ -292,7 +292,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
               {/* ── Expanded: media preview ── */}
               {isExpanded && (
                 <div style={{
-                  borderTop: '1px solid #E6E5DA',
+                  borderTop: '1px solid var(--line)',
                   padding: '12px 16px 16px',
                   background: 'rgba(0,0,0,0.2)',
                 }}>
@@ -304,7 +304,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                         playsInline
                         style={{
                           width: '100%', borderRadius: 8, maxHeight: 220,
-                          background: '#FFFFFF', objectFit: 'contain',
+                          background: 'var(--surface)', objectFit: 'contain',
                         }}
                       />
                     ) : sub.media_type === 'audio' ? (
@@ -315,13 +315,13 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                         alt="Submission proof"
                         style={{
                           width: '100%', borderRadius: 8, maxHeight: 220,
-                          objectFit: 'contain', background: '#FFFFFF',
+                          objectFit: 'contain', background: 'var(--surface)',
                           display: 'block',
                         }}
                       />
                     )
                   ) : (
-                    <p style={{ color: '#8F8E85', fontSize: '0.82rem', textAlign: 'center' }}>
+                    <p style={{ color: 'var(--ink-ghost)', fontSize: '0.82rem', textAlign: 'center' }}>
                       Media not available
                     </p>
                   )}
@@ -342,9 +342,9 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
 const outerWrap: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
-  background: '#FDFFF1',
+  background: 'var(--paper)',
   fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-  color: '#202122',
+  color: 'var(--ink)',
 }
 
 const summaryBar: React.CSSProperties = {
@@ -352,8 +352,8 @@ const summaryBar: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-around',
   padding: '16px 20px',
-  borderBottom: '1px solid #E6E5DA',
-  background: '#FDFFF1',
+  borderBottom: '1px solid var(--line)',
+  background: 'var(--paper)',
 }
 
 const summaryItem: React.CSSProperties = {
@@ -372,7 +372,7 @@ const summaryValue: React.CSSProperties = {
 
 const summaryLabel: React.CSSProperties = {
   fontSize: '0.7rem',
-  color: '#6F6E66',
+  color: 'var(--ink-faint)',
   textTransform: 'uppercase',
   letterSpacing: 1,
   fontWeight: 600,
@@ -381,7 +381,7 @@ const summaryLabel: React.CSSProperties = {
 const divider: React.CSSProperties = {
   width: 1,
   height: 32,
-  background: '#E6E5DA',
+  background: 'var(--line)',
 }
 
 const emptyState: React.CSSProperties = {
@@ -396,8 +396,8 @@ const spinner: React.CSSProperties = {
   width: 28,
   height: 28,
   borderRadius: '50%',
-  border: '2px solid #E6E5DA',
-  borderTopColor: '#28B770',
+  border: '2px solid var(--line)',
+  borderTopColor: 'var(--green)',
   animation: 'spin 0.8s linear infinite',
 }
 

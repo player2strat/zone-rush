@@ -33,8 +33,8 @@ export default function GameRouteGuard({
       <div
         style={{
           minHeight: '100vh',
-          background: '#FDFFF1',
-          color: '#6F6E66',
+          background: 'var(--paper)',
+          color: 'var(--ink-faint)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

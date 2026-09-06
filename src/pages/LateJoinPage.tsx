@@ -114,8 +114,8 @@ export default function LateJoinPage() {
   const shell = (children: React.ReactNode) => (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       display: 'flex',
       flexDirection: 'column',
@@ -128,26 +128,26 @@ export default function LateJoinPage() {
   )
 
   if (request === undefined || gameStatus === null) {
-    return shell(<p style={{ color: '#6F6E66', textAlign: 'center' }}>Loading…</p>)
+    return shell(<p style={{ color: 'var(--ink-faint)', textAlign: 'center' }}>Loading…</p>)
   }
 
   // ---- Waiting / denied ----
   if (request && request.status === 'pending') {
     return shell(
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '0.75rem', color: '#FFD626', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
           {gameName}
         </p>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 12px' }}>
           Waiting for the Game Master
         </h1>
-        <p style={{ color: '#55544E', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
-          Your request to join as <strong style={{ color: '#2A2B2C' }}>{request.name}</strong> has been sent.
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
+          Your request to join as <strong style={{ color: 'var(--ink-soft)' }}>{request.name}</strong> has been sent.
           Keep this screen open — you'll be dropped into the game as soon as it's approved.
         </p>
         <div style={{
           width: 36, height: 36, margin: '0 auto 32px',
-          border: '3px solid #E6E5DA', borderTopColor: '#FFD626', borderRadius: '50%',
+          border: '3px solid var(--line)', borderTopColor: 'var(--marigold)', borderRadius: '50%',
           animation: 'zr-spin 1s linear infinite',
         }} />
         <style>{'@keyframes zr-spin { to { transform: rotate(360deg) } }'}</style>
@@ -164,8 +164,8 @@ export default function LateJoinPage() {
         <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 12px' }}>
           Request declined
         </h1>
-        <p style={{ color: '#55544E', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
-          The Game Master didn't approve your request to join <strong style={{ color: '#2A2B2C' }}>{gameName}</strong>.
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
+          The Game Master didn't approve your request to join <strong style={{ color: 'var(--ink-soft)' }}>{gameName}</strong>.
         </p>
         <button onClick={handleCancel} disabled={busy} style={quietBtn}>
           ← Back to Home
@@ -181,18 +181,18 @@ export default function LateJoinPage() {
         ← Back
       </button>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <p style={{ fontSize: '0.75rem', color: '#FFD626', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
           {gameName}
         </p>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
           This game is in progress
         </h1>
-        <p style={{ color: '#5F5E57', fontSize: '0.88rem', marginTop: 8, lineHeight: 1.5 }}>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', marginTop: 8, lineHeight: 1.5 }}>
           You can still join — the Game Master needs to approve you and put you on a team.
         </p>
       </div>
 
-      <label style={{ color: '#55544E', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+      <label style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1 }}>
         Your name
       </label>
       <input
@@ -203,11 +203,11 @@ export default function LateJoinPage() {
         autoFocus
         style={{
           width: '100%',
-          background: 'rgba(32,33,34,0.05)',
-          border: '2px solid #D6D5CA',
+          background: 'rgba(var(--ink-rgb), 0.05)',
+          border: '2px solid var(--line-strong)',
           borderRadius: 12,
           padding: '14px 16px',
-          color: '#202122',
+          color: 'var(--ink)',
           fontSize: '1.05rem',
           fontWeight: 600,
           fontFamily: 'inherit',
@@ -219,8 +219,8 @@ export default function LateJoinPage() {
 
       {error && (
         <p style={{
-          color: '#FF4443', fontSize: '0.85rem', marginBottom: 16,
-          padding: '10px 14px', background: 'rgba(255,68,67,0.08)', borderRadius: 8, textAlign: 'center',
+          color: 'var(--red)', fontSize: '0.85rem', marginBottom: 16,
+          padding: '10px 14px', background: 'rgba(var(--red-rgb), 0.08)', borderRadius: 8, textAlign: 'center',
         }}>
           {error}
         </p>
@@ -231,9 +231,9 @@ export default function LateJoinPage() {
         disabled={busy || !name.trim()}
         style={{
           width: '100%',
-          background: name.trim() ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)',
-          border: `1px solid ${name.trim() ? 'rgba(255,214,38,0.3)' : '#E6E5DA'}`,
-          color: name.trim() ? '#FFD626' : '#8F8E85',
+          background: name.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
+          border: `1px solid ${name.trim() ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`,
+          color: name.trim() ? 'var(--marigold)' : 'var(--ink-ghost)',
           padding: '16px 24px',
           borderRadius: 12,
           fontSize: '1.05rem',
@@ -251,7 +251,7 @@ export default function LateJoinPage() {
 const quietBtn: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#6F6E66',
+  color: 'var(--ink-faint)',
   cursor: 'pointer',
   fontFamily: 'inherit',
   fontSize: '0.85rem',

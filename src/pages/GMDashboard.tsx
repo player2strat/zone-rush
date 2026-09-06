@@ -146,7 +146,7 @@ interface ZoneScoreData {
 // --------------- Constants ---------------
 
 const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: '#28B770', medium: '#FFD626', hard: '#FF4443',
+  easy: 'var(--green)', medium: 'var(--marigold)', hard: 'var(--red)',
 }
 
 // Which media types get included in the post-game highlight zip.
@@ -1009,9 +1009,9 @@ const handleApprove = async (sub: SubmissionData) => {
 
   if (loading || !game) {
     return (
-      <div style={{ minHeight: '100vh', background: '#FDFFF1', color: '#6F6E66', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+      <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 32, height: 32, border: '3px solid #E6E5DA', borderTopColor: '#FFD626', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+          <div style={{ width: 32, height: 32, border: '3px solid var(--line)', borderTopColor: 'var(--marigold)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
           <p>Loading GM Dashboard...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -1020,42 +1020,42 @@ const handleApprove = async (sub: SubmissionData) => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FDFFF1', color: '#202122', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", display: 'flex', flexDirection: 'column' }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
       {/* TOP BAR */}
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid #E6E5DA', background: '#FDFFF1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
-            <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.68rem', color: '#FFD626', textTransform: 'uppercase', letterSpacing: 2 }}>GM Dashboard</span>
-            <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 4, background: game.status === 'active' ? 'rgba(40,183,112,0.15)' : game.status === 'paused' ? 'rgba(255,214,38,0.15)' : 'rgba(255,68,67,0.15)', color: game.status === 'active' ? '#28B770' : game.status === 'paused' ? '#FFD626' : '#FF4443', fontWeight: 700 }}>
+            <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.68rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2 }}>GM Dashboard</span>
+            <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 4, background: game.status === 'active' ? 'rgba(var(--green-rgb), 0.15)' : game.status === 'paused' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--red-rgb), 0.15)', color: game.status === 'active' ? 'var(--green)' : game.status === 'paused' ? 'var(--marigold)' : 'var(--red)', fontWeight: 700 }}>
               {game.status.toUpperCase()}
             </span>
           </div>
           <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>{game.name}</h1>
-          <p style={{ fontSize: '0.75rem', color: '#6F6E66', marginTop: 2 }}>
-            Code: <span style={{ color: '#55544E', fontFamily: "'Martian Mono', monospace" }}>{game.join_code}</span>
+          <p style={{ fontSize: '0.75rem', color: 'var(--ink-faint)', marginTop: 2 }}>
+            Code: <span style={{ color: 'var(--ink-muted)', fontFamily: "'Martian Mono', monospace" }}>{game.join_code}</span>
             {' · '}{teams.length} team{teams.length !== 1 ? 's' : ''}
             {' · '}{submissions.length} submissions
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.2rem', fontWeight: 700, color: timeLeft === 'GAME OVER' ? '#FF4443' : '#FFD626' }}>
+          <div style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.2rem', fontWeight: 700, color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold)' }}>
             {timeLeft || '—'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {game.status !== 'ended' && (
-              <button onClick={handlePauseResume} style={{ background: 'rgba(32,33,34,0.05)', border: '1px solid #E6E5DA', color: '#55544E', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={handlePauseResume} style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                 {game.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
               </button>
             )}
             {game.status !== 'ended' && (
-              <button onClick={handleEndGame} style={{ background: 'rgba(255,68,67,0.08)', border: '1px solid rgba(255,68,67,0.2)', color: '#FF4443', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={handleEndGame} style={{ background: 'rgba(var(--red-rgb), 0.08)', border: '1px solid rgba(var(--red-rgb), 0.2)', color: 'var(--red)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                 End Game
               </button>
             )}
             {game.status === 'ended' && (
-              <button onClick={() => navigate('/results/' + gameId)} style={{ background: 'rgba(255,214,38,0.12)', border: '1px solid rgba(255,214,38,0.3)', color: '#FFD626', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => navigate('/results/' + gameId)} style={{ background: 'rgba(var(--marigold-rgb), 0.12)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                 🏆 View Results
               </button>
             )}
@@ -1064,11 +1064,11 @@ const handleApprove = async (sub: SubmissionData) => {
       </div>
 
       {/* TAB BAR */}
-      <div style={{ borderBottom: '1px solid #E6E5DA', background: '#FDFFF1', display: 'flex', padding: '0 20px', flexShrink: 0 }}>
+      <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', padding: '0 20px', flexShrink: 0 }}>
         {([
-          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: '#FFD626' },
+          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: 'var(--marigold)' },
           { id: 'map' as const, label: '🗺️ Map & Zones', badge: null, badgeColor: '' },
-          { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: '#FF4443' },
+          { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: 'var(--red)' },
           { id: 'activity' as const, label: '📜 Activity Log', badge: null, badgeColor: '' },
         ]).map((tab) => (
           <button
@@ -1076,8 +1076,8 @@ const handleApprove = async (sub: SubmissionData) => {
             onClick={() => setActiveTab(tab.id)}
             style={{
               background: 'none', border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid #FFD626' : '2px solid transparent',
-              color: activeTab === tab.id ? '#FFD626' : '#6F6E66',
+              borderBottom: activeTab === tab.id ? '2px solid var(--marigold)' : '2px solid transparent',
+              color: activeTab === tab.id ? 'var(--marigold)' : 'var(--ink-faint)',
               padding: '12px 18px', fontSize: '0.85rem', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 7,
@@ -1085,7 +1085,7 @@ const handleApprove = async (sub: SubmissionData) => {
           >
             {tab.label}
             {tab.badge !== null && (
-              <span style={{ background: tab.badgeColor, color: '#FDFFF1', fontSize: '0.65rem', fontWeight: 800, padding: '1px 6px', borderRadius: 10, lineHeight: '16px' }}>
+              <span style={{ background: tab.badgeColor, color: 'var(--paper)', fontSize: '0.65rem', fontWeight: 800, padding: '1px 6px', borderRadius: 10, lineHeight: '16px' }}>
                 {tab.badge}
               </span>
             )}
@@ -1095,14 +1095,14 @@ const handleApprove = async (sub: SubmissionData) => {
 
       {/* SIDE QUESTS PANEL (shown when game ended) */}
      {game.status === 'ended' && (
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E6E5DA', background: bonusesApplied ? 'rgba(40,183,112,0.03)' : 'rgba(255,214,38,0.03)', flexShrink: 0 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: bonusesApplied ? 'rgba(var(--green-rgb), 0.03)' : 'rgba(var(--marigold-rgb), 0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <p style={{ fontSize: '0.7rem', color: bonusesApplied ? '#28B770' : '#FFD626', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
+            <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
               {bonusesApplied ? '✅ Side Quests Applied' : '🏁 Award Side Quest Points'}
             </p>
 
             {bonusesApplied ? (
-              <p style={{ color: '#5F5E57', fontSize: '0.82rem' }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
                 Side Quest points have been added to team totals. Check results to see final scores.
               </p>
             ) : (
@@ -1110,16 +1110,16 @@ const handleApprove = async (sub: SubmissionData) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, marginBottom: 16 }}>
 
                   {/* Most Zones Claimed */}
-                  <div style={{ background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ fontSize: '0.75rem', color: '#4A4944', fontWeight: 600, marginBottom: 4 }}>
+                  <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                       🗺️ Most Zones Claimed
-                      <span style={{ color: '#FFD626', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
+                      <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
                     </p>
-                    <p style={{ fontSize: '0.68rem', color: '#8F8E85', marginBottom: 8 }}>Auto-calculated — confirm below</p>
+                    <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Auto-calculated — confirm below</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       <button
                         onClick={() => setBonusAwards((p) => ({ ...p, mostZonesClaimed: null }))}
-                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === null ? 'rgba(255,68,67,0.12)' : 'rgba(32,33,34,0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === null ? 'rgba(255,68,67,0.3)' : '#E6E5DA'}`, color: bonusAwards.mostZonesClaimed === null ? '#FF4443' : '#6F6E66' }}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === null ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === null ? 'rgba(var(--red-rgb), 0.3)' : 'var(--line)'}`, color: bonusAwards.mostZonesClaimed === null ? 'var(--red)' : 'var(--ink-faint)' }}
                       >
                         None
                       </button>
@@ -1127,7 +1127,7 @@ const handleApprove = async (sub: SubmissionData) => {
                         <button
                           key={s.teamId}
                           onClick={() => setBonusAwards((p) => ({ ...p, mostZonesClaimed: s.teamId }))}
-                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === s.teamId ? `${s.teamColor}20` : 'rgba(32,33,34,0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor + '50' : '#E6E5DA'}`, color: bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor : '#5F5E57' }}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesClaimed === s.teamId ? `${s.teamColor}20` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor + '50' : 'var(--line)'}`, color: bonusAwards.mostZonesClaimed === s.teamId ? s.teamColor : 'var(--ink-muted)' }}
                         >
                           {s.teamName} ({s.zonesClaimedCount})
                         </button>
@@ -1144,16 +1144,16 @@ const handleApprove = async (sub: SubmissionData) => {
                       setBonusAwards((p) => ({ ...p, sideQuests: { ...(p.sideQuests ?? {}), [quest.id]: teamId } }))
                     }
                     return (
-                      <div key={quest.id} style={{ background: 'rgba(230,125,209,0.04)', border: '1px solid rgba(230,125,209,0.25)', borderRadius: 10, padding: '12px 14px' }}>
-                        <p style={{ fontSize: '0.75rem', color: '#4A4944', fontWeight: 600, marginBottom: 4 }}>
+                      <div key={quest.id} style={{ background: 'rgba(var(--pink-rgb), 0.04)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 10, padding: '12px 14px' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                           🧩 {quest.title}
-                          <span style={{ color: '#FFD626', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
+                          <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
                         </p>
-                        <p style={{ fontSize: '0.68rem', color: '#8F8E85', marginBottom: 8 }}>Most approved photo submissions — confirm below</p>
+                        <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Most approved photo submissions — confirm below</p>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                           <button
                             onClick={() => pick(null)}
-                            style={{ ...smallBtnStyle, background: picked === null ? 'rgba(255,68,67,0.12)' : 'rgba(32,33,34,0.03)', border: `1px solid ${picked === null ? 'rgba(255,68,67,0.3)' : '#E6E5DA'}`, color: picked === null ? '#FF4443' : '#6F6E66' }}
+                            style={{ ...smallBtnStyle, background: picked === null ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${picked === null ? 'rgba(var(--red-rgb), 0.3)' : 'var(--line)'}`, color: picked === null ? 'var(--red)' : 'var(--ink-faint)' }}
                           >
                             None
                           </button>
@@ -1161,7 +1161,7 @@ const handleApprove = async (sub: SubmissionData) => {
                             <button
                               key={t.id}
                               onClick={() => pick(t.id)}
-                              style={{ ...smallBtnStyle, background: picked === t.id ? `${t.color}20` : 'rgba(32,33,34,0.03)', border: `1px solid ${picked === t.id ? t.color + '50' : '#E6E5DA'}`, color: picked === t.id ? t.color : '#5F5E57' }}
+                              style={{ ...smallBtnStyle, background: picked === t.id ? `${t.color}20` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${picked === t.id ? t.color + '50' : 'var(--line)'}`, color: picked === t.id ? t.color : 'var(--ink-muted)' }}
                             >
                               {t.name} ({byTeam?.get(t.id) ?? 0})
                             </button>
@@ -1172,16 +1172,16 @@ const handleApprove = async (sub: SubmissionData) => {
                   })}
 
                   {/* Most Zones With Challenges */}
-                  <div style={{ background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ fontSize: '0.75rem', color: '#4A4944', fontWeight: 600, marginBottom: 4 }}>
+                  <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                       🏆 Most Zones Explored
-                      <span style={{ color: '#FFD626', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
+                      <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
                     </p>
-                    <p style={{ fontSize: '0.68rem', color: '#8F8E85', marginBottom: 8 }}>Zones with at least 1 challenge completed</p>
+                    <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Zones with at least 1 challenge completed</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       <button
                         onClick={() => setBonusAwards((p) => ({ ...p, mostZonesWithChallenges: null }))}
-                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === null ? 'rgba(255,68,67,0.12)' : 'rgba(32,33,34,0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === null ? 'rgba(255,68,67,0.3)' : '#E6E5DA'}`, color: bonusAwards.mostZonesWithChallenges === null ? '#FF4443' : '#6F6E66' }}
+                        style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === null ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === null ? 'rgba(var(--red-rgb), 0.3)' : 'var(--line)'}`, color: bonusAwards.mostZonesWithChallenges === null ? 'var(--red)' : 'var(--ink-faint)' }}
                       >
                         None
                       </button>
@@ -1189,7 +1189,7 @@ const handleApprove = async (sub: SubmissionData) => {
                         <button
                           key={s.teamId}
                           onClick={() => setBonusAwards((p) => ({ ...p, mostZonesWithChallenges: s.teamId }))}
-                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === s.teamId ? `${s.teamColor}20` : 'rgba(32,33,34,0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor + '50' : '#E6E5DA'}`, color: bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor : '#5F5E57' }}
+                          style={{ ...smallBtnStyle, background: bonusAwards.mostZonesWithChallenges === s.teamId ? `${s.teamColor}20` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor + '50' : 'var(--line)'}`, color: bonusAwards.mostZonesWithChallenges === s.teamId ? s.teamColor : 'var(--ink-muted)' }}
                         >
                           {s.teamName} ({s.zonesWithChallengesCount})
                         </button>
@@ -1203,11 +1203,11 @@ const handleApprove = async (sub: SubmissionData) => {
                   <button
                     onClick={handleApplyBonuses}
                     disabled={applyingBonuses}
-                    style={{ background: applyingBonuses ? '#E6E5DA' : 'rgba(255,214,38,0.15)', border: '1px solid rgba(255,214,38,0.3)', color: applyingBonuses ? '#8F8E85' : '#FFD626', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: applyingBonuses ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                    style={{ background: applyingBonuses ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: applyingBonuses ? 'var(--ink-ghost)' : 'var(--marigold)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: applyingBonuses ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                   >
                     {applyingBonuses ? 'Applying...' : 'Apply Side Quest Points'}
                   </button>
-                  <p style={{ fontSize: '0.72rem', color: '#6F6E66' }}>One-time. Points are permanent.</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)' }}>One-time. Points are permanent.</p>
                 </div>
               </div>
             )}
@@ -1221,19 +1221,19 @@ const handleApprove = async (sub: SubmissionData) => {
           (s) => s.highlight === true && s.status === 'approved' && ZIP_MEDIA_TYPES.includes(s.media_type)
         ).length
         return (
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #E6E5DA', background: 'rgba(32,33,34,0.01)', flexShrink: 0 }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: 'rgba(var(--ink-rgb), 0.01)', flexShrink: 0 }}>
             <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
               <div>
-                <p style={{ fontSize: '0.7rem', color: '#FFD626', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>
+                <p style={{ fontSize: '0.7rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>
                   ⭐ Highlight Reel
                 </p>
-                <p style={{ fontSize: '0.82rem', color: '#55544E', margin: 0 }}>
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>
                   {flaggedCount > 0
                     ? `${flaggedCount} flagged assets${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
                     : 'No assets flagged yet. Star approved assets to include them.'}
                 </p>
                 {zipProgress && (
-                  <p style={{ fontSize: '0.74rem', color: '#28B770', marginTop: 6, fontFamily: "'Martian Mono', monospace" }}>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--green)', marginTop: 6, fontFamily: "'Martian Mono', monospace" }}>
                     {zipProgress}
                   </p>
                 )}
@@ -1241,7 +1241,7 @@ const handleApprove = async (sub: SubmissionData) => {
               <button
                 onClick={handlePullHighlights}
                 disabled={zipBusy || flaggedCount === 0}
-                style={{ background: zipBusy || flaggedCount === 0 ? '#E6E5DA' : 'rgba(255,214,38,0.15)', border: '1px solid rgba(255,214,38,0.3)', color: zipBusy || flaggedCount === 0 ? '#8F8E85' : '#FFD626', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: zipBusy ? 'wait' : flaggedCount === 0 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                style={{ background: zipBusy || flaggedCount === 0 ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: zipBusy || flaggedCount === 0 ? 'var(--ink-ghost)' : 'var(--marigold)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: zipBusy ? 'wait' : flaggedCount === 0 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               >
                 {zipBusy ? 'Working…' : '⬇ Pull All Highlights'}
               </button>
@@ -1252,9 +1252,9 @@ const handleApprove = async (sub: SubmissionData) => {
 
       {/* LATE-JOIN REQUESTS — shown on every tab so they're never missed */}
       {joinRequests.length > 0 && (
-        <div style={{ background: 'rgba(255,214,38,0.08)', borderBottom: '1px solid rgba(255,214,38,0.3)', padding: '12px 20px', flexShrink: 0 }}>
+        <div style={{ background: 'rgba(var(--marigold-rgb), 0.08)', borderBottom: '1px solid rgba(var(--marigold-rgb), 0.3)', padding: '12px 20px', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <p style={{ color: '#FFD626', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 10px' }}>
+            <p style={{ color: 'var(--marigold)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 10px' }}>
               🙋 {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} asking to join
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1269,7 +1269,7 @@ const handleApprove = async (sub: SubmissionData) => {
                       value={pick}
                       onChange={(e) => setJoinTeamPick((prev) => ({ ...prev, [r.uid]: e.target.value }))}
                       disabled={busy}
-                      style={{ flex: 1, minWidth: 160, background: '#FFFFFF', color: '#2A2B2C', border: '1px solid #D6D5CA', borderRadius: 8, padding: '8px 10px', fontFamily: 'inherit', fontSize: '0.85rem' }}
+                      style={{ flex: 1, minWidth: 160, background: 'var(--surface)', color: 'var(--ink-soft)', border: '1px solid var(--line-strong)', borderRadius: 8, padding: '8px 10px', fontFamily: 'inherit', fontSize: '0.85rem' }}
                     >
                       {teams.map((t) => (
                         <option key={t.id} value={t.id}>
@@ -1280,14 +1280,14 @@ const handleApprove = async (sub: SubmissionData) => {
                     <button
                       onClick={() => handleApproveJoin(r.uid, r.name)}
                       disabled={busy || !pick}
-                      style={{ background: '#28B770', color: '#FDFFF1', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                      style={{ background: 'var(--green)', color: 'var(--paper)', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                     >
                       {busy ? '…' : 'Approve'}
                     </button>
                     <button
                       onClick={() => handleDenyJoin(r.uid)}
                       disabled={busy}
-                      style={{ background: 'none', color: '#FF4443', border: '1px solid rgba(255,68,67,0.4)', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                      style={{ background: 'none', color: 'var(--red)', border: '1px solid rgba(var(--red-rgb), 0.4)', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: '0.85rem', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                     >
                       Deny
                     </button>
@@ -1309,15 +1309,15 @@ const handleApprove = async (sub: SubmissionData) => {
             {/* SIDE QUEST REVIEW — separate from challenge submissions */}
             {(game.settings?.side_quests?.length ?? 0) > 0 && (
               <div style={{
-                background: 'rgba(230,125,209,0.04)',
-                border: '1px solid rgba(230,125,209,0.25)',
+                background: 'rgba(var(--pink-rgb), 0.04)',
+                border: '1px solid rgba(var(--pink-rgb), 0.25)',
                 borderRadius: 12, padding: 16, marginBottom: 24,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <p style={{ fontSize: '0.72rem', color: '#E67DD1', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0 }}>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--pink)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0 }}>
                     🧩 Side Quests
                     {sideQuestSubs.filter((s) => s.status === 'pending').length > 0 && (
-                      <span style={{ background: '#E67DD1', color: '#202122', fontSize: '0.65rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10, marginLeft: 8 }}>
+                      <span style={{ background: 'var(--pink)', color: 'var(--ink)', fontSize: '0.65rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10, marginLeft: 8 }}>
                         {sideQuestSubs.filter((s) => s.status === 'pending').length} pending
                       </span>
                     )}
@@ -1325,13 +1325,13 @@ const handleApprove = async (sub: SubmissionData) => {
                   {sideQuestSubs.length > 0 && (
                     <button
                       onClick={exportSideQuestCsv}
-                      style={{ background: 'none', border: '1px solid rgba(230,125,209,0.35)', color: '#E67DD1', borderRadius: 8, padding: '5px 12px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      style={{ background: 'none', border: '1px solid rgba(var(--pink-rgb), 0.35)', color: 'var(--pink)', borderRadius: 8, padding: '5px 12px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
                       ⬇ Export CSV
                     </button>
                   )}
                 </div>
-                <p style={{ color: '#5F5E57', fontSize: '0.75rem', margin: '0 0 12px' }}>
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', margin: '0 0 12px' }}>
                   Approvals count toward the running tally only — points come from the post-game bonus.
                 </p>
 
@@ -1339,8 +1339,8 @@ const handleApprove = async (sub: SubmissionData) => {
                 {(game.settings?.side_quests ?? []).map((quest: SideQuest) => {
                   const byTeam = sideQuestTallies.get(quest.id)
                   return (
-                    <p key={quest.id} style={{ margin: '0 0 6px', fontSize: '0.8rem', color: '#4A4944' }}>
-                      <strong style={{ color: '#2A2B2C' }}>{quest.title}</strong>
+                    <p key={quest.id} style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+                      <strong style={{ color: 'var(--ink-soft)' }}>{quest.title}</strong>
                       {' — '}
                       {byTeam && byTeam.size > 0
                         ? teams
@@ -1359,16 +1359,16 @@ const handleApprove = async (sub: SubmissionData) => {
                       const team = teams.find((t) => t.id === s.team_id)
                       const busy = sqProcessing === s.id
                       return (
-                        <div key={s.id} style={{ background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 10, overflow: 'hidden' }}>
+                        <div key={s.id} style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
                           <a href={s.media_url} target="_blank" rel="noreferrer">
-                            <img src={s.media_url} alt="" loading="lazy" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', background: '#FFFFFF' }} />
+                            <img src={s.media_url} alt="" loading="lazy" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', background: 'var(--surface)' }} />
                           </a>
                           <div style={{ padding: '8px 10px' }}>
-                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#2A2B2C', fontWeight: 600 }}>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--ink-soft)', fontWeight: 600 }}>
                               {(s as unknown as { quest_title?: string }).quest_title ?? s.quest_id}
                             </p>
-                            <p style={{ margin: '2px 0 8px', fontSize: '0.7rem', color: '#55544E' }}>
-                              <span style={{ color: team?.color ?? '#55544E' }}>{team?.name ?? s.team_id}</span>
+                            <p style={{ margin: '2px 0 8px', fontSize: '0.7rem', color: 'var(--ink-muted)' }}>
+                              <span style={{ color: team?.color ?? 'var(--ink-muted)' }}>{team?.name ?? s.team_id}</span>
                               {' · '}{s.submitter_name}
                               {s.gps_lat != null && s.gps_lng != null && (
                                 <>
@@ -1376,7 +1376,7 @@ const handleApprove = async (sub: SubmissionData) => {
                                   <a
                                     href={`https://www.google.com/maps?q=${s.gps_lat},${s.gps_lng}`}
                                     target="_blank" rel="noreferrer"
-                                    style={{ color: '#1EB2F2', textDecoration: 'none' }}
+                                    style={{ color: 'var(--blue)', textDecoration: 'none' }}
                                   >
                                     📍 GPS
                                   </a>
@@ -1387,14 +1387,14 @@ const handleApprove = async (sub: SubmissionData) => {
                               <button
                                 onClick={() => handleReviewSideQuest(s.id, 'approved')}
                                 disabled={busy}
-                                style={{ flex: 1, background: 'rgba(40,183,112,0.15)', border: '1px solid rgba(40,183,112,0.3)', color: '#28B770', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                                style={{ flex: 1, background: 'rgba(var(--green-rgb), 0.15)', border: '1px solid rgba(var(--green-rgb), 0.3)', color: 'var(--green)', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                               >
                                 ✓ Approve
                               </button>
                               <button
                                 onClick={() => handleReviewSideQuest(s.id, 'rejected')}
                                 disabled={busy}
-                                style={{ flex: 1, background: 'rgba(255,68,67,0.1)', border: '1px solid rgba(255,68,67,0.3)', color: '#FF4443', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                                style={{ flex: 1, background: 'rgba(var(--red-rgb), 0.1)', border: '1px solid rgba(var(--red-rgb), 0.3)', color: 'var(--red)', borderRadius: 6, padding: '6px 0', fontSize: '0.72rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                               >
                                 ✕ Reject
                               </button>
@@ -1410,22 +1410,22 @@ const handleApprove = async (sub: SubmissionData) => {
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {([
-                { id: 'pending', label: `Pending (${pendingCount})`, color: '#FFD626' },
-                { id: 'approved', label: 'Approved', color: '#28B770' },
-                { id: 'rejected', label: 'Rejected', color: '#FF4443' },
-                { id: 'all', label: 'All', color: '#55544E' },
+                { id: 'pending', label: `Pending (${pendingCount})`, color: 'var(--marigold)' },
+                { id: 'approved', label: 'Approved', color: 'var(--green)' },
+                { id: 'rejected', label: 'Rejected', color: 'var(--red)' },
+                { id: 'all', label: 'All', color: 'var(--ink-muted)' },
               ] as const).map((f) => (
-                <button key={f.id} onClick={() => setFilter(f.id)} style={{ background: filter === f.id ? `${f.color}15` : 'rgba(32,33,34,0.03)', border: `1px solid ${filter === f.id ? `${f.color}40` : '#E6E5DA'}`, color: filter === f.id ? f.color : '#6F6E66', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <button key={f.id} onClick={() => setFilter(f.id)} style={{ background: filter === f.id ? `${f.color}15` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${filter === f.id ? `${f.color}40` : 'var(--line)'}`, color: filter === f.id ? f.color : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {f.label}
                 </button>
               ))}
             </div>
 
             {filteredSubmissions.length === 0 ? (
-              <div style={{ textAlign: 'center', marginTop: 80, color: '#A3A298' }}>
+              <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-ghost)' }}>
                 <p style={{ fontSize: '2rem', marginBottom: 12 }}>{filter === 'pending' ? '✅' : '📋'}</p>
-                <p style={{ color: '#6F6E66', fontWeight: 600 }}>{filter === 'pending' ? 'No pending submissions' : `No ${filter} submissions`}</p>
-                <p style={{ color: '#A3A298', fontSize: '0.82rem', marginTop: 6 }}>{filter === 'pending' ? "You're all caught up!" : 'Try switching the filter.'}</p>
+                <p style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>{filter === 'pending' ? 'No pending submissions' : `No ${filter} submissions`}</p>
+                <p style={{ color: 'var(--ink-ghost)', fontSize: '0.82rem', marginTop: 6 }}>{filter === 'pending' ? "You're all caught up!" : 'Try switching the filter.'}</p>
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 16 }}>
@@ -1434,15 +1434,15 @@ const handleApprove = async (sub: SubmissionData) => {
                   const team = getTeam(sub.team_id)
                   const review = getReviewState(sub.id)
                   const isProcessing = processing === sub.id
-                  const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || '#FFD626'
+                  const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || 'var(--marigold)'
                   const basePts = (game?.settings as any)?.[`points_${challenge?.difficulty || 'medium'}`] ?? ({ easy: 1, medium: 2, hard: 3 }[challenge?.difficulty || 'medium'] ?? 2)
                   const gpsCheck = checkGpsProximity(sub)
 
                   return (
-                    <div key={sub.id} style={{ background: sub.status === 'pending' ? 'rgba(255,214,38,0.02)' : 'rgba(32,33,34,0.02)', border: `1px solid ${sub.status === 'pending' ? 'rgba(255,214,38,0.15)' : '#E6E5DA'}`, borderRadius: 14, padding: 20, opacity: isProcessing ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                    <div key={sub.id} style={{ background: sub.status === 'pending' ? 'rgba(var(--marigold-rgb), 0.02)' : 'rgba(var(--ink-rgb), 0.02)', border: `1px solid ${sub.status === 'pending' ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)'}`, borderRadius: 14, padding: 20, opacity: isProcessing ? 0.6 : 1, transition: 'opacity 0.2s' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: 3, background: team?.color || '#6F6E66' }} />
+                          <div style={{ width: 10, height: 10, borderRadius: 3, background: team?.color || 'var(--ink-faint)' }} />
                           <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{team?.name || sub.team_id}</span>
                           <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${diffColor}15`, color: diffColor }}>
                             {challenge?.difficulty?.toUpperCase() || '?'} · {basePts}pt
@@ -1454,12 +1454,12 @@ const handleApprove = async (sub: SubmissionData) => {
                               <button
                                 onClick={() => handleToggleHighlight(sub)}
                                 title={sub.highlight ? 'Unstar this highlight' : 'Star as a highlight (included in the post-game pull)'}
-                                style={{ background: sub.highlight ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)', border: `1px solid ${sub.highlight ? 'rgba(255,214,38,0.4)' : '#E6E5DA'}`, color: sub.highlight ? '#FFD626' : '#6F6E66', padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                                style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold)' : 'var(--ink-faint)', padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                               >
                                 {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
                             )}
-                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: sub.status === 'approved' ? 'rgba(40,183,112,0.12)' : 'rgba(255,68,67,0.12)', color: sub.status === 'approved' ? '#28B770' : '#FF4443' }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: sub.status === 'approved' ? 'rgba(var(--green-rgb), 0.12)' : 'rgba(var(--red-rgb), 0.12)', color: sub.status === 'approved' ? 'var(--green)' : 'var(--red)' }}>
                               {sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
                             </span>
                           </div>
@@ -1470,51 +1470,51 @@ const handleApprove = async (sub: SubmissionData) => {
                       {sub.resolved_task ? (
                         <div style={{ marginBottom: 14 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: 'rgba(230,125,209,0.2)', color: '#E67DD1', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: 'rgba(var(--pink-rgb), 0.2)', color: 'var(--pink)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
                               🎲 CYOA
                             </span>
                             {sub.step_choices && sub.step_choices.length > 0 && (
-                              <span style={{ fontSize: '0.72rem', color: '#5F5E57' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
                                 locked: {sub.step_choices.join(' · ')}
                               </span>
                             )}
                           </div>
-                          <p style={{ color: '#202122', fontSize: '0.9rem', lineHeight: 1.6, fontWeight: 600, background: 'rgba(230,125,209,0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(230,125,209,0.2)' }}>
+                          <p style={{ color: 'var(--ink)', fontSize: '0.9rem', lineHeight: 1.6, fontWeight: 600, background: 'rgba(var(--pink-rgb), 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(var(--pink-rgb), 0.2)' }}>
                             {sub.resolved_task}
                           </p>
                         </div>
                       ) : (
-                        <p style={{ color: '#3A3935', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14, background: 'rgba(32,33,34,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid #FFFFFF' }}>
+                        <p style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 14, background: 'rgba(var(--ink-rgb), 0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--surface)' }}>
                           {challenge?.description || `Challenge: ${sub.challenge_id}`}
                         </p>
                       )}
 
                       <div style={{ marginBottom: 14 }}>
                         {sub.media_type === 'video' ? (
-                          <video src={sub.media_url} controls style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: '#FFFFFF', objectFit: 'contain' }} />
+                          <video src={sub.media_url} controls style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: 'var(--surface)', objectFit: 'contain' }} />
                         ) : sub.media_type === 'audio' ? (
-                          <div style={{ background: '#FFFFFF', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+                          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
                             <span style={{ fontSize: '1.5rem' }}>🎙️</span>
                             <audio src={sub.media_url} controls style={{ width: '100%', marginTop: 8 }} />
                           </div>
                         ) : (
-                          <img src={sub.media_url} alt="Submission" style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: '#FFFFFF', objectFit: 'contain' }} />
+                          <img src={sub.media_url} alt="Submission" style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: 'var(--surface)', objectFit: 'contain' }} />
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: '#6F6E66', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--ink-faint)', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
                         {sub.zone_id && <span>📍 {sub.zone_id.replace('zone_district_', 'D')}</span>}
-                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: '#FFD626' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
-                        {!sub.zone_id && !sub.gps_lat && <span style={{ color: '#FF4443' }}>⚠ No zone · No GPS</span>}
+                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: 'var(--marigold)' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
+                        {!sub.zone_id && !sub.gps_lat && <span style={{ color: 'var(--red)' }}>⚠ No zone · No GPS</span>}
                         {sub.submitted_at && <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>}
-                        {gpsCheck === 'inside' && <span style={{ color: '#28B770', fontWeight: 600 }}>✓ GPS in zone</span>}
-                        {gpsCheck === 'outside' && <span style={{ color: '#FF4443', fontWeight: 700 }}>⚠ GPS OUTSIDE zone</span>}
+                        {gpsCheck === 'inside' && <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ GPS in zone</span>}
+                        {gpsCheck === 'outside' && <span style={{ color: 'var(--red)', fontWeight: 700 }}>⚠ GPS OUTSIDE zone</span>}
                       </div>
 
                       {gpsCheck === 'outside' && sub.status === 'pending' && (
-                        <div style={{ background: 'rgba(255,68,67,0.06)', border: '1px solid rgba(255,68,67,0.2)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.2)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span>🚩</span>
-                          <p style={{ color: '#FF4443', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}</p>
+                          <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}</p>
                         </div>
                       )}
 
@@ -1522,12 +1522,12 @@ const handleApprove = async (sub: SubmissionData) => {
                         <div>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                             {sub.attempted_tier2 && challenge?.tier2 && (
-                              <button onClick={() => updateReviewState(sub.id, { tier2Approved: !review.tier2Approved })} style={{ background: review.tier2Approved ? 'rgba(230,125,209,0.12)' : 'rgba(32,33,34,0.03)', border: `1px solid ${review.tier2Approved ? 'rgba(230,125,209,0.3)' : '#E6E5DA'}`, color: review.tier2Approved ? '#E67DD1' : '#5F5E57', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <button onClick={() => updateReviewState(sub.id, { tier2Approved: !review.tier2Approved })} style={{ background: review.tier2Approved ? 'rgba(var(--pink-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${review.tier2Approved ? 'rgba(var(--pink-rgb), 0.3)' : 'var(--line)'}`, color: review.tier2Approved ? 'var(--pink)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 {review.tier2Approved ? '✓' : '○'} Tier 2 (+{challenge.tier2.bonus_points}pt)
                               </button>
                             )}
                             {ZIP_MEDIA_TYPES.includes(sub.media_type) && (
-                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)', border: `1px solid ${sub.highlight ? 'rgba(255,214,38,0.4)' : '#E6E5DA'}`, color: sub.highlight ? '#FFD626' : '#5F5E57', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
                             )}
@@ -1537,26 +1537,26 @@ const handleApprove = async (sub: SubmissionData) => {
                             const tierPts = sub.attempted_tier2 && review.tier2Approved && challenge?.tier2 ? challenge.tier2.bonus_points : 0
                             const total = basePts + tierPts
                             return (
-                              <div style={{ background: 'rgba(32,33,34,0.03)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#55544E' }}>{basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}</span>
-                                <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1rem', fontWeight: 700, color: '#FFD626' }}>= {total}pt</span>
+                              <div style={{ background: 'rgba(var(--ink-rgb), 0.03)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}</span>
+                                <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1rem', fontWeight: 700, color: 'var(--marigold)' }}>= {total}pt</span>
                               </div>
                             )
                           })()}
 
-                          <input type="text" placeholder="Rejection reason (required to reject)" value={review.notes} onChange={(e) => updateReviewState(sub.id, { notes: e.target.value })} style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E6E5DA', borderRadius: 8, padding: '10px 14px', color: '#3A3935', fontSize: '0.82rem', fontFamily: 'inherit', marginBottom: 10, boxSizing: 'border-box' }} />
+                          <input type="text" placeholder="Rejection reason (required to reject)" value={review.notes} onChange={(e) => updateReviewState(sub.id, { notes: e.target.value })} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', color: 'var(--ink-soft)', fontSize: '0.82rem', fontFamily: 'inherit', marginBottom: 10, boxSizing: 'border-box' }} />
                           <div style={{ display: 'flex', gap: 10 }}>
-                            <button onClick={() => handleApprove(sub)} disabled={isProcessing} style={{ flex: 2, background: 'rgba(40,183,112,0.15)', border: '1px solid rgba(40,183,112,0.3)', color: '#28B770', padding: '12px', borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                            <button onClick={() => handleApprove(sub)} disabled={isProcessing} style={{ flex: 2, background: 'rgba(var(--green-rgb), 0.15)', border: '1px solid rgba(var(--green-rgb), 0.3)', color: 'var(--green)', padding: '12px', borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                               {isProcessing ? 'Processing...' : '✓ Approve'}
                             </button>
-                            <button onClick={() => handleReject(sub)} disabled={isProcessing} style={{ flex: 1, background: 'rgba(255,68,67,0.08)', border: '1px solid rgba(255,68,67,0.2)', color: '#FF4443', padding: '12px', borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                            <button onClick={() => handleReject(sub)} disabled={isProcessing} style={{ flex: 1, background: 'rgba(var(--red-rgb), 0.08)', border: '1px solid rgba(var(--red-rgb), 0.2)', color: 'var(--red)', padding: '12px', borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                               ✗ Reject
                             </button>
                           </div>
                         </div>
                       )}
                       {sub.status === 'rejected' && sub.gm_notes && (
-                        <p style={{ color: '#FF4443', fontSize: '0.82rem', marginTop: 10, fontStyle: 'italic' }}>GM: {sub.gm_notes}</p>
+                        <p style={{ color: 'var(--red)', fontSize: '0.82rem', marginTop: 10, fontStyle: 'italic' }}>GM: {sub.gm_notes}</p>
                       )}
                     </div>
                   )
@@ -1576,64 +1576,64 @@ const handleApprove = async (sub: SubmissionData) => {
               <p style={sectionLabel}>Scoreboard</p>
               <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
                 {scoreboard.map((team, rank) => (
-                  <div key={team.id} style={{ background: 'rgba(32,33,34,0.02)', border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : '#E6E5DA'}`, borderRadius: 12, padding: '14px 16px' }}>
+                  <div key={team.id} style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: `1px solid ${rank === 0 && team.total_points > 0 ? `${team.color}40` : 'var(--line)'}`, borderRadius: 12, padding: '14px 16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
                         <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{team.name}</span>
                       </div>
-                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.1rem', fontWeight: 700, color: team.total_points > 0 ? '#202122' : '#A3A298' }}>{team.total_points}</span>
+                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.1rem', fontWeight: 700, color: team.total_points > 0 ? 'var(--ink)' : 'var(--ink-ghost)' }}>{team.total_points}</span>
                     </div>
                     {team.zoneBreakdown.length > 0 ? (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {team.zoneBreakdown.map((zs) => {
                           const owned = zs.status === 'claimed' || zs.status === 'locked'
                           return (
-                          <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: owned ? `${team.color}20` : 'rgba(32,33,34,0.04)', border: `1px solid ${owned ? `${team.color}40` : '#E6E5DA'}`, color: owned ? team.color : '#6F6E66', fontWeight: 600, fontFamily: "'Martian Mono', monospace" }}>
+                          <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: owned ? `${team.color}20` : 'rgba(var(--ink-rgb), 0.04)', border: `1px solid ${owned ? `${team.color}40` : 'var(--line)'}`, color: owned ? team.color : 'var(--ink-faint)', fontWeight: 600, fontFamily: "'Martian Mono', monospace" }}>
                             {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'locked' ? ' 🔒' : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                           )
                         })}
                       </div>
-                    ) : <p style={{ fontSize: '0.75rem', color: '#A3A298', fontStyle: 'italic' }}>No points yet</p>}
+                    ) : <p style={{ fontSize: '0.75rem', color: 'var(--ink-ghost)', fontStyle: 'italic' }}>No points yet</p>}
                   </div>
                 ))}
               </div>
 
               <p style={sectionLabel}>Live Map</p>
-              <div style={{ height: 380, borderRadius: 12, overflow: 'hidden', border: '1px solid #E6E5DA', background: '#FFFFFF', marginBottom: 28 }}>
+              <div style={{ height: 380, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--surface)', marginBottom: 28 }}>
                 {activeZones.length > 0
                   ? <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} closedZones={game.closed_zones ?? []} playerLocations={playerLocations} showGeolocate={false} />
-                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#A3A298', fontSize: '0.78rem' }}>No zone data loaded</div>}
+                  : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-ghost)', fontSize: '0.78rem' }}>No zone data loaded</div>}
               </div>
 
               <p style={sectionLabel}>Team Hands</p>
               <div style={{ display: 'grid', gap: 16, marginBottom: 40 }}>
                 {teams.map((team) => (
-                  <div key={team.id} style={{ background: 'rgba(32,33,34,0.02)', border: `1px solid ${team.color}25`, borderRadius: 12, padding: '14px 16px' }}>
+                  <div key={team.id} style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: `1px solid ${team.color}25`, borderRadius: 12, padding: '14px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
                       <span style={{ fontWeight: 700, fontSize: '0.88rem', color: team.color }}>{team.name}</span>
-                      <span style={{ fontSize: '0.72rem', color: '#8F8E85' }}>{team.hand?.length ?? 0} cards</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--ink-ghost)' }}>{team.hand?.length ?? 0} cards</span>
                     </div>
                     {team.hand && team.hand.length > 0 ? (
                       <div style={{ display: 'grid', gap: 8 }}>
                         {team.hand.map((challengeId) => {
                           const ch = challenges.get(challengeId)
                           if (!ch) return <span key={challengeId} />
-                          const diffColor = DIFFICULTY_COLORS[ch.difficulty] || '#55544E'
+                          const diffColor = DIFFICULTY_COLORS[ch.difficulty] || 'var(--ink-muted)'
                           return (
-                            <div key={challengeId} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 8 }}>
+                            <div key={challengeId} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 8 }}>
                               <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${diffColor}15`, color: diffColor, flexShrink: 0, marginTop: 2 }}>
                                 {ch.difficulty?.toUpperCase()}
                               </span>
-                              <p style={{ color: '#3A3935', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>{ch.description}</p>
+                              <p style={{ color: 'var(--ink-soft)', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>{ch.description}</p>
                             </div>
                           )
                         })}
                       </div>
                     ) : (
-                      <p style={{ color: '#A3A298', fontSize: '0.78rem', fontStyle: 'italic' }}>No cards in hand</p>
+                      <p style={{ color: 'var(--ink-ghost)', fontSize: '0.78rem', fontStyle: 'italic' }}>No cards in hand</p>
                     )}
                   </div>
                 ))}
@@ -1648,13 +1648,13 @@ const handleApprove = async (sub: SubmissionData) => {
                   const owner = zoneOwnership.get(zoneId)
                   const isClosed = (game.closed_zones ?? []).includes(zoneId)
                   return (
-                    <div key={zoneId} style={{ background: isClosed ? 'rgba(32,33,34,0.01)' : owner ? `${owner.teamColor}08` : 'rgba(32,33,34,0.02)', border: `1px solid ${isClosed ? '#D6D5CA' : owner ? `${owner.teamColor}30` : '#E6E5DA'}`, borderRadius: 10, padding: '10px 12px', opacity: isClosed ? 0.6 : 1 }}>
+                    <div key={zoneId} style={{ background: isClosed ? 'rgba(var(--ink-rgb), 0.01)' : owner ? `${owner.teamColor}08` : 'rgba(var(--ink-rgb), 0.02)', border: `1px solid ${isClosed ? 'var(--line-strong)' : owner ? `${owner.teamColor}30` : 'var(--line)'}`, borderRadius: 10, padding: '10px 12px', opacity: isClosed ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: owner || isClosed ? 6 : 0 }}>
-                        <span style={{ fontSize: '0.78rem', color: owner ? '#3A3935' : '#8F8E85', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontSize: '0.78rem', color: owner ? 'var(--ink-soft)' : 'var(--ink-ghost)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {allZoneData.find((z: any) => z.id === zoneId)?.name ?? formatZoneLabel(zoneId)}
                         </span>
                         {isClosed && (
-                          <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(32,33,34,0.05)', border: '1px solid #D6D5CA', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1 }}>
+                          <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line-strong)', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1 }}>
                             Closed
                           </span>
                         )}
@@ -1666,14 +1666,14 @@ const handleApprove = async (sub: SubmissionData) => {
                             <span style={{ fontSize: '0.75rem', color: owner.teamColor, fontWeight: 600 }}>{owner.teamName}</span>
                           </div>
                         ) : (
-                          <p style={{ fontSize: '0.72rem', color: '#A3A298', fontStyle: 'italic', margin: 0 }}>
+                          <p style={{ fontSize: '0.72rem', color: 'var(--ink-ghost)', fontStyle: 'italic', margin: 0 }}>
                             {isClosed ? '—' : 'Unclaimed'}
                           </p>
                         )}
                         {game.status === 'active' && (
                           <button
                             onClick={() => handleCloseZone(zoneId)}
-                            style={{ background: isClosed ? 'rgba(40,183,112,0.08)' : 'rgba(255,68,67,0.08)', border: `1px solid ${isClosed ? 'rgba(40,183,112,0.2)' : 'rgba(255,68,67,0.2)'}`, color: isClosed ? '#28B770' : '#FF4443', padding: '4px 8px', borderRadius: 6, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}
+                            style={{ background: isClosed ? 'rgba(var(--green-rgb), 0.08)' : 'rgba(var(--red-rgb), 0.08)', border: `1px solid ${isClosed ? 'rgba(var(--green-rgb), 0.2)' : 'rgba(var(--red-rgb), 0.2)'}`, color: isClosed ? 'var(--green)' : 'var(--red)', padding: '4px 8px', borderRadius: 6, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}
                           >
                             {isClosed ? '↺ Reopen' : '✕ Close'}
                           </button>
@@ -1694,18 +1694,18 @@ const handleApprove = async (sub: SubmissionData) => {
 
             {/* ── NEEDS YOUR ATTENTION queue ── */}
             <div style={{ marginBottom: 28 }}>
-              <p style={{ fontSize: '0.72rem', color: attentionQueue.length > 0 ? '#FF4443' : '#6F6E66', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <p style={{ fontSize: '0.72rem', color: attentionQueue.length > 0 ? 'var(--red)' : 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 🔔 Needs Your Attention
                 {attentionQueue.length > 0 && (
-                  <span style={{ background: '#FF4443', color: '#FDFFF1', fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10 }}>
+                  <span style={{ background: 'var(--red)', color: 'var(--paper)', fontSize: '0.68rem', fontWeight: 800, padding: '1px 7px', borderRadius: 10 }}>
                     {attentionQueue.length}
                   </span>
                 )}
               </p>
 
               {attentionQueue.length === 0 ? (
-                <div style={{ background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 12, padding: '16px 18px', textAlign: 'center' }}>
-                  <p style={{ color: '#6F6E66', fontSize: '0.85rem', margin: 0 }}>
+                <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 12, padding: '16px 18px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', margin: 0 }}>
                     No messages need your attention. Player “Message GM” pings show up here.
                   </p>
                 </div>
@@ -1713,7 +1713,7 @@ const handleApprove = async (sub: SubmissionData) => {
                 <div style={{ display: 'grid', gap: 8 }}>
                   {attentionQueue.map((msg) => {
                     const team = teams.find((t) => t.id === msg.team_id)
-                    const teamColor = team?.color || '#55544E'
+                    const teamColor = team?.color || 'var(--ink-muted)'
                     return (
                       <button
                         key={msg.id}
@@ -1733,14 +1733,14 @@ const handleApprove = async (sub: SubmissionData) => {
                           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: teamColor }}>
                             {team?.name ?? msg.team_id}
                           </span>
-                          <span style={{ fontSize: '0.72rem', color: '#55544E' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
                             · {msg.from_name || 'Player'}
                           </span>
-                          <span style={{ fontSize: '0.66rem', color: '#8F8E85', marginLeft: 'auto', fontFamily: "'Martian Mono', monospace" }}>
+                          <span style={{ fontSize: '0.66rem', color: 'var(--ink-ghost)', marginLeft: 'auto', fontFamily: "'Martian Mono', monospace" }}>
                             {msg.sent_at?.toDate ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                           </span>
                         </div>
-                        <p style={{ color: '#2A2B2C', fontSize: '0.86rem', lineHeight: 1.45, margin: 0 }}>
+                        <p style={{ color: 'var(--ink-soft)', fontSize: '0.86rem', lineHeight: 1.45, margin: 0 }}>
                           {msg.text}
                         </p>
                         <span style={{ fontSize: '0.68rem', color: teamColor, fontWeight: 600 }}>
@@ -1755,8 +1755,8 @@ const handleApprove = async (sub: SubmissionData) => {
 
             <p style={sectionLabel}>Broadcast to All Teams</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
-              <input type="text" value={broadcastInput} onChange={(e) => setBroadcastInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }} placeholder="📢 Message all teams at once..." style={{ flex: 1, background: '#FFFFFF', border: '1px solid #D6D5CA', borderRadius: 10, padding: '12px 14px', color: '#202122', fontSize: '0.88rem', fontFamily: 'inherit', outline: 'none' }} />
-              <button onClick={handleBroadcast} disabled={!broadcastInput.trim() || broadcasting} style={{ background: broadcastInput.trim() ? 'rgba(255,214,38,0.15)' : '#E6E5DA', border: '1px solid rgba(255,214,38,0.3)', color: '#FFD626', padding: '12px 18px', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: broadcasting ? 0.5 : 1 }}>
+              <input type="text" value={broadcastInput} onChange={(e) => setBroadcastInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }} placeholder="📢 Message all teams at once..." style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10, padding: '12px 14px', color: 'var(--ink)', fontSize: '0.88rem', fontFamily: 'inherit', outline: 'none' }} />
+              <button onClick={handleBroadcast} disabled={!broadcastInput.trim() || broadcasting} style={{ background: broadcastInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '12px 18px', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: broadcasting ? 0.5 : 1 }}>
                 {broadcasting ? '...' : 'Send All'}
               </button>
             </div>
@@ -1764,20 +1764,20 @@ const handleApprove = async (sub: SubmissionData) => {
       {/* Broadcast history — shows all gm_broadcast messages sent this game */}
       {chatMessages.filter((m) => m.channel_type === 'gm_broadcast').length > 0 && (
         <div style={{ marginBottom: 28 }}>
-          <p style={{ fontSize: '0.68rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 10 }}>
+          <p style={{ fontSize: '0.68rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 10 }}>
             Broadcast History
           </p>
-          <div style={{ background: '#FDFFF1', border: '1px solid #E6E5DA', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+          <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
             {chatMessages
               .filter((m) => m.channel_type === 'gm_broadcast')
               .map((msg) => (
                 <div key={msg.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '0.65rem', color: '#8F8E85', flexShrink: 0, marginTop: 3, fontFamily: "'Martian Mono', monospace" }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--ink-ghost)', flexShrink: 0, marginTop: 3, fontFamily: "'Martian Mono', monospace" }}>
                     {msg.sent_at?.toDate
                       ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       : ''}
                   </span>
-                  <p style={{ color: '#4A4944', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>
+                  <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.5, margin: 0 }}>
                     📢 {msg.text}
                   </p>
                 </div>
@@ -1793,16 +1793,16 @@ const handleApprove = async (sub: SubmissionData) => {
                 // attention queue for this team.
                 const unread = attentionQueue.filter((m) => m.team_id === t.id).length
                 return (
-                  <button key={t.id} onClick={() => setSelectedTeamId(selectedTeamId === t.id ? null : t.id)} style={{ background: selectedTeamId === t.id ? `${t.color}20` : 'rgba(32,33,34,0.03)', border: `1px solid ${selectedTeamId === t.id ? `${t.color}40` : '#E6E5DA'}`, color: selectedTeamId === t.id ? t.color : '#5F5E57', padding: '8px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative' }}>
+                  <button key={t.id} onClick={() => setSelectedTeamId(selectedTeamId === t.id ? null : t.id)} style={{ background: selectedTeamId === t.id ? `${t.color}20` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${selectedTeamId === t.id ? `${t.color}40` : 'var(--line)'}`, color: selectedTeamId === t.id ? t.color : 'var(--ink-muted)', padding: '8px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative' }}>
                     {t.name}
-                    {unread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: '#FF4443' }} />}
+                    {unread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'var(--red)' }} />}
                   </button>
                 )
               })}
             </div>
 
             {selectedTeamId ? (
-              <div style={{ background: '#FDFFF1', border: '1px solid #E6E5DA', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
                 <div style={{ maxHeight: 380, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {chatMessages
                     .filter((m) => m.team_id === selectedTeamId && (m.channel_type === 'team_internal' || m.channel_type === 'team_to_gm' || m.channel_type === 'gm_to_team'))
@@ -1811,26 +1811,26 @@ const handleApprove = async (sub: SubmissionData) => {
                       const isFlagged = msg.channel_type === 'team_to_gm'
                       return (
                         <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isFromGM ? 'flex-end' : 'flex-start' }}>
-                          <p style={{ fontSize: '0.65rem', color: isFlagged ? '#FFD626' : '#8F8E85', marginBottom: 4, fontWeight: isFlagged ? 700 : 400 }}>
+                          <p style={{ fontSize: '0.65rem', color: isFlagged ? 'var(--marigold)' : 'var(--ink-ghost)', marginBottom: 4, fontWeight: isFlagged ? 700 : 400 }}>
                             {isFromGM ? '🎮 You (GM)' : isFlagged ? `🔔 ${msg.from_name || 'Player'} → GM` : (msg.from_name || 'Player')}
                           </p>
-                          <div style={{ maxWidth: '80%', background: isFromGM ? 'rgba(255,214,38,0.08)' : isFlagged ? 'rgba(255,214,38,0.06)' : 'rgba(32,33,34,0.04)', border: `1px solid ${isFromGM ? 'rgba(255,214,38,0.2)' : isFlagged ? 'rgba(255,214,38,0.3)' : '#E6E5DA'}`, borderRadius: 10, padding: '10px 14px' }}>
-                            <p style={{ color: '#2A2B2C', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>{msg.text}</p>
+                          <div style={{ maxWidth: '80%', background: isFromGM ? 'rgba(var(--marigold-rgb), 0.08)' : isFlagged ? 'rgba(var(--marigold-rgb), 0.06)' : 'rgba(var(--ink-rgb), 0.04)', border: `1px solid ${isFromGM ? 'rgba(var(--marigold-rgb), 0.2)' : isFlagged ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`, borderRadius: 10, padding: '10px 14px' }}>
+                            <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 }}>{msg.text}</p>
                           </div>
                         </div>
                       )
                     })}
                   <div ref={chatBottomRef} />
                 </div>
-                <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid #E6E5DA', background: '#FDFFF1' }}>
-                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleGMReply() }} placeholder={`Reply to ${teams.find(t => t.id === selectedTeamId)?.name}...`} style={{ flex: 1, background: '#FFFFFF', border: '1px solid #E6E5DA', borderRadius: 8, padding: '10px 12px', color: '#202122', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' }} />
-                  <button onClick={handleGMReply} disabled={!chatInput.trim() || chatSending} style={{ background: chatInput.trim() ? 'rgba(255,214,38,0.15)' : '#E6E5DA', border: '1px solid rgba(255,214,38,0.3)', color: '#FFD626', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: chatSending ? 0.5 : 1 }}>↑</button>
+                <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--line)', background: 'var(--paper)' }}>
+                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleGMReply() }} placeholder={`Reply to ${teams.find(t => t.id === selectedTeamId)?.name}...`} style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', color: 'var(--ink)', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' }} />
+                  <button onClick={handleGMReply} disabled={!chatInput.trim() || chatSending} style={{ background: chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: chatSending ? 0.5 : 1 }}>↑</button>
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8F8E85' }}>
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--ink-ghost)' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
-                <p style={{ fontWeight: 600, color: '#6F6E66' }}>Select a team above to view their messages</p>
+                <p style={{ fontWeight: 600, color: 'var(--ink-faint)' }}>Select a team above to view their messages</p>
               </div>
             )}
           </div>
@@ -1842,7 +1842,7 @@ const handleApprove = async (sub: SubmissionData) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div>
                 <p style={sectionLabel}>Activity Log</p>
-                <p style={{ fontSize: '0.78rem', color: '#5F5E57', marginTop: -8 }}>
+                <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', marginTop: -8 }}>
                   Chronological feed of every event this game · {activityRows.length} entries
                 </p>
               </div>
@@ -1850,14 +1850,14 @@ const handleApprove = async (sub: SubmissionData) => {
                 <button
                   onClick={refreshActivityLog}
                   disabled={activityLoading}
-                  style={{ background: 'rgba(32,33,34,0.05)', border: '1px solid #E6E5DA', color: '#55544E', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: activityLoading ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                  style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-muted)', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: activityLoading ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                 >
                   {activityLoading ? '⏳ Loading...' : '↻ Refresh'}
                 </button>
                 <button
                   onClick={handleDownloadActivityCSV}
                   disabled={activityRows.length === 0}
-                  style={{ background: activityRows.length > 0 ? 'rgba(40,183,112,0.12)' : '#E6E5DA', border: '1px solid rgba(40,183,112,0.3)', color: activityRows.length > 0 ? '#28B770' : '#8F8E85', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: activityRows.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit' }}
+                  style={{ background: activityRows.length > 0 ? 'rgba(var(--green-rgb), 0.12)' : 'var(--line)', border: '1px solid rgba(var(--green-rgb), 0.3)', color: activityRows.length > 0 ? 'var(--green)' : 'var(--ink-ghost)', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: activityRows.length > 0 ? 'pointer' : 'default', fontFamily: 'inherit' }}
                 >
                   ⬇ Download CSV
                 </button>
@@ -1868,7 +1868,7 @@ const handleApprove = async (sub: SubmissionData) => {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
               <button
                 onClick={() => setActivityTeamFilter('all')}
-                style={{ background: activityTeamFilter === 'all' ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)', border: `1px solid ${activityTeamFilter === 'all' ? 'rgba(255,214,38,0.4)' : '#E6E5DA'}`, color: activityTeamFilter === 'all' ? '#FFD626' : '#6F6E66', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ background: activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: activityTeamFilter === 'all' ? 'var(--marigold)' : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 All ({activityRows.length})
               </button>
@@ -1878,7 +1878,7 @@ const handleApprove = async (sub: SubmissionData) => {
                   <button
                     key={t.id}
                     onClick={() => setActivityTeamFilter(t.id)}
-                    style={{ background: activityTeamFilter === t.id ? `${t.color}20` : 'rgba(32,33,34,0.03)', border: `1px solid ${activityTeamFilter === t.id ? `${t.color}50` : '#E6E5DA'}`, color: activityTeamFilter === t.id ? t.color : '#6F6E66', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    style={{ background: activityTeamFilter === t.id ? `${t.color}20` : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${activityTeamFilter === t.id ? `${t.color}50` : 'var(--line)'}`, color: activityTeamFilter === t.id ? t.color : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     {t.name} ({count})
                   </button>
@@ -1886,22 +1886,22 @@ const handleApprove = async (sub: SubmissionData) => {
               })}
               <button
                 onClick={() => setActivityTeamFilter('' as any)}
-                style={{ background: (activityTeamFilter as any) === '' ? 'rgba(230,125,209,0.15)' : 'rgba(32,33,34,0.03)', border: `1px solid ${(activityTeamFilter as any) === '' ? 'rgba(230,125,209,0.4)' : '#E6E5DA'}`, color: (activityTeamFilter as any) === '' ? '#E67DD1' : '#6F6E66', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ background: (activityTeamFilter as any) === '' ? 'rgba(var(--pink-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${(activityTeamFilter as any) === '' ? 'rgba(var(--pink-rgb), 0.4)' : 'var(--line)'}`, color: (activityTeamFilter as any) === '' ? 'var(--pink)' : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 System/GM only
               </button>
             </div>
 
             {activityLoading && activityRows.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8F8E85' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-ghost)' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>⏳</p>
                 <p>Loading activity log...</p>
               </div>
             ) : activityRows.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8F8E85' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-ghost)' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>📜</p>
-                <p style={{ fontWeight: 600, color: '#6F6E66' }}>No activity yet</p>
-                <p style={{ fontSize: '0.82rem', color: '#A3A298', marginTop: 6 }}>Events will appear here once the game starts.</p>
+                <p style={{ fontWeight: 600, color: 'var(--ink-faint)' }}>No activity yet</p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-ghost)', marginTop: 6 }}>Events will appear here once the game starts.</p>
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 6 }}>
@@ -1915,9 +1915,9 @@ const handleApprove = async (sub: SubmissionData) => {
                     <div
                       key={i}
                       style={{
-                        background: 'rgba(32,33,34,0.02)',
-                        border: `1px solid ${r.team_color ? r.team_color + '20' : '#E6E5DA'}`,
-                        borderLeft: r.team_color ? `3px solid ${r.team_color}` : '3px solid #D6D5CA',
+                        background: 'rgba(var(--ink-rgb), 0.02)',
+                        border: `1px solid ${r.team_color ? r.team_color + '20' : 'var(--line)'}`,
+                        borderLeft: r.team_color ? `3px solid ${r.team_color}` : '3px solid var(--line-strong)',
                         borderRadius: 8,
                         padding: '10px 14px',
                         display: 'grid',
@@ -1926,17 +1926,17 @@ const handleApprove = async (sub: SubmissionData) => {
                         gap: 12,
                       }}
                     >
-                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: '#6F6E66' }}>
+                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: 'var(--ink-faint)' }}>
                         {r.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: r.team_color ?? '#5F5E57', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: r.team_color ?? 'var(--ink-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {r.team_name ?? 'System'}
                       </span>
-                      <span style={{ fontSize: '0.84rem', color: '#3A3935', lineHeight: 1.4 }}>
+                      <span style={{ fontSize: '0.84rem', color: 'var(--ink-soft)', lineHeight: 1.4 }}>
                         {r.details}
-                        {r.gm_notes && <span style={{ color: '#FF4443', fontStyle: 'italic', marginLeft: 6 }}>— {r.gm_notes}</span>}
+                        {r.gm_notes && <span style={{ color: 'var(--red)', fontStyle: 'italic', marginLeft: 6 }}>— {r.gm_notes}</span>}
                       </span>
-                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.72rem', color: r.points_delta && r.points_delta > 0 ? '#28B770' : '#8F8E85', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.72rem', color: r.points_delta && r.points_delta > 0 ? 'var(--green)' : 'var(--ink-ghost)', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {r.points_delta !== null && r.points_delta !== 0 ? (r.points_delta > 0 ? `+${r.points_delta}pt` : `${r.points_delta}pt`) : ''}
                       </span>
                     </div>
@@ -1949,10 +1949,10 @@ const handleApprove = async (sub: SubmissionData) => {
 
       {/* Full-screen map overlay */}
       {showFullMap && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#FDFFF1', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid #E6E5DA', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FDFFF1', flexShrink: 0 }}>
-            <p style={{ fontSize: '0.82rem', color: '#FFD626', fontWeight: 700, margin: 0 }}>🗺️ Zone Map — {game.name}</p>
-            <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(32,33,34,0.05)', border: '1px solid #E6E5DA', color: '#3A3935', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper)', flexShrink: 0 }}>
+            <p style={{ fontSize: '0.82rem', color: 'var(--marigold)', fontWeight: 700, margin: 0 }}>🗺️ Zone Map — {game.name}</p>
+            <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-soft)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>
             <GameMap zones={activeZones} zoneOwnership={mapZoneOwnership.size > 0 ? mapZoneOwnership : undefined} closedZones={game.closed_zones ?? []} playerLocations={playerLocations} showGeolocate={false} />
@@ -1965,7 +1965,7 @@ const handleApprove = async (sub: SubmissionData) => {
 
 const sectionLabel: React.CSSProperties = {
   fontSize: '0.72rem',
-  color: '#FFD626',
+  color: 'var(--marigold)',
   textTransform: 'uppercase',
   letterSpacing: 1.5,
   fontWeight: 700,

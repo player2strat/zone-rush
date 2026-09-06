@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { BRAND } from '../lib/brand'
 
 // --------------- Types ---------------
 
@@ -60,10 +61,10 @@ interface GameMapProps {
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
 const ZONE_COLORS: Record<string, string> = {
-  zone_district_33: '#28B770',
-  zone_district_34: '#FFD626',
-  zone_district_35: '#1EB2F2',
-  zone_district_36: '#FF4443',
+  zone_district_33: BRAND.green,
+  zone_district_34: BRAND.marigold,
+  zone_district_35: BRAND.blue,
+  zone_district_36: BRAND.red,
 }
 
 // Official MTA line colors
@@ -106,7 +107,7 @@ function parseLineField(raw: string): {
   const firstLine = unique[0] ?? 'S'
   const label = unique.join(' ')
   const color = MTA_LINE_COLORS[firstLine] ?? '#888888'
-  const textColor = MTA_LABEL_COLOR[firstLine] ?? '#ffffff'
+  const textColor = MTA_LABEL_COLOR[firstLine] ?? BRAND.surface
   return { label, color, textColor }
 }
 
@@ -158,7 +159,7 @@ export default function GameMap({
     zones.forEach((zone) => {
       const isClosed = closed.includes(zone.id)
       const owner = ownership?.get(zone.id)
-      const defaultColor = ZONE_COLORS[zone.id] || '#202122'
+      const defaultColor = ZONE_COLORS[zone.id] || BRAND.ink
 
       let fillColor: string
       let fillOpacity: number
@@ -185,11 +186,11 @@ export default function GameMap({
       } else if (isClosed) {
         // GM-closed but NOT locked → black out. (A locked zone is also closed,
         // but the owner?.locked branch above already handled it.)
-        fillColor = '#202122'
+        fillColor = BRAND.ink
         fillOpacity = 0.55
-        borderColor = '#55544E'
+        borderColor = BRAND.inkMuted
         borderWidth = 2
-        labelColor = '#55544E'
+        labelColor = BRAND.inkMuted
         labelText = `🔒 ${zone.name}\nCLOSED`
       } else if (owner) {
         if (owner.claimed) {
@@ -223,9 +224,9 @@ export default function GameMap({
         // No points — transparent, white outline until a team earns points
         fillColor = defaultColor
         fillOpacity = 0
-        borderColor = '#202122'
+        borderColor = BRAND.ink
         borderWidth = 1.5
-        labelColor = '#202122'
+        labelColor = BRAND.ink
       }
 
       try {
@@ -271,7 +272,7 @@ export default function GameMap({
 
       // ---- Zone layers ----
       zones.forEach((zone) => {
-        const color = ZONE_COLORS[zone.id] || '#202122'
+        const color = ZONE_COLORS[zone.id] || BRAND.ink
 
         map.current!.addSource(`zone-${zone.id}`, {
           type: 'geojson',
@@ -296,7 +297,7 @@ export default function GameMap({
           type: 'line',
           source: `zone-${zone.id}`,
           paint: {
-            'line-color': '#202122',
+            'line-color': BRAND.ink,
             'line-width': 1.5,
             'line-dasharray': [1, 0],
           },
@@ -333,7 +334,7 @@ export default function GameMap({
           },
           paint: {
             'text-color': color,
-            'text-halo-color': '#FDFFF1',
+            'text-halo-color': BRAND.paper,
             'text-halo-width': 1.5,
           },
         })
@@ -363,7 +364,7 @@ export default function GameMap({
               'interpolate', ['linear'], ['zoom'],
               11, 1, 13, 1.5,
             ],
-            'circle-stroke-color': '#202122',
+            'circle-stroke-color': BRAND.ink,
             'circle-opacity': 0.95,
           },
         })
@@ -426,7 +427,7 @@ export default function GameMap({
               width: 48px !important;
               height: 48px !important;
               background: rgba(15,15,15,0.92) !important;
-              border: 2px solid #FFD626 !important;
+              border: 2px solid ${BRAND.marigold} !important;
               border-radius: 12px !important;
               display: flex !important;
               align-items: center !important;
@@ -507,7 +508,7 @@ export default function GameMap({
           height: 14px;
           border-radius: 50%;
           background: ${player.teamColor};
-          border: 2px solid #FDFFF1;
+          border: 2px solid ${BRAND.paper};
           box-shadow: 0 0 0 2px ${player.teamColor}60;
         `
 

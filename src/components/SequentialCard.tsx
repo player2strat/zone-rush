@@ -22,7 +22,7 @@ import {
 } from '../lib/sequential'
 import type { SequentialProgress } from '../types/game'
 
-const CYOA = '#E67DD1' // purple accent, reused from the app palette
+const CYOA = 'var(--pink)' // purple accent, reused from the app palette
 
 interface SequentialChallenge {
   id: string
@@ -110,16 +110,16 @@ export default function SequentialCard({
 
   // Difficulty pill colour, matching the app's standard card styling
   const diffColor =
-    challenge.difficulty === 'easy' ? '#28B770'
-    : challenge.difficulty === 'hard' ? '#FF4443'
-    : '#FFD626'
+    challenge.difficulty === 'easy' ? 'var(--green)'
+    : challenge.difficulty === 'hard' ? 'var(--red)'
+    : 'var(--marigold)'
   const diffPts = challenge.points
 
   return (
     <div
       style={{
-        background: isApproved ? 'rgba(40,183,112,0.03)' : `${CYOA}08`,
-        border: `1px solid ${isApproved ? 'rgba(40,183,112,0.2)' : `${CYOA}40`}`,
+        background: isApproved ? 'rgba(var(--green-rgb), 0.03)' : `${CYOA}08`,
+        border: `1px solid ${isApproved ? 'rgba(var(--green-rgb), 0.2)' : `${CYOA}40`}`,
         borderRadius: 12,
         padding: '16px 18px',
         opacity: isApproved ? 0.7 : 1,
@@ -136,21 +136,21 @@ export default function SequentialCard({
           </span>
         </div>
         {submissionStatus && (
-          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isApproved ? '#28B770' : isPending ? '#FFD626' : '#FF4443' }}>
+          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isApproved ? 'var(--green)' : isPending ? 'var(--marigold)' : 'var(--red)' }}>
             {isApproved ? '✅ Approved' : isPending ? '⏳ Pending' : '❌ Rejected'}
           </span>
         )}
       </div>
 
       {/* Card title / flavour */}
-      <p style={{ color: '#2A2B2C', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 14 }}>
+      <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 14 }}>
         {challenge.description || 'Lock in each choice below — you won\u2019t see how it\u2019s used until everything is locked.'}
       </p>
 
       {loadingProgress ? (
-        <p style={{ color: '#6F6E66', fontSize: '0.82rem' }}>Loading your progress…</p>
+        <p style={{ color: 'var(--ink-faint)', fontSize: '0.82rem' }}>Loading your progress…</p>
       ) : progressError ? (
-        <p style={{ color: '#FF4443', fontSize: '0.82rem' }}>⚠️ {progressError}</p>
+        <p style={{ color: 'var(--red)', fontSize: '0.82rem' }}>⚠️ {progressError}</p>
       ) : (
         <>
           {/* Step rail — one row per step */}
@@ -166,8 +166,8 @@ export default function SequentialCard({
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '10px 12px', borderRadius: 8,
-                    background: locked ? 'rgba(40,183,112,0.06)' : isCurrent ? `${CYOA}12` : 'rgba(32,33,34,0.02)',
-                    border: `1px solid ${locked ? 'rgba(40,183,112,0.25)' : isCurrent ? `${CYOA}40` : '#E6E5DA'}`,
+                    background: locked ? 'rgba(var(--green-rgb), 0.06)' : isCurrent ? `${CYOA}12` : 'rgba(var(--ink-rgb), 0.02)',
+                    border: `1px solid ${locked ? 'rgba(var(--green-rgb), 0.25)' : isCurrent ? `${CYOA}40` : 'var(--line)'}`,
                     opacity: future ? 0.4 : 1,
                   }}
                 >
@@ -175,18 +175,18 @@ export default function SequentialCard({
                     width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.7rem', fontWeight: 800,
-                    background: locked ? '#28B770' : isCurrent ? CYOA : '#E6E5DA',
-                    color: locked || isCurrent ? '#202122' : '#6F6E66',
+                    background: locked ? 'var(--green)' : isCurrent ? CYOA : 'var(--line)',
+                    color: locked || isCurrent ? 'var(--ink)' : 'var(--ink-faint)',
                   }}>
                     {locked ? '✓' : i + 1}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '0.7rem', color: '#55544E', marginBottom: locked ? 2 : 0 }}>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--ink-muted)', marginBottom: locked ? 2 : 0 }}>
                       Part {i + 1}: {prompt}
                     </p>
                     {locked && (
-                      <p style={{ fontSize: '0.88rem', color: '#28B770', fontWeight: 700 }}>
-                        {choices[i]} <span style={{ color: '#6F6E66', fontWeight: 400, fontSize: '0.7rem' }}>· locked</span>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--green)', fontWeight: 700 }}>
+                        {choices[i]} <span style={{ color: 'var(--ink-faint)', fontWeight: 400, fontSize: '0.7rem' }}>· locked</span>
                       </p>
                     )}
                   </div>
@@ -207,8 +207,8 @@ export default function SequentialCard({
                 disabled={locking}
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  background: '#FFFFFF', border: `1px solid ${CYOA}40`,
-                  borderRadius: 8, padding: '11px 14px', color: '#202122',
+                  background: 'var(--surface)', border: `1px solid ${CYOA}40`,
+                  borderRadius: 8, padding: '11px 14px', color: 'var(--ink)',
                   fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', marginBottom: 8,
                 }}
               />
@@ -217,20 +217,20 @@ export default function SequentialCard({
                 disabled={!draft.trim() || locking}
                 style={{
                   width: '100%',
-                  background: draft.trim() ? `${CYOA}20` : '#E6E5DA',
-                  border: `1px solid ${draft.trim() ? `${CYOA}50` : '#E6E5DA'}`,
-                  color: draft.trim() ? CYOA : '#8F8E85',
+                  background: draft.trim() ? `${CYOA}20` : 'var(--line)',
+                  border: `1px solid ${draft.trim() ? `${CYOA}50` : 'var(--line)'}`,
+                  color: draft.trim() ? CYOA : 'var(--ink-ghost)',
                   padding: '11px', borderRadius: 8, fontSize: '0.88rem', fontWeight: 700,
                   cursor: draft.trim() && !locking ? 'pointer' : 'default', fontFamily: 'inherit',
                 }}
               >
                 {locking ? 'Locking…' : `🔒 Lock Part ${lockedCount + 1} (can\u2019t be changed)`}
               </button>
-              <p style={{ fontSize: '0.68rem', color: '#5F5E57', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
+              <p style={{ fontSize: '0.68rem', color: 'var(--ink-muted)', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
                 Once locked, this choice is final. You won\u2019t see the full challenge until every part is locked.
               </p>
               {lockError && (
-                <p style={{ fontSize: '0.74rem', color: '#FF4443', textAlign: 'center', marginTop: 6 }}>{lockError}</p>
+                <p style={{ fontSize: '0.74rem', color: 'var(--red)', textAlign: 'center', marginTop: 6 }}>{lockError}</p>
               )}
             </div>
           )}
@@ -244,7 +244,7 @@ export default function SequentialCard({
               <p style={{ fontSize: '0.66rem', color: CYOA, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
                 🎯 Your Challenge
               </p>
-              <p style={{ color: '#202122', fontSize: '0.95rem', lineHeight: 1.5, fontWeight: 600 }}>
+              <p style={{ color: 'var(--ink)', fontSize: '0.95rem', lineHeight: 1.5, fontWeight: 600 }}>
                 {resolvedTask}
               </p>
             </div>
@@ -252,20 +252,20 @@ export default function SequentialCard({
 
           {/* GM rejection feedback */}
           {isRejected && gmNotes && (
-            <div style={{ background: 'rgba(255,68,67,0.06)', border: '1px solid rgba(255,68,67,0.15)', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
-              <p style={{ fontSize: '0.7rem', color: '#FF4443', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>GM Feedback</p>
-              <p style={{ color: '#3A3935', fontSize: '0.82rem', lineHeight: 1.5 }}>{gmNotes}</p>
+            <div style={{ background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.15)', borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+              <p style={{ fontSize: '0.7rem', color: 'var(--red)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>GM Feedback</p>
+              <p style={{ color: 'var(--ink-soft)', fontSize: '0.82rem', lineHeight: 1.5 }}>{gmNotes}</p>
             </div>
           )}
 
           {/* Submit / status button */}
           {allLocked && resolvedTask && !isApproved && (
             isPending ? (
-              <div style={{ width: '100%', background: 'rgba(255,214,38,0.08)', border: '1px solid rgba(255,214,38,0.2)', padding: '12px', borderRadius: 8, textAlign: 'center', color: '#FFD626', fontSize: '0.88rem', fontWeight: 600 }}>
+              <div style={{ width: '100%', background: 'rgba(var(--marigold-rgb), 0.08)', border: '1px solid rgba(var(--marigold-rgb), 0.2)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--marigold)', fontSize: '0.88rem', fontWeight: 600 }}>
                 ⏳ Waiting for GM review…
               </div>
             ) : gameEnded ? (
-              <div style={{ width: '100%', background: 'rgba(32,33,34,0.03)', border: '1px solid #E6E5DA', padding: '12px', borderRadius: 8, textAlign: 'center', color: '#6F6E66', fontSize: '0.88rem' }}>
+              <div style={{ width: '100%', background: 'rgba(var(--ink-rgb), 0.03)', border: '1px solid var(--line)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem' }}>
                 🏁 Game Over — submissions closed
               </div>
             ) : (

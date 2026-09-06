@@ -723,33 +723,33 @@ export default function SeedMaps() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: '32px 24px',
     }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
         <button
           onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', color: '#6F6E66', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+          style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
         >
           ← Home
         </button>
         <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 4 }}>
           Seed Maps & Zones
         </h1>
-        <p style={{ color: '#5F5E57', fontSize: '0.85rem', marginBottom: 24 }}>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', marginBottom: 24 }}>
           Seeds 29 Manhattan zones + the `maps` collection, and backfills map_id on every zone
         </p>
 
         <div style={{
-          background: 'rgba(255,214,38,0.06)',
-          border: '1px solid rgba(255,214,38,0.2)',
+          background: 'rgba(var(--marigold-rgb), 0.06)',
+          border: '1px solid rgba(var(--marigold-rgb), 0.2)',
           borderRadius: 10,
           padding: 16,
           marginBottom: 24,
         }}>
-          <p style={{ color: '#FFD626', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+          <p style={{ color: 'var(--marigold)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
             This will:
           </p>
           {[
@@ -759,8 +759,8 @@ export default function SeedMaps() {
             'Backfill map_id onto every zone (first-wins; warns on shared/orphan zones)',
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: '#FFD626' }}>{i + 1}.</span>
-              <span style={{ color: '#3A3935', fontSize: '0.88rem' }}>{item}</span>
+              <span style={{ color: 'var(--marigold)' }}>{i + 1}.</span>
+              <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem' }}>{item}</span>
             </div>
           ))}
         </div>
@@ -770,9 +770,9 @@ export default function SeedMaps() {
           disabled={running}
           style={{
             width: '100%',
-            background: running ? '#E6E5DA' : 'rgba(40,183,112,0.12)',
-            border: '1px solid ' + (running ? '#E6E5DA' : 'rgba(40,183,112,0.3)'),
-            color: running ? '#8F8E85' : '#28B770',
+            background: running ? 'var(--line)' : 'rgba(var(--green-rgb), 0.12)',
+            border: '1px solid ' + (running ? 'var(--line)' : 'rgba(var(--green-rgb), 0.3)'),
+            color: running ? 'var(--ink-ghost)' : 'var(--green)',
             padding: '16px 24px',
             borderRadius: 12,
             fontSize: '1rem',
@@ -787,8 +787,8 @@ export default function SeedMaps() {
 
         {status.length > 0 && (
           <div style={{
-            background: '#FDFFF1',
-            border: '1px solid #E6E5DA',
+            background: 'var(--paper)',
+            border: '1px solid var(--line)',
             borderRadius: 10,
             padding: 16,
             fontFamily: "'Martian Mono', monospace",
@@ -799,11 +799,11 @@ export default function SeedMaps() {
           }}>
             {status.map((line, i) => (
               <div key={i} style={{
-                color: line.includes('\u2713') ? '#28B770'
-                  : line.includes('\u2717') ? '#FF4443'
-                  : line.includes('\u2705') ? '#28B770'
-                  : line.startsWith('---') ? '#FFD626'
-                  : '#55544E',
+                color: line.includes('\u2713') ? 'var(--green)'
+                  : line.includes('\u2717') ? 'var(--red)'
+                  : line.includes('\u2705') ? 'var(--green)'
+                  : line.startsWith('---') ? 'var(--marigold)'
+                  : 'var(--ink-muted)',
               }}>
                 {line}
               </div>

@@ -419,8 +419,8 @@ export default function CreateGame() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: '24px 24px 48px',
     }}>
@@ -430,7 +430,7 @@ export default function CreateGame() {
         <button
           onClick={() => step > 1 ? setStep(step - 1) : navigate('/')}
           style={{
-            background: 'none', border: 'none', color: '#6F6E66',
+            background: 'none', border: 'none', color: 'var(--ink-faint)',
             cursor: 'pointer', fontFamily: 'inherit',
             fontSize: '0.85rem', padding: 0, marginBottom: 24,
           }}
@@ -449,27 +449,27 @@ export default function CreateGame() {
               <div style={{
                 width: 28, height: 28, borderRadius: '50%',
                 background: step === n
-                  ? 'rgba(255,214,38,0.2)'
+                  ? 'rgba(var(--marigold-rgb), 0.2)'
                   : step > n
-                  ? 'rgba(40,183,112,0.15)'
-                  : 'rgba(32,33,34,0.04)',
-                border: `1px solid ${step === n ? 'rgba(255,214,38,0.4)' : step > n ? 'rgba(40,183,112,0.3)' : '#E6E5DA'}`,
+                  ? 'rgba(var(--green-rgb), 0.15)'
+                  : 'rgba(var(--ink-rgb), 0.04)',
+                border: `1px solid ${step === n ? 'rgba(var(--marigold-rgb), 0.4)' : step > n ? 'rgba(var(--green-rgb), 0.3)' : 'var(--line)'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.78rem', fontWeight: 700,
-                color: step === n ? '#FFD626' : step > n ? '#28B770' : '#8F8E85',
+                color: step === n ? 'var(--marigold)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
               }}>
                 {step > n ? '✓' : n}
               </div>
               <span style={{
                 fontSize: '0.8rem', fontWeight: 600,
-                color: step === n ? '#FFD626' : step > n ? '#28B770' : '#8F8E85',
+                color: step === n ? 'var(--marigold)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
               }}>
                 {label}
               </span>
               {i < 2 && (
                 <div style={{
                   width: 24, height: 1,
-                  background: step > n ? 'rgba(40,183,112,0.3)' : '#E6E5DA',
+                  background: step > n ? 'rgba(var(--green-rgb), 0.3)' : 'var(--line)',
                 }} />
               )}
             </div>
@@ -484,7 +484,7 @@ export default function CreateGame() {
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
               Game Basics
             </h1>
-            <p style={{ color: '#6F6E66', fontSize: '0.85rem', marginBottom: 28 }}>
+            <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', marginBottom: 28 }}>
               Name your game and set the format
             </p>
 
@@ -510,7 +510,7 @@ export default function CreateGame() {
             {/* Team names — one editable input per team, pre-filled with defaults */}
             <div style={{ marginBottom: 28 }}>
               <label style={labelStyle}>Team Names</label>
-              <p style={{ color: '#5F5E57', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 Pre-filled with fun defaults — leave them as-is or rename any team. You can also rename teams later in the lobby.
               </p>
               <div style={{ display: 'grid', gap: 8 }}>
@@ -523,8 +523,8 @@ export default function CreateGame() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: 10,
-                        background: 'rgba(32,33,34,0.03)',
-                        border: '1px solid #E6E5DA',
+                        background: 'rgba(var(--ink-rgb), 0.03)',
+                        border: '1px solid var(--line)',
                         borderRadius: 8,
                         padding: '8px 12px',
                       }}
@@ -543,7 +543,7 @@ export default function CreateGame() {
                           flex: 1,
                           background: 'transparent',
                           border: 'none',
-                          color: '#202122',
+                          color: 'var(--ink)',
                           fontSize: '0.9rem',
                           fontFamily: 'inherit',
                           fontWeight: 600,
@@ -566,9 +566,9 @@ export default function CreateGame() {
                     onClick={() => setDurationMinutes(mins)}
                     style={{
                       background: durationMinutes === mins
-                        ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)',
-                      border: `1px solid ${durationMinutes === mins ? 'rgba(255,214,38,0.35)' : '#E6E5DA'}`,
-                      color: durationMinutes === mins ? '#FFD626' : '#5F5E57',
+                        ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
+                      border: `1px solid ${durationMinutes === mins ? 'rgba(var(--marigold-rgb), 0.35)' : 'var(--line)'}`,
+                      color: durationMinutes === mins ? 'var(--marigold)' : 'var(--ink-muted)',
                       borderRadius: 8,
                       padding: '10px 16px',
                       cursor: 'pointer',
@@ -604,14 +604,14 @@ export default function CreateGame() {
                 <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
                   Pick a Map
                 </h1>
-                <p style={{ color: '#6F6E66', fontSize: '0.85rem', marginBottom: 24 }}>
+                <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', marginBottom: 24 }}>
                   Choose which area to play in
                   {' · '}
                   <button
                     onClick={() => navigate('/admin/zone-builder')}
                     style={{
                       background: 'none', border: 'none', padding: 0,
-                      color: '#E67DD1', cursor: 'pointer',
+                      color: 'var(--pink)', cursor: 'pointer',
                       fontFamily: 'inherit', fontSize: 'inherit',
                     }}
                   >
@@ -620,9 +620,9 @@ export default function CreateGame() {
                 </p>
 
                 {loadingMaps || loadingZones ? (
-                  <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>Loading maps...</p>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading maps...</p>
                 ) : maps.length === 0 ? (
-                  <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
                     No maps available for this city yet.
                   </p>
                 ) : (
@@ -633,8 +633,8 @@ export default function CreateGame() {
                         key={m.id}
                         onClick={() => handleSelectMap(m.id)}
                         style={{
-                          background: 'rgba(32,33,34,0.02)',
-                          border: '1px solid #E6E5DA',
+                          background: 'rgba(var(--ink-rgb), 0.02)',
+                          border: '1px solid var(--line)',
                           borderRadius: 12,
                           padding: '18px 18px 14px',
                           textAlign: 'left',
@@ -644,7 +644,7 @@ export default function CreateGame() {
                         }}
                       >
                         <p style={{
-                          color: '#2A2B2C',
+                          color: 'var(--ink-soft)',
                           fontWeight: 700,
                           fontSize: '1rem',
                           marginBottom: 6,
@@ -653,7 +653,7 @@ export default function CreateGame() {
                         </p>
                         {m.description && (
                           <p style={{
-                            color: '#5F5E57',
+                            color: 'var(--ink-muted)',
                             fontSize: '0.82rem',
                             lineHeight: 1.5,
                             marginBottom: 10,
@@ -662,16 +662,16 @@ export default function CreateGame() {
                           </p>
                         )}
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={tagStyle('#E67DD1')}>
+                          <span style={tagStyle('var(--pink)')}>
                             {zoneCountByMap[m.id] || 0} zones
                           </span>
                           {m.borough && (
-                            <span style={tagStyle('#E67DD1')}>
+                            <span style={tagStyle('var(--pink)')}>
                               {m.borough}
                             </span>
                           )}
                           {m.recommended_teams && (
-                            <span style={tagStyle('#6F6E66')}>
+                            <span style={tagStyle('var(--ink-faint)')}>
                               ~{m.recommended_teams} teams rec.
                             </span>
                           )}
@@ -695,7 +695,7 @@ export default function CreateGame() {
                     <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
                       {activeMap?.name || 'Zones'}
                     </h1>
-                    <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>
+                    <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
                       All zones included — toggle any off if needed
                     </p>
                   </div>
@@ -703,9 +703,9 @@ export default function CreateGame() {
                     onClick={handleChangeMap}
                     style={{
                       background: 'none',
-                      border: '1px solid #D6D5CA',
+                      border: '1px solid var(--line-strong)',
                       borderRadius: 6,
-                      color: '#5F5E57',
+                      color: 'var(--ink-muted)',
                       padding: '6px 12px',
                       fontSize: '0.78rem',
                       fontWeight: 600,
@@ -727,7 +727,7 @@ export default function CreateGame() {
                     marginBottom: 14,
                   }}>
                     <span style={{
-                      color: selectedZones.length > 0 ? '#28B770' : '#5F5E57',
+                      color: selectedZones.length > 0 ? 'var(--green)' : 'var(--ink-muted)',
                       fontSize: '0.82rem', fontWeight: 600,
                     }}>
                       {selectedZones.length} of {visibleZones.length} zone{visibleZones.length !== 1 ? 's' : ''} selected
@@ -755,7 +755,7 @@ export default function CreateGame() {
 
                 {/* Zone toggles */}
                 {loadingZones ? (
-                  <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>Loading zones...</p>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading zones...</p>
                 ) : (
                   <>
                     {Object.entries(visibleZonesByBorough).map(([borough, boroughZones]) => (
@@ -764,7 +764,7 @@ export default function CreateGame() {
                         {Object.keys(visibleZonesByBorough).length > 1 && (
                           <p style={{
                             fontSize: '0.7rem',
-                            color: '#6F6E66',
+                            color: 'var(--ink-faint)',
                             textTransform: 'uppercase',
                             letterSpacing: 1,
                             fontWeight: 700,
@@ -782,8 +782,8 @@ export default function CreateGame() {
                                 onClick={() => toggleZone(zone.id)}
                                 style={{
                                   background: isSelected
-                                    ? 'rgba(40,183,112,0.08)' : 'rgba(32,33,34,0.02)',
-                                  border: `1px solid ${isSelected ? 'rgba(40,183,112,0.25)' : '#E6E5DA'}`,
+                                    ? 'rgba(var(--green-rgb), 0.08)' : 'rgba(var(--ink-rgb), 0.02)',
+                                  border: `1px solid ${isSelected ? 'rgba(var(--green-rgb), 0.25)' : 'var(--line)'}`,
                                   borderRadius: 8,
                                   padding: '11px 14px',
                                   textAlign: 'left',
@@ -796,17 +796,17 @@ export default function CreateGame() {
                                 }}
                               >
                                 <span style={{
-                                  color: isSelected ? '#28B770' : '#55544E',
+                                  color: isSelected ? 'var(--green)' : 'var(--ink-muted)',
                                   fontWeight: 600, fontSize: '0.88rem',
                                 }}>
                                   {zone.name}
                                 </span>
                                 <div style={{
                                   width: 18, height: 18, borderRadius: 4,
-                                  border: `1.5px solid ${isSelected ? '#28B770' : '#D6D5CA'}`,
-                                  background: isSelected ? 'rgba(40,183,112,0.15)' : 'transparent',
+                                  border: `1.5px solid ${isSelected ? 'var(--green)' : 'var(--line-strong)'}`,
+                                  background: isSelected ? 'rgba(var(--green-rgb), 0.15)' : 'transparent',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  fontSize: '0.65rem', color: '#28B770', fontWeight: 700,
+                                  fontSize: '0.65rem', color: 'var(--green)', fontWeight: 700,
                                   flexShrink: 0,
                                 }}>
                                   {isSelected ? '✓' : ''}
@@ -846,14 +846,14 @@ export default function CreateGame() {
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 4px' }}>
               Final Settings
             </h1>
-            <p style={{ color: '#6F6E66', fontSize: '0.85rem', marginBottom: 24 }}>
+            <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', marginBottom: 24 }}>
               Set zone closure times and review before creating
             </p>
 
             {/* Side quests */}
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Side Quests</label>
-              <p style={{ color: '#5F5E57', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 Running photo tallies (unlimited submissions, GM-reviewed).
                 Worth no points during the game — the team with the most
                 approved wins the bonus at the end.
@@ -861,8 +861,8 @@ export default function CreateGame() {
 
               {sideQuests.map((q, i) => (
                 <div key={q.id} style={{
-                  border: '1px solid rgba(230,125,209,0.25)',
-                  background: 'rgba(230,125,209,0.04)',
+                  border: '1px solid rgba(var(--pink-rgb), 0.25)',
+                  background: 'rgba(var(--pink-rgb), 0.04)',
                   borderRadius: 10, padding: 14, marginBottom: 10,
                 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -876,7 +876,7 @@ export default function CreateGame() {
                       onClick={() => setSideQuests((prev) => prev.filter((_, j) => j !== i))}
                       title="Remove side quest"
                       style={{
-                        background: 'none', border: 'none', color: '#B02F2E',
+                        background: 'none', border: 'none', color: 'var(--red-deep)',
                         cursor: 'pointer', fontSize: '1rem', fontFamily: 'inherit', padding: '0 4px',
                       }}
                     >
@@ -890,7 +890,7 @@ export default function CreateGame() {
                     style={{ ...inputStyle, marginBottom: 8 }}
                   />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: '#55544E', fontSize: '0.8rem' }}>Bonus for most approved:</span>
+                    <span style={{ color: 'var(--ink-muted)', fontSize: '0.8rem' }}>Bonus for most approved:</span>
                     <input
                       type="number"
                       min={1}
@@ -899,7 +899,7 @@ export default function CreateGame() {
                       onChange={(e) => setSideQuests((prev) => prev.map((x, j) => j === i ? { ...x, bonus_points: Math.max(1, parseInt(e.target.value) || 1) } : x))}
                       style={{ ...inputStyle, marginBottom: 0, width: 70, textAlign: 'center' }}
                     />
-                    <span style={{ color: '#55544E', fontSize: '0.8rem' }}>pts</span>
+                    <span style={{ color: 'var(--ink-muted)', fontSize: '0.8rem' }}>pts</span>
                   </div>
                 </div>
               ))}
@@ -920,8 +920,8 @@ export default function CreateGame() {
                   }
                 }}
                 style={{
-                  background: '#FFFFFF', border: '1px solid rgba(230,125,209,0.35)',
-                  color: '#E67DD1', borderRadius: 8, padding: '10px 12px',
+                  background: 'var(--surface)', border: '1px solid rgba(var(--pink-rgb), 0.35)',
+                  color: 'var(--pink)', borderRadius: 8, padding: '10px 12px',
                   fontSize: '0.85rem', fontWeight: 600, fontFamily: 'inherit',
                   cursor: 'pointer', outline: 'none', width: '100%', boxSizing: 'border-box',
                 }}
@@ -937,13 +937,13 @@ export default function CreateGame() {
             {/* Zone opening schedule */}
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Zone Opening Schedule</label>
-              <p style={{ color: '#5F5E57', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 Hold zones back at the start — they begin closed and open at the
                 set time. Good for saving a zone for later in the game.
               </p>
 
               <div style={{
-                border: '1px solid #E6E5DA',
+                border: '1px solid var(--line)',
                 borderRadius: 10,
                 overflow: 'hidden',
               }}>
@@ -959,11 +959,11 @@ export default function CreateGame() {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '12px 16px',
-                          borderBottom: i < arr.length - 1 ? '1px solid #FFFFFF' : 'none',
-                          background: val ? 'rgba(40,183,112,0.04)' : 'transparent',
+                          borderBottom: i < arr.length - 1 ? '1px solid var(--surface)' : 'none',
+                          background: val ? 'rgba(var(--green-rgb), 0.04)' : 'transparent',
                         }}
                       >
-                        <span style={{ color: '#3A3935', fontSize: '0.88rem', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
                           {zone.name}
                         </span>
                         <select
@@ -975,10 +975,10 @@ export default function CreateGame() {
                             }))
                           }
                           style={{
-                            background: '#FFFFFF',
-                            border: `1px solid ${val ? 'rgba(40,183,112,0.35)' : '#D6D5CA'}`,
+                            background: 'var(--surface)',
+                            border: `1px solid ${val ? 'rgba(var(--green-rgb), 0.35)' : 'var(--line-strong)'}`,
                             borderRadius: 6,
-                            color: val ? '#28B770' : '#6F6E66',
+                            color: val ? 'var(--green)' : 'var(--ink-faint)',
                             padding: '7px 10px',
                             fontSize: '0.85rem',
                             fontFamily: 'inherit',
@@ -1002,16 +1002,16 @@ export default function CreateGame() {
                 <div style={{
                   marginTop: 12,
                   padding: '10px 14px',
-                  background: 'rgba(40,183,112,0.06)',
+                  background: 'rgba(var(--green-rgb), 0.06)',
                   borderRadius: 8,
-                  border: '1px solid rgba(40,183,112,0.15)',
+                  border: '1px solid rgba(var(--green-rgb), 0.15)',
                 }}>
                   {buildOpenSchedule()
                     .sort((a, b) => a.open_at_minutes - b.open_at_minutes)
                     .map((entry) => {
                       const zone = zones.find((z) => z.id === entry.zone_id)
                       return (
-                        <p key={entry.zone_id} style={{ color: '#28B770', fontSize: '0.82rem', marginBottom: 3 }}>
+                        <p key={entry.zone_id} style={{ color: 'var(--green)', fontSize: '0.82rem', marginBottom: 3 }}>
                           🔓 {zone?.name} opens at {entry.open_at_minutes} min
                         </p>
                       )
@@ -1023,14 +1023,14 @@ export default function CreateGame() {
                 <div style={{
                   marginTop: 12,
                   padding: '10px 14px',
-                  background: 'rgba(255,68,67,0.06)',
+                  background: 'rgba(var(--red-rgb), 0.06)',
                   borderRadius: 8,
-                  border: '1px solid rgba(255,68,67,0.2)',
+                  border: '1px solid rgba(var(--red-rgb), 0.2)',
                 }}>
                   {scheduleConflicts.map((zoneId) => {
                     const zone = zones.find((z) => z.id === zoneId)
                     return (
-                      <p key={zoneId} style={{ color: '#FF4443', fontSize: '0.82rem', marginBottom: 3 }}>
+                      <p key={zoneId} style={{ color: 'var(--red)', fontSize: '0.82rem', marginBottom: 3 }}>
                         ⚠ {zone?.name} would open at or after it closes — its opening time will be ignored.
                       </p>
                     )
@@ -1042,12 +1042,12 @@ export default function CreateGame() {
             {/* Zone closure schedule */}
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Zone Closure Schedule</label>
-              <p style={{ color: '#5F5E57', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 Zones close at a set time — teams keep points earned but can't score new ones after closing. Shrinks the map as the game winds down.
               </p>
 
               <div style={{
-                border: '1px solid #E6E5DA',
+                border: '1px solid var(--line)',
                 borderRadius: 10,
                 overflow: 'hidden',
               }}>
@@ -1063,11 +1063,11 @@ export default function CreateGame() {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '12px 16px',
-                          borderBottom: i < arr.length - 1 ? '1px solid #FFFFFF' : 'none',
+                          borderBottom: i < arr.length - 1 ? '1px solid var(--surface)' : 'none',
                           background: val ? 'rgba(247,127,0,0.04)' : 'transparent',
                         }}
                       >
-                        <span style={{ color: '#3A3935', fontSize: '0.88rem', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
                           {zone.name}
                         </span>
                         <select
@@ -1079,10 +1079,10 @@ export default function CreateGame() {
                             }))
                           }
                           style={{
-                            background: '#FFFFFF',
-                            border: `1px solid ${val ? 'rgba(247,127,0,0.35)' : '#D6D5CA'}`,
+                            background: 'var(--surface)',
+                            border: `1px solid ${val ? 'rgba(247,127,0,0.35)' : 'var(--line-strong)'}`,
                             borderRadius: 6,
-                            color: val ? '#F77F00' : '#6F6E66',
+                            color: val ? '#F77F00' : 'var(--ink-faint)',
                             padding: '7px 10px',
                             fontSize: '0.85rem',
                             fontFamily: 'inherit',
@@ -1130,11 +1130,11 @@ export default function CreateGame() {
                 onClick={() => setShowAdvanced((v) => !v)}
                 style={{
                   width: '100%',
-                  background: 'rgba(32,33,34,0.02)',
-                  border: '1px solid #E6E5DA',
+                  background: 'rgba(var(--ink-rgb), 0.02)',
+                  border: '1px solid var(--line)',
                   borderRadius: 8,
                   padding: '11px 16px',
-                  color: '#6F6E66',
+                  color: 'var(--ink-faint)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   fontWeight: 600,
@@ -1153,11 +1153,11 @@ export default function CreateGame() {
 
               {showAdvanced && (
                 <div style={{
-                  border: '1px solid #E6E5DA',
+                  border: '1px solid var(--line)',
                   borderTop: 'none',
                   borderRadius: '0 0 8px 8px',
                   padding: 16,
-                  background: 'rgba(32,33,34,0.01)',
+                  background: 'rgba(var(--ink-rgb), 0.01)',
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                     <SettingInput label="Zone Claim (pts)" value={claimThreshold} onChange={setClaimThreshold} min={4} max={10} />
@@ -1168,14 +1168,14 @@ export default function CreateGame() {
                   </div>
 
                   <p style={{
-                    fontSize: '0.7rem', color: '#8F8E85',
+                    fontSize: '0.7rem', color: 'var(--ink-ghost)',
                     textTransform: 'uppercase', letterSpacing: 1,
                     fontWeight: 700, marginBottom: 10,
-                    borderTop: '1px solid #E6E5DA', paddingTop: 14,
+                    borderTop: '1px solid var(--line)', paddingTop: 14,
                   }}>
                     Hand Composition
                   </p>
-                  <p style={{ color: '#6F6E66', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 12 }}>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 12 }}>
                     Controls the mix of Easy / Hard cards dealt to each team at game start.
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
@@ -1189,13 +1189,13 @@ export default function CreateGame() {
 
             {/* Game summary */}
             <div style={{
-              background: 'rgba(32,33,34,0.02)',
-              border: '1px solid #E6E5DA',
+              background: 'rgba(var(--ink-rgb), 0.02)',
+              border: '1px solid var(--line)',
               borderRadius: 10,
               padding: 16,
               marginBottom: 24,
             }}>
-              <p style={{ color: '#FFD626', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+              <p style={{ color: 'var(--marigold)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
                 Summary
               </p>
               <div style={{ display: 'grid', gap: 6 }}>
@@ -1219,8 +1219,8 @@ export default function CreateGame() {
                   .filter(Boolean)
                   .map((row) => (
                     <div key={row!.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#6F6E66', fontSize: '0.85rem' }}>{row!.label}</span>
-                      <span style={{ color: '#3A3935', fontSize: '0.85rem', fontWeight: 600 }}>{row!.value}</span>
+                      <span style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>{row!.label}</span>
+                      <span style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', fontWeight: 600 }}>{row!.value}</span>
                     </div>
                   ))}
               </div>
@@ -1259,13 +1259,13 @@ function SettingInput({
 }) {
   return (
     <div style={{
-      background: 'rgba(32,33,34,0.03)',
-      border: '1px solid #E6E5DA',
+      background: 'rgba(var(--ink-rgb), 0.03)',
+      border: '1px solid var(--line)',
       borderRadius: 8,
       padding: compact ? '8px 10px' : '10px 14px',
     }}>
       <p style={{
-        fontSize: compact ? '0.65rem' : '0.7rem', color: '#5F5E57',
+        fontSize: compact ? '0.65rem' : '0.7rem', color: 'var(--ink-muted)',
         textTransform: 'uppercase', letterSpacing: 0.5,
         marginBottom: 8, fontWeight: 700,
       }}>
@@ -1278,7 +1278,7 @@ function SettingInput({
           height: compact ? 22 : 32,
           fontSize: compact ? '0.8rem' : '1rem',
         }}>−</button>
-        <span style={{ color: '#202122', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem', minWidth: compact ? 20 : 36, textAlign: 'center' }}>
+        <span style={{ color: 'var(--ink)', fontWeight: 700, fontSize: compact ? '1rem' : '1.1rem', minWidth: compact ? 20 : 36, textAlign: 'center' }}>
           {value}
         </span>
         <button onClick={() => onChange(Math.min(max, value + step))} style={{
@@ -1317,9 +1317,9 @@ function CityPicker({ value, onChange }: { value: string; onChange: (v: string) 
             key={city.id}
             onClick={() => onChange(city.id)}
             style={{
-              background: value === city.id ? 'rgba(255,214,38,0.15)' : 'rgba(32,33,34,0.03)',
-              border: `1px solid ${value === city.id ? 'rgba(255,214,38,0.3)' : '#E6E5DA'}`,
-              color: value === city.id ? '#FFD626' : '#5F5E57',
+              background: value === city.id ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
+              border: `1px solid ${value === city.id ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`,
+              color: value === city.id ? 'var(--marigold)' : 'var(--ink-muted)',
               borderRadius: 8, padding: '10px 18px',
               cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, fontSize: '0.9rem',
@@ -1340,7 +1340,7 @@ function CityPicker({ value, onChange }: { value: string; onChange: (v: string) 
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '0.75rem',
-  color: '#FFD626',
+  color: 'var(--marigold)',
   textTransform: 'uppercase',
   letterSpacing: 1,
   fontWeight: 700,
@@ -1349,11 +1349,11 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(32,33,34,0.05)',
-  border: '1px solid #D6D5CA',
+  background: 'rgba(var(--ink-rgb), 0.05)',
+  border: '1px solid var(--line-strong)',
   borderRadius: 8,
   padding: '12px 14px',
-  color: '#202122',
+  color: 'var(--ink)',
   fontSize: '0.95rem',
   fontFamily: 'inherit',
   outline: 'none',
@@ -1361,9 +1361,9 @@ const inputStyle: React.CSSProperties = {
 }
 
 const stepBtnStyle: React.CSSProperties = {
-  background: 'rgba(32,33,34,0.08)',
-  border: '1px solid #D6D5CA',
-  color: '#3A3935',
+  background: 'rgba(var(--ink-rgb), 0.08)',
+  border: '1px solid var(--line-strong)',
+  color: 'var(--ink-soft)',
   width: 32, height: 32,
   borderRadius: 6, cursor: 'pointer',
   fontSize: '1rem', fontWeight: 700,
@@ -1372,18 +1372,18 @@ const stepBtnStyle: React.CSSProperties = {
 }
 
 const errorStyle: React.CSSProperties = {
-  color: '#FF4443',
+  color: 'var(--red)',
   fontSize: '0.85rem',
   marginBottom: 16,
   padding: '10px 14px',
-  background: 'rgba(255,68,67,0.08)',
+  background: 'rgba(var(--red-rgb), 0.08)',
   borderRadius: 8,
 }
 
 const ghostBtnStyle: React.CSSProperties = {
-  background: 'rgba(32,33,34,0.03)',
-  border: '1px solid #E6E5DA',
-  color: '#5F5E57',
+  background: 'rgba(var(--ink-rgb), 0.03)',
+  border: '1px solid var(--line)',
+  color: 'var(--ink-muted)',
   borderRadius: 7,
   padding: '7px 14px',
   cursor: 'pointer',
@@ -1394,9 +1394,9 @@ const ghostBtnStyle: React.CSSProperties = {
 
 const primaryBtnStyle = (disabled: boolean): React.CSSProperties => ({
   width: '100%',
-  background: disabled ? '#E6E5DA' : 'rgba(255,214,38,0.12)',
-  border: `1px solid ${disabled ? '#E6E5DA' : 'rgba(255,214,38,0.3)'}`,
-  color: disabled ? '#8F8E85' : '#FFD626',
+  background: disabled ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.12)',
+  border: `1px solid ${disabled ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.3)'}`,
+  color: disabled ? 'var(--ink-ghost)' : 'var(--marigold)',
   padding: '16px 24px',
   borderRadius: 12,
   fontSize: '1rem',

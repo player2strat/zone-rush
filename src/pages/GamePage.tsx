@@ -125,9 +125,9 @@ interface ZoneScoreData {
 // --------------- Helpers ---------------
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string; label: string; pts: number }> = {
-  easy:   { bg: 'rgba(40,183,112,0.15)',  color: '#28B770', label: 'Easy',   pts: 1 },
-  medium: { bg: 'rgba(255,214,38,0.15)', color: '#FFD626', label: 'Medium', pts: 2 },
-  hard:   { bg: 'rgba(255,68,67,0.15)',  color: '#FF4443', label: 'Hard',   pts: 3 },
+  easy:   { bg: 'rgba(var(--green-rgb), 0.15)',  color: 'var(--green)', label: 'Easy',   pts: 1 },
+  medium: { bg: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold)', label: 'Medium', pts: 2 },
+  hard:   { bg: 'rgba(var(--red-rgb), 0.15)',  color: 'var(--red)', label: 'Hard',   pts: 3 },
 }
 
 const VERIFICATION_ICONS: Record<string, string> = {
@@ -144,9 +144,9 @@ const TIME_LABELS: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, { bg: string; border: string; color: string; label: string; icon: string }> = {
-  pending:  { bg: 'rgba(255,214,38,0.10)', border: 'rgba(255,214,38,0.3)', color: '#FFD626', label: 'Pending Review', icon: '⏳' },
-  approved: { bg: 'rgba(40,183,112,0.10)',   border: 'rgba(40,183,112,0.3)',   color: '#28B770', label: 'Approved',       icon: '✅' },
-  rejected: { bg: 'rgba(255,68,67,0.10)',  border: 'rgba(255,68,67,0.3)',  color: '#FF4443', label: 'Rejected',       icon: '❌' },
+  pending:  { bg: 'rgba(var(--marigold-rgb), 0.10)', border: 'rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', label: 'Pending Review', icon: '⏳' },
+  approved: { bg: 'rgba(var(--green-rgb), 0.10)',   border: 'rgba(var(--green-rgb), 0.3)',   color: 'var(--green)', label: 'Approved',       icon: '✅' },
+  rejected: { bg: 'rgba(var(--red-rgb), 0.10)',  border: 'rgba(var(--red-rgb), 0.3)',  color: 'var(--red)', label: 'Rejected',       icon: '❌' },
 }
 
 // --------------- Component ---------------
@@ -589,14 +589,14 @@ export default function GamePage() {
   if (loading) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#FDFFF1', color: '#6F6E66',
+        minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-faint)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            width: 32, height: 32, border: '3px solid #E6E5DA',
-            borderTopColor: '#FFD626', borderRadius: '50%',
+            width: 32, height: 32, border: '3px solid var(--line)',
+            borderTopColor: 'var(--marigold)', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading game...</p>
@@ -609,13 +609,13 @@ export default function GamePage() {
   if (!myTeam) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#FDFFF1', color: '#FF4443',
+        minHeight: '100vh', background: 'var(--paper)', color: 'var(--red)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", gap: 16,
       }}>
         <p>You're not on a team in this game</p>
         <button onClick={() => navigate('/')} style={{
-          background: 'none', border: '1px solid #D6D5CA', color: '#55544E',
+          background: 'none', border: '1px solid var(--line-strong)', color: 'var(--ink-muted)',
           padding: '10px 20px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
         }}>
           Go Home
@@ -626,14 +626,14 @@ export default function GamePage() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#FDFFF1', color: '#202122',
+      minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Top bar */}
       <div style={{
-        padding: '12px 20px', borderBottom: '1px solid #E6E5DA',
-        background: '#FDFFF1', flexShrink: 0,
+        padding: '12px 20px', borderBottom: '1px solid var(--line)',
+        background: 'var(--paper)', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -646,7 +646,7 @@ export default function GamePage() {
             <div style={{
               fontFamily: "'Martian Mono', monospace",
               fontSize: '0.85rem',
-              color: timeLeft === 'GAME OVER' ? '#FF4443' : '#FFD626',
+              color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold)',
               fontWeight: 600,
             }}>
               {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
@@ -655,11 +655,11 @@ export default function GamePage() {
         </div>
 
         {submissions.size > 0 && (
-          <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: '#6F6E66' }}>
-            {approvedCount > 0 && <span style={{ color: '#28B770' }}>✅ {approvedCount} approved</span>}
-            {pendingCount > 0 && <span style={{ color: '#FFD626' }}>⏳ {pendingCount} pending</span>}
+          <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: 'var(--ink-faint)' }}>
+            {approvedCount > 0 && <span style={{ color: 'var(--green)' }}>✅ {approvedCount} approved</span>}
+            {pendingCount > 0 && <span style={{ color: 'var(--marigold)' }}>⏳ {pendingCount} pending</span>}
             {zoneOwnership.size > 0 && (
-              <span style={{ color: '#E67DD1' }}>
+              <span style={{ color: 'var(--pink)' }}>
                 🗺️ {Array.from(zoneOwnership.values()).filter(z => z.claimed).length} zone{Array.from(zoneOwnership.values()).filter(z => z.claimed).length !== 1 ? 's' : ''} claimed
               </span>
             )}
@@ -671,14 +671,14 @@ export default function GamePage() {
       {latestBroadcast && broadcastDismissed !== latestBroadcast && activeTab !== 'chat' && (
         <div style={{
           marginTop: 10,
-          background: 'rgba(255,214,38,0.10)', border: '1px solid rgba(255,214,38,0.3)',
+          background: 'rgba(var(--marigold-rgb), 0.10)', border: '1px solid rgba(var(--marigold-rgb), 0.3)',
           borderRadius: 8, padding: '8px 12px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📢</span>
             <p style={{
-              color: '#FFD626', fontSize: '0.78rem', fontWeight: 600,
+              color: 'var(--marigold)', fontSize: '0.78rem', fontWeight: 600,
               lineHeight: 1.4, margin: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -689,8 +689,8 @@ export default function GamePage() {
             <button
               onClick={() => setActiveTab('chat')}
               style={{
-                background: 'rgba(255,214,38,0.15)', border: '1px solid rgba(255,214,38,0.3)',
-                color: '#FFD626', padding: '4px 10px', borderRadius: 6,
+                background: 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)',
+                color: 'var(--marigold)', padding: '4px 10px', borderRadius: 6,
                 fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -698,7 +698,7 @@ export default function GamePage() {
             </button>
             <button
               onClick={() => setBroadcastDismissed(latestBroadcast)}
-              style={{ background: 'none', border: 'none', color: '#6F6E66', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
+              style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
             >
               ✕
             </button>
@@ -722,28 +722,28 @@ export default function GamePage() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
                 <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
-                <span style={{ fontWeight: 700, fontSize: '1rem', color: '#202122' }}>{myTeam.name}</span>
+                <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--ink)' }}>{myTeam.name}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-around' }}>
                 <div>
                   <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: myTeam.color, lineHeight: 1, marginBottom: 6 }}>
                     {myTeam.total_points}
                   </p>
-                  <p style={{ fontSize: '0.72rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Total Points</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Total Points</p>
                 </div>
-                <div style={{ width: 1, background: '#E6E5DA' }} />
+                <div style={{ width: 1, background: 'var(--line)' }} />
                 <div>
-                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: '#FFD626', lineHeight: 1, marginBottom: 6 }}>
+                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold)', lineHeight: 1, marginBottom: 6 }}>
                     {Array.from(zoneOwnership.values()).filter(z => z.claimed && allTeams.find(t => t.color === z.teamColor)?.id === myTeam.id).length}
                   </p>
-                  <p style={{ fontSize: '0.72rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Zones Claimed</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Zones Claimed</p>
                 </div>
-                <div style={{ width: 1, background: '#E6E5DA' }} />
+                <div style={{ width: 1, background: 'var(--line)' }} />
                 <div>
-                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: '#E67DD1', lineHeight: 1, marginBottom: 6 }}>
+                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: 'var(--pink)', lineHeight: 1, marginBottom: 6 }}>
                     {approvedCount}
                   </p>
-                  <p style={{ fontSize: '0.72rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Challenges</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Challenges</p>
                 </div>
               </div>
             </div>
@@ -763,11 +763,11 @@ export default function GamePage() {
 
             {/* Game Rules */}
             <div style={{
-              background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA',
+              background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)',
               borderRadius: 14, padding: '20px 18px', marginBottom: 16,
             }}>
               <p style={{
-                fontSize: '0.72rem', color: '#FFD626',
+                fontSize: '0.72rem', color: 'var(--marigold)',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
@@ -806,7 +806,7 @@ export default function GamePage() {
                 ].map((rule, i) => (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
-                    <p style={{ color: '#3A3935', fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>
+                    <p style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>
                       {rule.text}
                     </p>
                   </div>
@@ -823,7 +823,7 @@ export default function GamePage() {
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', marginBottom: 16,
             }}>
-              <p style={{ fontSize: '0.75rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, margin: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600, margin: 0 }}>
                 Your Challenges ({challenges.length})
               </p>
 
@@ -831,9 +831,9 @@ export default function GamePage() {
                 <button
                   onClick={() => { setDiscardMode(!discardMode); setSelectedCard(null) }}
                   style={{
-                    background: discardMode ? 'rgba(255,68,67,0.15)' : 'rgba(32,33,34,0.05)',
-                    border: `1px solid ${discardMode ? '#EF476F40' : '#E6E5DA'}`,
-                    color: discardMode ? '#FF4443' : '#55544E',
+                    background: discardMode ? 'rgba(var(--red-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.05)',
+                    border: `1px solid ${discardMode ? '#EF476F40' : 'var(--line)'}`,
+                    color: discardMode ? 'var(--red)' : 'var(--ink-muted)',
                     padding: '6px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                   }}
@@ -841,15 +841,15 @@ export default function GamePage() {
                   {discardMode ? '✕ Cancel' : `🔄 Discard (${discardLimit - discardsUsed} left)`}
                 </button>
               ) : (
-                <span style={{ fontSize: '0.72rem', color: '#A3A298', fontStyle: 'italic' }}>No discards left</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--ink-ghost)', fontStyle: 'italic' }}>No discards left</span>
               )}
             </div>
 
             {discardMode && (
               <div style={{
-                background: 'rgba(255,68,67,0.06)', border: '1px solid rgba(255,68,67,0.15)',
+                background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.15)',
                 borderRadius: 8, padding: '10px 14px', marginBottom: 12,
-                fontSize: '0.82rem', color: '#FF4443',
+                fontSize: '0.82rem', color: 'var(--red)',
               }}>
                 Tap the card you want to discard. You'll get a random replacement.
               </div>
@@ -903,15 +903,15 @@ export default function GamePage() {
                     }}
                     style={{
                       background: discardMode
-                        ? 'rgba(255,68,67,0.03)'
-                        : isCompleted ? 'rgba(40,183,112,0.03)'
-                        : isExpanded ? 'rgba(32,33,34,0.04)'
-                        : 'rgba(32,33,34,0.02)',
+                        ? 'rgba(var(--red-rgb), 0.03)'
+                        : isCompleted ? 'rgba(var(--green-rgb), 0.03)'
+                        : isExpanded ? 'rgba(var(--ink-rgb), 0.04)'
+                        : 'rgba(var(--ink-rgb), 0.02)',
                       border: `1px solid ${
-                        discardMode ? 'rgba(255,68,67,0.2)'
-                        : isCompleted ? 'rgba(40,183,112,0.2)'
+                        discardMode ? 'rgba(var(--red-rgb), 0.2)'
+                        : isCompleted ? 'rgba(var(--green-rgb), 0.2)'
                         : isExpanded ? diff.color + '40'
-                        : '#E6E5DA'
+                        : 'var(--line)'
                       }`,
                       borderRadius: 12, padding: '16px 18px',
                       cursor: 'pointer', transition: 'all 0.15s',
@@ -950,9 +950,9 @@ export default function GamePage() {
                             title="Withdraw this submission"
                             style={{
                               background: 'none',
-                              border: '1px solid rgba(255,214,38,0.3)',
+                              border: '1px solid rgba(var(--marigold-rgb), 0.3)',
                               borderRadius: 20,
-                              color: '#FFD626',
+                              color: 'var(--marigold)',
                               fontSize: '0.8rem',
                               lineHeight: 1,
                               padding: '3px 8px',
@@ -976,7 +976,7 @@ export default function GamePage() {
 
                     {/* Challenge description */}
                     <p style={{
-                      color: isCompleted ? '#55544E' : '#2A2B2C',
+                      color: isCompleted ? 'var(--ink-muted)' : 'var(--ink-soft)',
                       fontSize: '0.92rem', lineHeight: 1.6,
                       marginBottom: (isExpanded || discardMode) ? 12 : 0,
                       textDecoration: isCompleted ? 'line-through' : 'none',
@@ -987,13 +987,13 @@ export default function GamePage() {
                     {/* GM rejection notes */}
                     {sub?.status === 'rejected' && sub.gm_notes && (
                       <div style={{
-                        background: 'rgba(255,68,67,0.06)', border: '1px solid rgba(255,68,67,0.15)',
+                        background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.15)',
                         borderRadius: 8, padding: '8px 12px', marginBottom: 10,
                       }}>
-                        <p style={{ fontSize: '0.7rem', color: '#FF4443', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--red)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
                           GM Feedback
                         </p>
-                        <p style={{ color: '#3A3935', fontSize: '0.82rem', lineHeight: 1.5 }}>{sub.gm_notes}</p>
+                        <p style={{ color: 'var(--ink-soft)', fontSize: '0.82rem', lineHeight: 1.5 }}>{sub.gm_notes}</p>
                       </div>
                     )}
 
@@ -1008,8 +1008,8 @@ export default function GamePage() {
                         }}
                         disabled={discarding}
                         style={{
-                          width: '100%', background: 'rgba(255,68,67,0.12)',
-                          border: '1px solid rgba(255,68,67,0.3)', color: '#FF4443',
+                          width: '100%', background: 'rgba(var(--red-rgb), 0.12)',
+                          border: '1px solid rgba(var(--red-rgb), 0.3)', color: 'var(--red)',
                           padding: '10px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700,
                           cursor: discarding ? 'wait' : 'pointer', fontFamily: 'inherit',
                           opacity: discarding ? 0.5 : 1,
@@ -1022,20 +1022,20 @@ export default function GamePage() {
                     {/* Expanded details */}
                     {isExpanded && (
                       <div style={{ marginTop: 4 }}>
-                        <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '0.78rem', color: '#5F5E57', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '0.78rem', color: 'var(--ink-muted)', flexWrap: 'wrap' }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
-                          {ch.is_time_based && <span style={{ color: '#FFD626' }}>⏱ Timed challenge</span>}
+                          {ch.is_time_based && <span style={{ color: 'var(--marigold)' }}>⏱ Timed challenge</span>}
                         </div>
 
                         {ch.tier2 && (
                           <div style={{
-                            background: 'rgba(230,125,209,0.08)', border: '1px solid rgba(230,125,209,0.2)',
+                            background: 'rgba(var(--pink-rgb), 0.08)', border: '1px solid rgba(var(--pink-rgb), 0.2)',
                             borderRadius: 8, padding: '10px 14px', marginBottom: 10,
                           }}>
-                            <p style={{ fontSize: '0.7rem', color: '#E67DD1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--pink)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                               Tier 2 Bonus (+{ch.tier2.bonus_points}pt)
                             </p>
-                            <p style={{ color: '#4A4944', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                            <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
                               {ch.tier2.description}
                             </p>
                           </div>
@@ -1043,20 +1043,20 @@ export default function GamePage() {
 
                         {sub?.status === 'approved' ? (
                           <div style={{
-                            width: '100%', boxSizing: 'border-box', background: 'rgba(40,183,112,0.08)',
-                            border: '1px solid rgba(40,183,112,0.2)',
+                            width: '100%', boxSizing: 'border-box', background: 'rgba(var(--green-rgb), 0.08)',
+                            border: '1px solid rgba(var(--green-rgb), 0.2)',
                             padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#28B770', fontSize: '0.88rem', fontWeight: 600,
+                            textAlign: 'center', color: 'var(--green)', fontSize: '0.88rem', fontWeight: 600,
                           }}>
                             ✅ Challenge Complete — {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
                           </div>
                         ) : sub?.status === 'pending' ? (
                           <div style={{ width: '100%' }}>
                             <div style={{
-                              width: '100%', boxSizing: 'border-box', background: 'rgba(255,214,38,0.08)',
-                              border: '1px solid rgba(255,214,38,0.2)',
+                              width: '100%', boxSizing: 'border-box', background: 'rgba(var(--marigold-rgb), 0.08)',
+                              border: '1px solid rgba(var(--marigold-rgb), 0.2)',
                               padding: '12px 20px', borderRadius: 8,
-                              textAlign: 'center', color: '#FFD626', fontSize: '0.88rem', fontWeight: 600,
+                              textAlign: 'center', color: 'var(--marigold)', fontSize: '0.88rem', fontWeight: 600,
                               animation: 'pendingPulse 2s ease-in-out infinite',
                             }}>
                               ⏳ Waiting for GM review...
@@ -1079,10 +1079,10 @@ export default function GamePage() {
                               }}
                               style={{
                                 width: '100%', boxSizing: 'border-box', marginTop: 8,
-                                background: confirmCancelSubId === ch.id ? 'rgba(255,68,67,0.15)' : 'none',
-                                border: `1px solid ${confirmCancelSubId === ch.id ? 'rgba(255,68,67,0.5)' : '#D6D5CA'}`,
+                                background: confirmCancelSubId === ch.id ? 'rgba(var(--red-rgb), 0.15)' : 'none',
+                                border: `1px solid ${confirmCancelSubId === ch.id ? 'rgba(var(--red-rgb), 0.5)' : 'var(--line-strong)'}`,
                                 padding: '9px 16px', borderRadius: 8,
-                                color: confirmCancelSubId === ch.id ? '#FF4443' : '#55544E',
+                                color: confirmCancelSubId === ch.id ? 'var(--red)' : 'var(--ink-muted)',
                                 fontSize: '0.8rem', fontWeight: 600,
                                 cursor: 'pointer', fontFamily: 'inherit',
                               }}
@@ -1094,9 +1094,9 @@ export default function GamePage() {
                           </div>
                         ) : game?.status === 'ended' ? (
                           <div style={{
-                            width: '100%', boxSizing: 'border-box', background: 'rgba(32,33,34,0.03)',
-                            border: '1px solid #E6E5DA', padding: '12px 20px', borderRadius: 8,
-                            textAlign: 'center', color: '#6F6E66', fontSize: '0.88rem',
+                            width: '100%', boxSizing: 'border-box', background: 'rgba(var(--ink-rgb), 0.03)',
+                            border: '1px solid var(--line)', padding: '12px 20px', borderRadius: 8,
+                            textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem',
                           }}>
                             🏁 Game Over — submissions closed
                           </div>
@@ -1125,10 +1125,10 @@ export default function GamePage() {
             </div>
 
             {challenges.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: 60, color: '#6F6E66' }}>
+              <div style={{ textAlign: 'center', marginTop: 60, color: 'var(--ink-faint)' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🃏</p>
                 <p>No challenges dealt yet.</p>
-                <p style={{ fontSize: '0.82rem', color: '#A3A298', marginTop: 4 }}>Waiting for GM to start the game.</p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-ghost)', marginTop: 4 }}>Waiting for GM to start the game.</p>
               </div>
             )}
           </div>
@@ -1146,7 +1146,7 @@ export default function GamePage() {
                 playerLocations={teammateLocations}
               />
             ) : (
-              <div style={{ textAlign: 'center', marginTop: 60, color: '#6F6E66', padding: '0 20px' }}>
+              <div style={{ textAlign: 'center', marginTop: 60, color: 'var(--ink-faint)', padding: '0 20px' }}>
                 <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>🗺️</p>
                 <p>No zones loaded for this game.</p>
               </div>
@@ -1157,15 +1157,15 @@ export default function GamePage() {
               <div style={{
                 position: 'absolute', bottom: 20, left: 12,
                 background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(8px)',
-                border: '1px solid #E6E5DA', borderRadius: 10, padding: '10px 14px', zIndex: 10,
+                border: '1px solid var(--line)', borderRadius: 10, padding: '10px 14px', zIndex: 10,
               }}>
-                <p style={{ fontSize: '0.65rem', color: '#5F5E57', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
+                <p style={{ fontSize: '0.65rem', color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>
                   Zone Control
                 </p>
                 {Array.from(zoneOwnership.entries()).map(([zoneId, owner]) => (
                   <div key={zoneId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor, opacity: owner.claimed ? 1 : 0.4 }} />
-                    <span style={{ fontSize: '0.72rem', color: '#4A4944' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
                       {zoneNameById.get(zoneId) ?? zoneId} — {owner.teamName}
                       {owner.locked ? ' (locked)' : !owner.claimed ? ' (contesting)' : ''}
                     </span>
@@ -1181,10 +1181,10 @@ export default function GamePage() {
           <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {chatMessages.length === 0 ? (
-                <div style={{ textAlign: 'center', marginTop: 60, color: '#6F6E66' }}>
+                <div style={{ textAlign: 'center', marginTop: 60, color: 'var(--ink-faint)' }}>
                   <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>💬</p>
-                  <p style={{ fontWeight: 600, color: '#5F5E57' }}>No messages yet</p>
-                  <p style={{ fontSize: '0.82rem', color: '#8F8E85', marginTop: 6, lineHeight: 1.6 }}>
+                  <p style={{ fontWeight: 600, color: 'var(--ink-muted)' }}>No messages yet</p>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--ink-ghost)', marginTop: 6, lineHeight: 1.6 }}>
                     Chat with your team here. Use “Message GM” to send the GM a question.
                   </p>
                 </div>
@@ -1211,35 +1211,35 @@ export default function GamePage() {
 
                   return (
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-                      <p style={{ fontSize: '0.68rem', color: isFlaggedToGM ? '#FFD626' : '#8F8E85', marginBottom: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0, fontWeight: isFlaggedToGM ? 700 : 400 }}>
+                      <p style={{ fontSize: '0.68rem', color: isFlaggedToGM ? 'var(--marigold)' : 'var(--ink-ghost)', marginBottom: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0, fontWeight: isFlaggedToGM ? 700 : 400 }}>
                         {label}
                       </p>
                       <div style={{
                         maxWidth: '80%',
                         background: isBroadcast
-                          ? 'rgba(255,214,38,0.1)'
+                          ? 'rgba(var(--marigold-rgb), 0.1)'
                           : isFromGM
-                            ? 'rgba(32,33,34,0.05)'
+                            ? 'rgba(var(--ink-rgb), 0.05)'
                             : isFlaggedToGM
-                              ? 'rgba(255,214,38,0.08)'
+                              ? 'rgba(var(--marigold-rgb), 0.08)'
                               : `${myTeam.color}18`,
                         border: `1px solid ${
                           isBroadcast
-                            ? 'rgba(255,214,38,0.25)'
+                            ? 'rgba(var(--marigold-rgb), 0.25)'
                             : isFromGM
-                              ? '#E6E5DA'
+                              ? 'var(--line)'
                               : isFlaggedToGM
-                                ? 'rgba(255,214,38,0.35)'
+                                ? 'rgba(var(--marigold-rgb), 0.35)'
                                 : myTeam.color + '35'
                         }`,
                         borderRadius: alignRight ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
                         padding: '10px 14px',
                       }}>
-                        <p style={{ color: isBroadcast ? '#FFD626' : '#2A2B2C', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
+                        <p style={{ color: isBroadcast ? 'var(--marigold)' : 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
                           {msg.text}
                         </p>
                       </div>
-                      <p style={{ fontSize: '0.65rem', color: '#A3A298', marginTop: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0 }}>
+                      <p style={{ fontSize: '0.65rem', color: 'var(--ink-ghost)', marginTop: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0 }}>
                         {msg.sent_at?.toDate ? msg.sent_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </p>
                     </div>
@@ -1250,7 +1250,7 @@ export default function GamePage() {
             </div>
 
             {/* Composer: team message (default) + Message GM (flagged) */}
-            <div style={{ padding: '12px 16px 100px', borderTop: '1px solid #E6E5DA', background: '#FDFFF1' }}>
+            <div style={{ padding: '12px 16px 100px', borderTop: '1px solid var(--line)', background: 'var(--paper)' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 8 }}>
                 <textarea
                   value={chatInput}
@@ -1259,8 +1259,8 @@ export default function GamePage() {
                   placeholder="Message ..."
                   rows={1}
                   style={{
-                    flex: 1, background: '#FFFFFF', border: '1px solid #E6E5DA',
-                    borderRadius: 10, padding: '10px 14px', color: '#202122',
+                    flex: 1, background: 'var(--surface)', border: '1px solid var(--line)',
+                    borderRadius: 10, padding: '10px 14px', color: 'var(--ink)',
                     fontSize: '0.88rem', fontFamily: 'inherit', resize: 'none', outline: 'none', lineHeight: 1.5,
                   }}
                 />
@@ -1269,8 +1269,8 @@ export default function GamePage() {
                   disabled={!chatInput.trim() || chatSending}
                   title="Send to your team"
                   style={{
-                    background: chatInput.trim() ? '#FFD626' : '#E6E5DA',
-                    color: chatInput.trim() ? '#202122' : '#8F8E85',
+                    background: chatInput.trim() ? 'var(--marigold)' : 'var(--line)',
+                    color: chatInput.trim() ? 'var(--ink)' : 'var(--ink-ghost)',
                     border: 'none', borderRadius: 10, width: 42, height: 42,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: chatInput.trim() ? 'pointer' : 'default',
@@ -1289,9 +1289,9 @@ export default function GamePage() {
                 title="Send this message directly to the GM"
                 style={{
                   width: '100%',
-                  background: chatInput.trim() ? 'rgba(255,214,38,0.12)' : 'rgba(32,33,34,0.03)',
-                  border: `1px solid ${chatInput.trim() ? 'rgba(255,214,38,0.35)' : '#E6E5DA'}`,
-                  color: chatInput.trim() ? '#FFD626' : '#8F8E85',
+                  background: chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)',
+                  border: `1px solid ${chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.35)' : 'var(--line)'}`,
+                  color: chatInput.trim() ? 'var(--marigold)' : 'var(--ink-ghost)',
                   padding: '9px 14px', borderRadius: 10,
                   fontSize: '0.82rem', fontWeight: 700,
                   cursor: chatInput.trim() && !chatSending ? 'pointer' : 'default',
@@ -1301,7 +1301,7 @@ export default function GamePage() {
               >
                 🎮 Message GM
               </button>
-              <p style={{ fontSize: '0.66rem', color: '#8F8E85', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
+              <p style={{ fontSize: '0.66rem', color: 'var(--ink-ghost)', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
                 Normal messages go to your team (the GM can see them). “Message GM” pings the GM directly.
               </p>
             </div>
@@ -1332,21 +1332,21 @@ export default function GamePage() {
       {gameEnded && !previewHideOverlay && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
-          background: 'rgba(253,255,241,0.96)',
+          background: 'rgba(var(--paper-rgb), 0.96)',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
           gap: 16, padding: '0 32px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         }}>
           <span style={{ fontSize: '2.5rem' }}>🏁</span>
-          <h2 style={{ color: '#FFD626', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
-          <p style={{ color: '#55544E', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
+          <h2 style={{ color: 'var(--marigold)', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
+          <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
             The GM has ended the game. Time to see how you did!
           </p>
           <button
             onClick={() => navigate('/results/' + gameId)}
             style={{
-              marginTop: 8, background: '#FFD626', border: 'none', borderRadius: 12,
-              color: '#202122', fontFamily: 'inherit', fontSize: '1rem', fontWeight: 800,
+              marginTop: 8, background: 'var(--marigold)', border: 'none', borderRadius: 12,
+              color: 'var(--ink)', fontFamily: 'inherit', fontSize: '1rem', fontWeight: 800,
               padding: '14px 32px', cursor: 'pointer',
             }}
           >
@@ -1358,7 +1358,7 @@ export default function GamePage() {
       {/* Bottom tab bar */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: '#FDFFF1', borderTop: '1px solid #E6E5DA',
+        background: 'var(--paper)', borderTop: '1px solid var(--line)',
         display: 'flex', justifyContent: 'space-around',
         padding: '10px 0 24px', zIndex: 100,
       }}>
@@ -1388,7 +1388,7 @@ export default function GamePage() {
               onClick={() => setActiveTab(tab.id)}
               style={{
                 background: 'none', border: 'none',
-                color: activeTab === tab.id ? '#FFD626' : '#6F6E66',
+                color: activeTab === tab.id ? 'var(--marigold)' : 'var(--ink-faint)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 gap: 4, cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: '0.72rem',
@@ -1399,7 +1399,7 @@ export default function GamePage() {
               <span style={{ fontSize: '1.2rem', position: 'relative' }}>
                 {tab.icon}
                 {showDot && (
-                  <span style={{ position: 'absolute', top: -2, right: -6, width: 8, height: 8, borderRadius: '50%', background: '#FFD626' }} />
+                  <span style={{ position: 'absolute', top: -2, right: -6, width: 8, height: 8, borderRadius: '50%', background: 'var(--marigold)' }} />
                 )}
               </span>
               {tab.label}

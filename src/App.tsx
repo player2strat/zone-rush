@@ -105,12 +105,12 @@ export default function App() {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#FDFFF1',
+        background: 'var(--paper)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <div style={{ color: '#A3A298', fontSize: '0.85rem' }}>Loading...</div>
+        <div style={{ color: 'var(--ink-ghost)', fontSize: '0.85rem' }}>Loading...</div>
       </div>
     )
   }

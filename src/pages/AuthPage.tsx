@@ -88,7 +88,7 @@ export default function AuthPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
+      background: 'var(--paper)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -104,7 +104,7 @@ export default function AuthPage() {
             style={{ width: '100%', maxWidth: 320, height: 'auto', display: 'block', margin: '0 auto 16px' }}
           />
           <p style={{
-            color: '#202122', margin: 0, fontSize: '0.78rem', fontWeight: 700,
+            color: 'var(--ink)', margin: 0, fontSize: '0.78rem', fontWeight: 700,
             fontFamily: "'Martian Mono', monospace", textTransform: 'uppercase', letterSpacing: 2,
           }}>
             Claim the city
@@ -114,11 +114,11 @@ export default function AuthPage() {
         {/* Mode toggle */}
         <div style={{
           display: 'flex',
-          background: '#FFFFFF',
+          background: 'var(--surface)',
           borderRadius: 10,
           padding: 4,
           marginBottom: 24,
-          border: '1px solid #E6E5DA',
+          border: '1px solid var(--line)',
         }}>
           {(['login', 'signup'] as const).map((m) => (
             <button
@@ -129,8 +129,8 @@ export default function AuthPage() {
                 padding: '10px',
                 borderRadius: 8,
                 border: 'none',
-                background: mode === m ? '#FFD626' : 'transparent',
-                color: mode === m ? '#202122' : '#6F6E66',
+                background: mode === m ? 'var(--marigold)' : 'transparent',
+                color: mode === m ? 'var(--ink)' : 'var(--ink-faint)',
                 fontWeight: 700,
                 fontSize: '0.88rem',
                 cursor: 'pointer',
@@ -170,7 +170,7 @@ export default function AuthPage() {
           />
 
           {error && (
-            <p style={{ color: '#FF4443', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
+            <p style={{ color: 'var(--red)', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
               {error}
             </p>
           )}
@@ -180,8 +180,8 @@ export default function AuthPage() {
             disabled={loading}
             style={{
               ...buttonStyle,
-              background: '#FFD626',
-              color: '#202122',
+              background: 'var(--marigold)',
+              color: 'var(--ink)',
               opacity: loading ? 0.6 : 1,
             }}
           >
@@ -189,9 +189,9 @@ export default function AuthPage() {
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0' }}>
-            <div style={{ flex: 1, height: 1, background: '#E6E5DA' }} />
-            <span style={{ color: '#A3A298', fontSize: '0.78rem' }}>or</span>
-            <div style={{ flex: 1, height: 1, background: '#E6E5DA' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+            <span style={{ color: 'var(--ink-ghost)', fontSize: '0.78rem' }}>or</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
           </div>
 
           <button
@@ -199,9 +199,9 @@ export default function AuthPage() {
             disabled={loading}
             style={{
               ...buttonStyle,
-              background: '#FFFFFF',
-              color: '#2A2B2C',
-              border: '1px solid #E6E5DA',
+              background: 'var(--surface)',
+              color: 'var(--ink-soft)',
+              border: '1px solid var(--line)',
               opacity: loading ? 0.6 : 1,
             }}
           >
@@ -215,11 +215,11 @@ export default function AuthPage() {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#FFFFFF',
-  border: '1px solid #E6E5DA',
+  background: 'var(--surface)',
+  border: '1px solid var(--line)',
   borderRadius: 10,
   padding: '14px 16px',
-  color: '#202122',
+  color: 'var(--ink)',
   fontSize: '1rem',
   fontFamily: 'inherit',
   outline: 'none',

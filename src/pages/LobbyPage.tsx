@@ -538,7 +538,7 @@ export default function LobbyPage() {
   if (loading) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#FDFFF1', color: '#6F6E66',
+        minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-faint)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}>
@@ -550,13 +550,13 @@ export default function LobbyPage() {
   if (!game) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#FDFFF1', color: '#FF4443',
+        minHeight: '100vh', background: 'var(--paper)', color: 'var(--red)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", gap: 16,
       }}>
         <p>Game not found</p>
         <button onClick={() => navigate('/')} style={{
-          background: 'none', border: '1px solid #D6D5CA', color: '#55544E',
+          background: 'none', border: '1px solid var(--line-strong)', color: 'var(--ink-muted)',
           padding: '10px 20px', borderRadius: 8, cursor: 'pointer',
           fontFamily: 'inherit',
         }}>
@@ -576,8 +576,8 @@ export default function LobbyPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#FDFFF1',
-      color: '#202122',
+      background: 'var(--paper)',
+      color: 'var(--ink)',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: 24,
     }}>
@@ -588,7 +588,7 @@ export default function LobbyPage() {
           <button
             onClick={handleLeaveLobby}
             style={{
-              background: 'none', border: 'none', color: '#6F6E66',
+              background: 'none', border: 'none', color: 'var(--ink-faint)',
               cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem',
               padding: 0, marginBottom: 12,
             }}
@@ -602,14 +602,14 @@ export default function LobbyPage() {
               <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
                 {game.name}
               </h1>
-              <p style={{ color: '#5F5E57', fontSize: '0.85rem', marginTop: 4 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', marginTop: 4 }}>
                 {game.settings.duration_minutes} min · {game.zones.length} zones · {game.settings.team_size} per team
               </p>
               </div>
             </div>
             <span style={{
-              background: 'rgba(40,183,112,0.12)',
-              color: '#28B770',
+              background: 'rgba(var(--green-rgb), 0.12)',
+              color: 'var(--green)',
               padding: '4px 12px',
               borderRadius: 20,
               fontSize: '0.75rem',
@@ -625,8 +625,8 @@ export default function LobbyPage() {
         <div
           onClick={copyCode}
           style={{
-            background: 'rgba(255,214,38,0.08)',
-            border: '1px solid rgba(255,214,38,0.2)',
+            background: 'rgba(var(--marigold-rgb), 0.08)',
+            border: '1px solid rgba(var(--marigold-rgb), 0.2)',
             borderRadius: 12,
             padding: '20px 24px',
             textAlign: 'center',
@@ -635,18 +635,18 @@ export default function LobbyPage() {
           }}
         >
           <p style={{
-            fontSize: '0.72rem', color: '#7A6400',
+            fontSize: '0.72rem', color: 'var(--marigold-deep)',
             textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8,
           }}>
             Join Code (tap to copy)
           </p>
           <p style={{
-            fontSize: '2.2rem', fontWeight: 800, color: '#FFD626',
+            fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold)',
             letterSpacing: 6, fontFamily: "'Martian Mono', monospace", margin: 0,
           }}>
             {game.join_code}
           </p>
-          <p style={{ fontSize: '0.78rem', color: '#5F5E57', marginTop: 8 }}>
+          <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', marginTop: 8 }}>
             Share this code with your players
           </p>
         </div>
@@ -654,14 +654,14 @@ export default function LobbyPage() {
         {/* ── NAME PROMPT (shown at top once a player taps Join / Auto-Join) ── */}
         {!isGM && !playerTeamId && pendingJoin && (
           <div style={{
-            background: 'rgba(40,183,112,0.06)',
-            border: '1px solid rgba(40,183,112,0.25)',
+            background: 'rgba(var(--green-rgb), 0.06)',
+            border: '1px solid rgba(var(--green-rgb), 0.25)',
             borderRadius: 12,
             padding: '18px 18px',
             marginBottom: 20,
           }}>
             <p style={{
-              fontSize: '0.72rem', color: '#28B770',
+              fontSize: '0.72rem', color: 'var(--green)',
               textTransform: 'uppercase', letterSpacing: 1,
               fontWeight: 700, marginBottom: 4,
             }}>
@@ -669,7 +669,7 @@ export default function LobbyPage() {
                 ? `Joining ${teams.find(t => t.id === (pendingJoin as any).teamId)?.name ?? 'team'}`
                 : 'Joining a team'}
             </p>
-            <p style={{ color: '#55544E', fontSize: '0.8rem', marginBottom: 12 }}>
+            <p style={{ color: 'var(--ink-muted)', fontSize: '0.8rem', marginBottom: 12 }}>
               Pick the name your teammates and the GM will see in chat.
             </p>
             <input
@@ -683,15 +683,15 @@ export default function LobbyPage() {
               placeholder="Your name (shown in chat)"
               maxLength={20}
               style={{
-                width: '100%', background: '#FFFFFF',
-                border: `1px solid ${nameError ? '#FF4443' : 'rgba(40,183,112,0.4)'}`,
-                borderRadius: 8, padding: '11px 14px', color: '#202122',
+                width: '100%', background: 'var(--surface)',
+                border: `1px solid ${nameError ? 'var(--red)' : 'rgba(var(--green-rgb), 0.4)'}`,
+                borderRadius: 8, padding: '11px 14px', color: 'var(--ink)',
                 fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none',
                 boxSizing: 'border-box', marginBottom: nameError ? 6 : 12,
               }}
             />
             {nameError && (
-              <p style={{ color: '#FF4443', fontSize: '0.78rem', margin: '0 0 12px' }}>
+              <p style={{ color: 'var(--red)', fontSize: '0.78rem', margin: '0 0 12px' }}>
                 {nameError}
               </p>
             )}
@@ -700,8 +700,8 @@ export default function LobbyPage() {
                 onClick={confirmJoin}
                 disabled={joining}
                 style={{
-                  flex: 2, background: 'rgba(40,183,112,0.15)',
-                  border: '1px solid rgba(40,183,112,0.4)', color: '#28B770',
+                  flex: 2, background: 'rgba(var(--green-rgb), 0.15)',
+                  border: '1px solid rgba(var(--green-rgb), 0.4)', color: 'var(--green)',
                   padding: '12px 16px', borderRadius: 8,
                   fontSize: '0.9rem', fontWeight: 700,
                   cursor: joining ? 'wait' : 'pointer', fontFamily: 'inherit',
@@ -715,7 +715,7 @@ export default function LobbyPage() {
                 disabled={joining}
                 style={{
                   flex: 1, background: 'transparent',
-                  border: '1px solid #D6D5CA', color: '#5F5E57',
+                  border: '1px solid var(--line-strong)', color: 'var(--ink-muted)',
                   padding: '12px 16px', borderRadius: 8,
                   fontSize: '0.9rem', fontWeight: 600,
                   cursor: 'pointer', fontFamily: 'inherit',
@@ -747,7 +747,7 @@ export default function LobbyPage() {
               <p style={{ color: myTeam.color, fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>
                 You're on {myTeam.name}
               </p>
-              <p style={{ color: '#5F5E57', fontSize: '0.75rem', marginTop: 2 }}>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', marginTop: 2 }}>
                 Switch anytime before the game starts
               </p>
             </div>
@@ -757,8 +757,8 @@ export default function LobbyPage() {
         {/* ── "Pick a team" prompt banner (player only, not yet on a team, no name prompt open) ── */}
         {!isGM && !playerTeamId && !pendingJoin && teams.length > 0 && (
           <div style={{
-            background: 'rgba(40,183,112,0.06)',
-            border: '1px solid rgba(40,183,112,0.2)',
+            background: 'rgba(var(--green-rgb), 0.06)',
+            border: '1px solid rgba(var(--green-rgb), 0.2)',
             borderRadius: 10,
             padding: '12px 16px',
             marginBottom: 16,
@@ -767,14 +767,14 @@ export default function LobbyPage() {
             gap: 10,
           }}>
             <span style={{ fontSize: '1.1rem' }}>👇</span>
-            <p style={{ color: '#28B770', fontWeight: 600, fontSize: '0.88rem', margin: 0 }}>
+            <p style={{ color: 'var(--green)', fontWeight: 600, fontSize: '0.88rem', margin: 0 }}>
               Pick a team below, or tap Auto-Join
             </p>
           </div>
         )}
 
         {/* ── Player count ── */}
-        <p style={{ color: '#55544E', fontSize: '0.88rem', marginBottom: 16 }}>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', marginBottom: 16 }}>
           {totalPlayers} player{totalPlayers !== 1 ? 's' : ''} joined · {teams.length}/{game.max_teams} teams
         </p>
 
@@ -791,8 +791,8 @@ export default function LobbyPage() {
               <div
                 key={team.id}
                 style={{
-                  background: isMyTeam ? `${team.color}12` : 'rgba(32,33,34,0.02)',
-                  border: `1px solid ${isMyTeam ? team.color + '40' : '#E6E5DA'}`,
+                  background: isMyTeam ? `${team.color}12` : 'rgba(var(--ink-rgb), 0.02)',
+                  border: `1px solid ${isMyTeam ? team.color + '40' : 'var(--line)'}`,
                   borderRadius: 10,
                   padding: '14px 16px',
                   transition: 'border-color 0.15s',
@@ -801,7 +801,7 @@ export default function LobbyPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 12, height: 12, borderRadius: 3, background: team.color }} />
-                    <span style={{ color: '#202122', fontWeight: 700, fontSize: '0.95rem' }}>
+                    <span style={{ color: 'var(--ink)', fontWeight: 700, fontSize: '0.95rem' }}>
                       {team.name}
                     </span>
                     {isMyTeam && (
@@ -812,7 +812,7 @@ export default function LobbyPage() {
                   </div>
                   <span style={{
                     fontSize: '0.78rem',
-                    color: isFull ? '#FF4443' : '#6F6E66',
+                    color: isFull ? 'var(--red)' : 'var(--ink-faint)',
                     fontWeight: isFull ? 700 : 400,
                   }}>
                     {team.members.length}/{game.settings.team_size}
@@ -824,9 +824,9 @@ export default function LobbyPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (canJoin || canSwitch) ? 10 : 0 }}>
                   {team.member_names.map((name, i) => (
                     <span key={i} style={{
-                      background: 'rgba(32,33,34,0.05)',
+                      background: 'rgba(var(--ink-rgb), 0.05)',
                       padding: '3px 10px', borderRadius: 12,
-                      fontSize: '0.78rem', color: '#4A4944',
+                      fontSize: '0.78rem', color: 'var(--ink-muted)',
                     }}>
                       {name}
                     </span>
@@ -834,8 +834,8 @@ export default function LobbyPage() {
                   {!isFull && (
                     <span style={{
                       padding: '3px 10px', borderRadius: 12,
-                      fontSize: '0.78rem', color: '#A3A298',
-                      border: '1px dashed #D6D5CA',
+                      fontSize: '0.78rem', color: 'var(--ink-ghost)',
+                      border: '1px dashed var(--line-strong)',
                     }}>
                       waiting...
                     </span>
@@ -869,9 +869,9 @@ export default function LobbyPage() {
                     disabled={joining}
                     style={{
                       width: '100%',
-                      background: 'rgba(255,214,38,0.08)',
-                      border: '1px solid rgba(255,214,38,0.25)',
-                      color: '#FFD626',
+                      background: 'rgba(var(--marigold-rgb), 0.08)',
+                      border: '1px solid rgba(var(--marigold-rgb), 0.25)',
+                      color: 'var(--marigold)',
                       padding: '8px 14px', borderRadius: 7,
                       fontSize: '0.82rem', fontWeight: 700,
                       cursor: joining ? 'wait' : 'pointer',
@@ -893,9 +893,9 @@ export default function LobbyPage() {
             disabled={joining}
             style={{
               width: '100%',
-              background: 'rgba(40,183,112,0.12)',
-              border: '1px solid rgba(40,183,112,0.3)',
-              color: '#28B770',
+              background: 'rgba(var(--green-rgb), 0.12)',
+              border: '1px solid rgba(var(--green-rgb), 0.3)',
+              color: 'var(--green)',
               padding: '14px 24px', borderRadius: 10,
               fontSize: '0.95rem', fontWeight: 700,
               cursor: joining ? 'wait' : 'pointer',
@@ -910,8 +910,8 @@ export default function LobbyPage() {
         {/* ── Error ── */}
         {error && (
           <p style={{
-            color: '#FF4443', fontSize: '0.85rem', marginBottom: 16,
-            padding: '10px 14px', background: 'rgba(255,68,67,0.08)',
+            color: 'var(--red)', fontSize: '0.85rem', marginBottom: 16,
+            padding: '10px 14px', background: 'rgba(var(--red-rgb), 0.08)',
             borderRadius: 8, textAlign: 'center',
           }}>
             {error}
@@ -924,14 +924,14 @@ export default function LobbyPage() {
         {isGM && (
           <div style={{
             marginTop: 16,
-            background: 'rgba(255,214,38,0.05)',
-            border: '1px solid rgba(255,214,38,0.15)',
+            background: 'rgba(var(--marigold-rgb), 0.05)',
+            border: '1px solid rgba(var(--marigold-rgb), 0.15)',
             borderRadius: 12,
             overflow: 'hidden',
           }}>
             <div style={{ padding: '16px 20px 0' }}>
               <p style={{
-                fontSize: '0.72rem', color: '#FFD626',
+                fontSize: '0.72rem', color: 'var(--marigold)',
                 textTransform: 'uppercase', letterSpacing: 1,
                 fontWeight: 700, marginBottom: 12,
               }}>
@@ -943,9 +943,9 @@ export default function LobbyPage() {
                 onClick={handleStartGame}
                 style={{
                   width: '100%',
-                  background: 'rgba(255,214,38,0.15)',
-                  border: '1px solid rgba(255,214,38,0.3)',
-                  color: '#FFD626',
+                  background: 'rgba(var(--marigold-rgb), 0.15)',
+                  border: '1px solid rgba(var(--marigold-rgb), 0.3)',
+                  color: 'var(--marigold)',
                   padding: '14px 24px', borderRadius: 10,
                   fontSize: '1rem', fontWeight: 700,
                   cursor: 'pointer', fontFamily: 'inherit',
@@ -955,7 +955,7 @@ export default function LobbyPage() {
                 Start Game
               </button>
               <p style={{
-                fontSize: '0.78rem', color: '#5F5E57',
+                fontSize: '0.78rem', color: 'var(--ink-muted)',
                 marginBottom: 16, textAlign: 'center',
               }}>
                 Need at least 1 team with players
@@ -967,10 +967,10 @@ export default function LobbyPage() {
               onClick={() => setRosterOpen((v) => !v)}
               style={{
                 width: '100%',
-                background: rosterOpen ? 'rgba(32,33,34,0.04)' : 'transparent',
+                background: rosterOpen ? 'rgba(var(--ink-rgb), 0.04)' : 'transparent',
                 border: 'none',
-                borderTop: '1px solid rgba(255,214,38,0.1)',
-                color: rosterOpen ? '#3A3935' : '#5F5E57',
+                borderTop: '1px solid rgba(var(--marigold-rgb), 0.1)',
+                color: rosterOpen ? 'var(--ink-soft)' : 'var(--ink-muted)',
                 padding: '12px 20px',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -984,7 +984,7 @@ export default function LobbyPage() {
             >
               <span>✏️ Adjust Teams / Roster</span>
               <span style={{
-                color: '#8F8E85', fontSize: '0.75rem',
+                color: 'var(--ink-ghost)', fontSize: '0.75rem',
                 transform: rosterOpen ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.2s',
               }}>▼</span>
@@ -993,13 +993,13 @@ export default function LobbyPage() {
             {/* ── Roster Manager panel ── */}
             {rosterOpen && (
               <div style={{ padding: '16px 20px 20px' }}>
-                <p style={{ fontSize: '0.75rem', color: '#6F6E66', marginBottom: 16, lineHeight: 1.6 }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--ink-faint)', marginBottom: 16, lineHeight: 1.6 }}>
                   Move players between teams, rename teams, or remove players.
                   Changes apply instantly — all players see updates in real time.
                 </p>
 
                 {teams.length === 0 && (
-                  <p style={{ color: '#8F8E85', fontSize: '0.82rem', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                  <p style={{ color: 'var(--ink-ghost)', fontSize: '0.82rem', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
                     No teams yet. Players will appear here once they join.
                   </p>
                 )}
@@ -1009,8 +1009,8 @@ export default function LobbyPage() {
                     <div
                       key={team.id}
                       style={{
-                        background: 'rgba(32,33,34,0.02)',
-                        border: '1px solid #E6E5DA',
+                        background: 'rgba(var(--ink-rgb), 0.02)',
+                        border: '1px solid var(--line)',
                         borderRadius: 10,
                         overflow: 'hidden',
                       }}
@@ -1018,7 +1018,7 @@ export default function LobbyPage() {
                       {/* Team header with rename */}
                       <div style={{
                         padding: '10px 14px',
-                        borderBottom: '1px solid #FFFFFF',
+                        borderBottom: '1px solid var(--surface)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 10,
@@ -1040,8 +1040,8 @@ export default function LobbyPage() {
                                 })
                               }}
                               style={{
-                                flex: 1, background: '#FFFFFF', border: `1px solid ${team.color}40`,
-                                borderRadius: 6, padding: '4px 10px', color: '#202122',
+                                flex: 1, background: 'var(--surface)', border: `1px solid ${team.color}40`,
+                                borderRadius: 6, padding: '4px 10px', color: 'var(--ink)',
                                 fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none',
                               }}
                             />
@@ -1062,8 +1062,8 @@ export default function LobbyPage() {
                                 const next = { ...prev }; delete next[team.id]; return next
                               })}
                               style={{
-                                background: 'transparent', border: '1px solid #D6D5CA',
-                                color: '#6F6E66', padding: '4px 10px', borderRadius: 6,
+                                background: 'transparent', border: '1px solid var(--line-strong)',
+                                color: 'var(--ink-faint)', padding: '4px 10px', borderRadius: 6,
                                 fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit',
                               }}
                             >
@@ -1072,20 +1072,20 @@ export default function LobbyPage() {
                           </div>
                         ) : (
                           <>
-                            <span style={{ color: '#3A3935', fontWeight: 700, fontSize: '0.88rem', flex: 1 }}>
+                            <span style={{ color: 'var(--ink-soft)', fontWeight: 700, fontSize: '0.88rem', flex: 1 }}>
                               {team.name}
                             </span>
                             <button
                               onClick={() => setEditingTeamName((prev) => ({ ...prev, [team.id]: team.name }))}
                               style={{
-                                background: 'transparent', border: '1px solid #E6E5DA',
-                                color: '#6F6E66', padding: '3px 9px', borderRadius: 5,
+                                background: 'transparent', border: '1px solid var(--line)',
+                                color: 'var(--ink-faint)', padding: '3px 9px', borderRadius: 5,
                                 fontSize: '0.7rem', cursor: 'pointer', fontFamily: 'inherit',
                               }}
                             >
                               Rename
                             </button>
-                            <span style={{ fontSize: '0.72rem', color: '#8F8E85' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--ink-ghost)' }}>
                               {team.members.length}/{game.settings.team_size}
                             </span>
                           </>
@@ -1094,7 +1094,7 @@ export default function LobbyPage() {
 
                       {/* Player rows */}
                       {team.members.length === 0 ? (
-                        <p style={{ padding: '10px 14px', color: '#A3A298', fontSize: '0.78rem', fontStyle: 'italic' }}>
+                        <p style={{ padding: '10px 14px', color: 'var(--ink-ghost)', fontSize: '0.78rem', fontStyle: 'italic' }}>
                           No players yet
                         </p>
                       ) : (
@@ -1117,7 +1117,7 @@ export default function LobbyPage() {
                               >
                                 {/* Player name */}
                                 <span style={{
-                                  fontSize: '0.82rem', color: '#3A3935',
+                                  fontSize: '0.82rem', color: 'var(--ink-soft)',
                                   fontWeight: 600, flex: 1, minWidth: 80,
                                 }}>
                                   {playerName}
@@ -1133,10 +1133,10 @@ export default function LobbyPage() {
                                       title={other.members.length >= game.settings.team_size ? `${other.name} is full` : `Move to ${other.name}`}
                                       style={{
                                         background: other.members.length >= game.settings.team_size
-                                          ? 'rgba(32,33,34,0.02)'
+                                          ? 'rgba(var(--ink-rgb), 0.02)'
                                           : `${other.color}15`,
-                                        border: `1px solid ${other.members.length >= game.settings.team_size ? '#E6E5DA' : other.color + '40'}`,
-                                        color: other.members.length >= game.settings.team_size ? '#A3A298' : other.color,
+                                        border: `1px solid ${other.members.length >= game.settings.team_size ? 'var(--line)' : other.color + '40'}`,
+                                        color: other.members.length >= game.settings.team_size ? 'var(--ink-ghost)' : other.color,
                                         padding: '4px 9px', borderRadius: 5,
                                         fontSize: '0.7rem', fontWeight: 600,
                                         cursor: other.members.length >= game.settings.team_size || savingRoster
@@ -1155,9 +1155,9 @@ export default function LobbyPage() {
                                     disabled={savingRoster}
                                     title="Remove from team"
                                     style={{
-                                      background: 'rgba(255,68,67,0.06)',
-                                      border: '1px solid rgba(255,68,67,0.2)',
-                                      color: '#FF4443',
+                                      background: 'rgba(var(--red-rgb), 0.06)',
+                                      border: '1px solid rgba(var(--red-rgb), 0.2)',
+                                      color: 'var(--red)',
                                       padding: '4px 9px', borderRadius: 5,
                                       fontSize: '0.7rem', fontWeight: 600,
                                       cursor: savingRoster ? 'wait' : 'pointer',
@@ -1179,7 +1179,7 @@ export default function LobbyPage() {
                 {/* Saving indicator */}
                 {savingRoster && (
                   <p style={{
-                    color: '#FFD626', fontSize: '0.75rem',
+                    color: 'var(--marigold)', fontSize: '0.75rem',
                     textAlign: 'center', marginTop: 12,
                   }}>
                     Saving...
