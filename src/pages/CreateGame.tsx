@@ -934,63 +934,76 @@ export default function CreateGame() {
               </select>
             </div>
 
-            {/* Zone opening schedule */}
+            {/* Zone schedule — one row per zone, Opens + Closes side by side */}
             <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>Zone Opening Schedule</label>
+              <label style={labelStyle}>Zone Schedule</label>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
-                Hold zones back at the start — they begin closed and open at the
-                set time. Good for saving a zone for later in the game.
+                <strong style={{ color: 'var(--green)' }}>Opens</strong>: hold a zone back so it starts closed and opens at the set time.{' '}
+                <strong style={{ color: '#F77F00' }}>Closes</strong>: shut a zone at the set time — teams keep points earned there but can't score new ones. Leave both blank for a zone that's live all game.
               </p>
 
-              <div style={{
-                border: '1px solid var(--line)',
-                borderRadius: 10,
-                overflow: 'hidden',
-              }}>
+              <div style={{ border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
+                {/* Header row */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 118px 118px', gap: 10,
+                  alignItems: 'center', padding: '8px 16px',
+                  background: 'rgba(var(--ink-rgb), 0.03)', borderBottom: '1px solid var(--line)',
+                }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Zone</span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--green)', textAlign: 'center' }}>🔓 Opens</span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#F77F00', textAlign: 'center' }}>⏱ Closes</span>
+                </div>
+
                 {zones
                   .filter((z) => selectedZones.includes(z.id))
                   .map((zone, i, arr) => {
-                    const val = zoneOpenMinutes[zone.id] || ''
+                    const openVal = zoneOpenMinutes[zone.id] || ''
+                    const closeVal = zoneCloseMinutes[zone.id] || ''
+                    const conflict = scheduleConflicts.includes(zone.id)
+                    const selectBase: React.CSSProperties = {
+                      background: 'var(--surface)', borderRadius: 6, padding: '7px 8px',
+                      fontSize: '0.85rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%',
+                    }
                     return (
                       <div
                         key={zone.id}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '12px 16px',
+                          display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 118px 118px', gap: 10,
+                          alignItems: 'center', padding: '10px 16px',
                           borderBottom: i < arr.length - 1 ? '1px solid var(--surface)' : 'none',
-                          background: val ? 'rgba(var(--green-rgb), 0.04)' : 'transparent',
+                          background: conflict ? 'rgba(var(--red-rgb), 0.04)'
+                            : openVal || closeVal ? 'rgba(var(--ink-rgb), 0.015)' : 'transparent',
                         }}
                       >
-                        <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {zone.name}
                         </span>
                         <select
-                          value={val}
-                          onChange={(e) =>
-                            setZoneOpenMinutes((prev) => ({
-                              ...prev,
-                              [zone.id]: e.target.value,
-                            }))
-                          }
+                          value={openVal}
+                          aria-label={`${zone.name} opens at`}
+                          onChange={(e) => setZoneOpenMinutes((prev) => ({ ...prev, [zone.id]: e.target.value }))}
                           style={{
-                            background: 'var(--surface)',
-                            border: `1px solid ${val ? 'rgba(var(--green-rgb), 0.35)' : 'var(--line-strong)'}`,
-                            borderRadius: 6,
-                            color: val ? 'var(--green)' : 'var(--ink-faint)',
-                            padding: '7px 10px',
-                            fontSize: '0.85rem',
-                            fontFamily: 'inherit',
-                            cursor: 'pointer',
-                            outline: 'none',
-                            minWidth: 110,
+                            ...selectBase,
+                            border: `1px solid ${openVal ? 'rgba(var(--green-rgb), 0.35)' : 'var(--line-strong)'}`,
+                            color: openVal ? 'var(--green)' : 'var(--ink-faint)',
                           }}
                         >
                           {availableOpenPresets.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={closeVal}
+                          aria-label={`${zone.name} closes at`}
+                          onChange={(e) => setZoneCloseMinutes((prev) => ({ ...prev, [zone.id]: e.target.value }))}
+                          style={{
+                            ...selectBase,
+                            border: `1px solid ${closeVal ? 'rgba(247,127,0,0.35)' : 'var(--line-strong)'}`,
+                            color: closeVal ? '#F77F00' : 'var(--ink-faint)',
+                          }}
+                        >
+                          {availablePresets.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
                           ))}
                         </select>
                       </div>
@@ -998,21 +1011,25 @@ export default function CreateGame() {
                   })}
               </div>
 
-              {buildOpenSchedule().length > 0 && (
+              {/* Merged timeline: every opening and closing in time order */}
+              {(buildOpenSchedule().length > 0 || buildCloseSchedule().length > 0) && (
                 <div style={{
-                  marginTop: 12,
-                  padding: '10px 14px',
-                  background: 'rgba(var(--green-rgb), 0.06)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(var(--green-rgb), 0.15)',
+                  marginTop: 12, padding: '10px 14px',
+                  background: 'rgba(var(--ink-rgb), 0.02)', borderRadius: 8, border: '1px solid var(--line)',
                 }}>
-                  {buildOpenSchedule()
-                    .sort((a, b) => a.open_at_minutes - b.open_at_minutes)
+                  <p style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 6 }}>Timeline</p>
+                  {[
+                    ...buildOpenSchedule().map((e) => ({ zone_id: e.zone_id, at: e.open_at_minutes, kind: 'open' as const })),
+                    ...buildCloseSchedule().map((e) => ({ zone_id: e.zone_id, at: e.close_at_minutes, kind: 'close' as const })),
+                  ]
+                    .sort((a, b) => a.at - b.at || (a.kind === 'open' ? -1 : 1))
                     .map((entry) => {
                       const zone = zones.find((z) => z.id === entry.zone_id)
+                      const isOpen = entry.kind === 'open'
                       return (
-                        <p key={entry.zone_id} style={{ color: 'var(--green)', fontSize: '0.82rem', marginBottom: 3 }}>
-                          🔓 {zone?.name} opens at {entry.open_at_minutes} min
+                        <p key={`${entry.kind}-${entry.zone_id}`} style={{ color: isOpen ? 'var(--green)' : '#F77F00', fontSize: '0.82rem', marginBottom: 3 }}>
+                          <span style={{ fontFamily: "'Martian Mono', monospace", fontWeight: 700, marginRight: 8 }}>{entry.at} min</span>
+                          {isOpen ? '🔓' : '⏱'} {zone?.name} {isOpen ? 'opens' : 'closes'}
                         </p>
                       )
                     })}
@@ -1021,11 +1038,8 @@ export default function CreateGame() {
 
               {scheduleConflicts.length > 0 && (
                 <div style={{
-                  marginTop: 12,
-                  padding: '10px 14px',
-                  background: 'rgba(var(--red-rgb), 0.06)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(var(--red-rgb), 0.2)',
+                  marginTop: 12, padding: '10px 14px',
+                  background: 'rgba(var(--red-rgb), 0.06)', borderRadius: 8, border: '1px solid rgba(var(--red-rgb), 0.2)',
                 }}>
                   {scheduleConflicts.map((zoneId) => {
                     const zone = zones.find((z) => z.id === zoneId)
@@ -1035,91 +1049,6 @@ export default function CreateGame() {
                       </p>
                     )
                   })}
-                </div>
-              )}
-            </div>
-
-            {/* Zone closure schedule */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>Zone Closure Schedule</label>
-              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
-                Zones close at a set time — teams keep points earned but can't score new ones after closing. Shrinks the map as the game winds down.
-              </p>
-
-              <div style={{
-                border: '1px solid var(--line)',
-                borderRadius: 10,
-                overflow: 'hidden',
-              }}>
-                {zones
-                  .filter((z) => selectedZones.includes(z.id))
-                  .map((zone, i, arr) => {
-                    const val = zoneCloseMinutes[zone.id] || ''
-                    return (
-                      <div
-                        key={zone.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '12px 16px',
-                          borderBottom: i < arr.length - 1 ? '1px solid var(--surface)' : 'none',
-                          background: val ? 'rgba(247,127,0,0.04)' : 'transparent',
-                        }}
-                      >
-                        <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
-                          {zone.name}
-                        </span>
-                        <select
-                          value={val}
-                          onChange={(e) =>
-                            setZoneCloseMinutes((prev) => ({
-                              ...prev,
-                              [zone.id]: e.target.value,
-                            }))
-                          }
-                          style={{
-                            background: 'var(--surface)',
-                            border: `1px solid ${val ? 'rgba(247,127,0,0.35)' : 'var(--line-strong)'}`,
-                            borderRadius: 6,
-                            color: val ? '#F77F00' : 'var(--ink-faint)',
-                            padding: '7px 10px',
-                            fontSize: '0.85rem',
-                            fontFamily: 'inherit',
-                            cursor: 'pointer',
-                            outline: 'none',
-                            minWidth: 110,
-                          }}
-                        >
-                          {availablePresets.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )
-                  })}
-              </div>
-
-              {buildCloseSchedule().length > 0 && (
-                <div style={{
-                  marginTop: 12,
-                  padding: '10px 14px',
-                  background: 'rgba(247,127,0,0.06)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(247,127,0,0.15)',
-                }}>
-                  {buildCloseSchedule()
-                    .sort((a, b) => a.close_at_minutes - b.close_at_minutes)
-                    .map((entry) => {
-                      const zone = zones.find((z) => z.id === entry.zone_id)
-                      return (
-                        <p key={entry.zone_id} style={{ color: '#F77F00', fontSize: '0.82rem', marginBottom: 3 }}>
-                          ⏱ {zone?.name} closes at {entry.close_at_minutes} min
-                        </p>
-                      )
-                    })}
                 </div>
               )}
             </div>
