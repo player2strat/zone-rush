@@ -533,10 +533,6 @@ export default function GamePage() {
 }, [game?.ends_at])
 
   const gameEnded = game?.status === 'ended'
-  // Brand-preview only (dev + ?preview=game): suppress the Game Over overlay so
-  // the underlying tabs can be reviewed. Never active in a production build.
-  const previewHideOverlay =
-    import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'game'
   const discardLimit = game?.settings.discard_limit ?? 1
   const discardsUsed = myTeam?.discard_used ?? 0
   const canDiscard = discardsUsed < discardLimit && game?.status === 'active'
@@ -1329,7 +1325,7 @@ export default function GamePage() {
       )}
 
       {/* Game ended overlay */}
-      {gameEnded && !previewHideOverlay && (
+      {gameEnded && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: 'rgba(var(--paper-rgb), 0.96)',

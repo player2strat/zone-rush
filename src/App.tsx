@@ -115,19 +115,6 @@ export default function App() {
     )
   }
 
-  // Brand-preview only (dev server + ?preview=player): render the signed-out
-  // player Home view so the reskin can be reviewed without logging in.
-  // Never active in a production build.
-  if (!user && import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'player') {
-    return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<HomePage />} />
-        </Routes>
-      </BrowserRouter>
-    )
-  }
-
   if (!user) return <AuthPage />
 
   return (
