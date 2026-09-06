@@ -41,6 +41,7 @@ interface GameData {
   closed_zones?: string[]
   end_game_bonuses?: Record<string, number>
   bonuses_applied?: boolean
+  created_by?: string             // UID of the GM who created this game
   settings: {
     claim_threshold: number
     zone_bonus_points: number
@@ -242,10 +243,26 @@ export default function ResultsPage() {
     return teams.find((t) => t.members?.includes(user.uid)) ?? null
   }, [teams, user])
 
-  // GM / spectator = authenticated, teams have loaded, but the viewer is on
-  // no team. We only trust this once teams are present, to avoid flashing the
-  // GM view before the teams snapshot arrives.
-  const isGM = !!user && teams.length > 0 && !myTeam
+  // Full standings are for the GM/admin only. Being on "no team" is NOT
+  // enough — any signed-in account could otherwise open /results/<id> and
+  // see every team's score, while real players only see their own. The
+  // viewer qualifies if they created this game or their account role is
+  // gm/admin (mirrors the Firestore rules' isAdminOrGm).
+  const [viewerRole, setViewerRole] = useState<string | null>(null)
+  useEffect(() => {
+    if (!user) { setViewerRole(null); return }
+    let cancelled = false
+    getDoc(doc(db, 'users', user.uid))
+      .then((snap) => { if (!cancelled) setViewerRole(snap.exists() ? (snap.data().role || 'player') : 'player') })
+      .catch(() => { if (!cancelled) setViewerRole('player') })
+    return () => { cancelled = true }
+  }, [user?.uid])
+
+  const isGM = !!user && !myTeam && !!game && (
+    game.created_by === user.uid || viewerRole === 'gm' || viewerRole === 'admin'
+  )
+  // Signed in, data loaded, but neither a player on this game nor its GM.
+  const isOutsider = !!user && !!game && teams.length > 0 && !myTeam && viewerRole !== null && !isGM
 
   // ---- The viewer's team submissions (post-game gallery) ----
   interface TeamSub {
@@ -674,6 +691,35 @@ export default function ResultsPage() {
   // GM / SPECTATOR VIEW — full results (unchanged from original).
   // Only render once we're confident the viewer is on no team (teams loaded).
   // =========================================================================
+
+  if (isOutsider) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-soft)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24, textAlign: 'center',
+      }}>
+        <div>
+          <p style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px' }}>
+            Results are private to this game's players
+          </p>
+          <p style={{ fontSize: '0.88rem', margin: '0 0 18px' }}>
+            You weren't on a team in {game?.name ?? 'this game'}, so there's nothing to show here.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--line-strong)', color: 'var(--ink)',
+              padding: '10px 18px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            ← Back to Home
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (!isGM) {
     return (

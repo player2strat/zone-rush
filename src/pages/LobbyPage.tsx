@@ -93,6 +93,12 @@ export default function LobbyPage() {
   // GM roster manager state
   const [rosterOpen, setRosterOpen] = useState(false)
   const [editingTeamName, setEditingTeamName] = useState<Record<string, string>>({})
+
+  // Player renaming themselves after joining (fix a typo before the game starts).
+  const [editingMyName, setEditingMyName] = useState(false)
+  const [myNameInput, setMyNameInput] = useState('')
+  const [myNameError, setMyNameError] = useState('')
+  const [savingMyName, setSavingMyName] = useState(false)
   const [savingRoster, setSavingRoster] = useState(false)
 
   // Case-insensitive, trimmed check: is this name already taken by someone
@@ -323,6 +329,41 @@ export default function LobbyPage() {
     }
 
     setJoining(false)
+  }
+
+  // -----------------------------------------------------------------------
+  // Player: fix my own display name (member_names is a parallel array to
+  // members, so we replace the entry at my index).
+  // -----------------------------------------------------------------------
+
+  const handleSaveMyName = async () => {
+    if (!user || !gameId || !playerTeamId) return
+    const name = myNameInput.trim()
+    if (!name) { setMyNameError('Please enter a name.'); return }
+    if (name.length > 30) { setMyNameError('Keep it under 30 characters.'); return }
+    if (isNameTakenOnTeam(name, playerTeamId, user.uid)) {
+      setMyNameError('That name is taken on this team. Pick another.')
+      return
+    }
+    const team = teams.find((t) => t.id === playerTeamId)
+    const idx = team ? team.members.indexOf(user.uid) : -1
+    if (!team || idx === -1) { setMyNameError('Could not find you on the team. Try rejoining.'); return }
+
+    setSavingMyName(true)
+    setMyNameError('')
+    try {
+      const names = [...team.member_names]
+      names[idx] = name
+      await updateDoc(doc(db, 'games', gameId, 'teams', playerTeamId), { member_names: names })
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { display_name: name })
+      } catch { /* non-critical */ }
+      setEditingMyName(false)
+    } catch (err) {
+      setMyNameError('Failed to save: ' + (err as Error).message)
+    } finally {
+      setSavingMyName(false)
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -743,14 +784,84 @@ export default function LobbyPage() {
               width: 14, height: 14, borderRadius: 3,
               background: myTeam.color, flexShrink: 0,
             }} />
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ color: myTeam.color, fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>
                 You're on {myTeam.name}
               </p>
-              <p style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', marginTop: 2 }}>
-                Switch anytime before the game starts
+              {(() => {
+                const myName = user ? (myTeam.member_names[myTeam.members.indexOf(user.uid)] ?? '') : ''
+                if (!editingMyName) {
+                  return (
+                    <p style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>Playing as <strong style={{ color: 'var(--ink-soft)' }}>{myName || 'Player'}</strong></span>
+                      <button
+                        onClick={() => { setMyNameInput(myName); setMyNameError(''); setEditingMyName(true) }}
+                        style={{ background: 'none', border: '1px solid var(--line-strong)', color: 'var(--ink-soft)', padding: '2px 8px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Edit name
+                      </button>
+                      <span>· Switch teams anytime before the game starts</span>
+                    </p>
+                  )
+                }
+                return (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="text"
+                        value={myNameInput}
+                        maxLength={30}
+                        autoFocus
+                        onChange={(e) => setMyNameInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveMyName(); if (e.key === 'Escape') setEditingMyName(false) }}
+                        placeholder="Your name"
+                        style={{ flex: 1, minWidth: 0, background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 8, padding: '8px 10px', color: 'var(--ink)', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' }}
+                      />
+                      <button
+                        onClick={handleSaveMyName}
+                        disabled={savingMyName || !myNameInput.trim()}
+                        style={{ background: myTeam.color, border: 'none', color: '#fff', padding: '8px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: savingMyName || !myNameInput.trim() ? 0.5 : 1 }}
+                      >
+                        {savingMyName ? '...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingMyName(false)}
+                        disabled={savingMyName}
+                        style={{ background: 'none', border: '1px solid var(--line-strong)', color: 'var(--ink-soft)', padding: '8px 10px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {myNameError && (
+                      <p style={{ color: 'var(--red)', fontSize: '0.72rem', marginTop: 4 }}>{myNameError}</p>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ── Waiting for the GM (player on a team, game not started) ── */}
+        {!isGM && myTeam && game?.status !== 'active' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'var(--surface)', border: '1px solid var(--line)',
+            borderRadius: 10, padding: '10px 14px', marginBottom: 20,
+          }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%', background: 'var(--marigold)',
+              flexShrink: 0, animation: 'lobbyPulse 1.4s ease-in-out infinite',
+            }} />
+            <div>
+              <p style={{ color: 'var(--ink)', fontSize: '0.85rem', fontWeight: 600, margin: 0 }}>
+                Waiting for the GM to start the game
+              </p>
+              <p style={{ color: 'var(--ink-muted)', fontSize: '0.72rem', marginTop: 2 }}>
+                You'll be taken to the game automatically. Keep this page open.
               </p>
             </div>
+            <style>{`@keyframes lobbyPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }`}</style>
           </div>
         )}
 
