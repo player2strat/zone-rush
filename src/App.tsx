@@ -105,13 +105,26 @@ export default function App() {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0a',
+        background: '#FDFFF1',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        <div style={{ color: '#333', fontSize: '0.85rem' }}>Loading...</div>
+        <div style={{ color: '#A3A298', fontSize: '0.85rem' }}>Loading...</div>
       </div>
+    )
+  }
+
+  // Brand-preview only (dev server + ?preview=player): render the signed-out
+  // player Home view so the reskin can be reviewed without logging in.
+  // Never active in a production build.
+  if (!user && import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'player') {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<HomePage />} />
+        </Routes>
+      </BrowserRouter>
     )
   }
 

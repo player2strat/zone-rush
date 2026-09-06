@@ -60,10 +60,10 @@ interface GameMapProps {
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
 const ZONE_COLORS: Record<string, string> = {
-  zone_district_33: '#06D6A0',
-  zone_district_34: '#FFD166',
-  zone_district_35: '#118AB2',
-  zone_district_36: '#EF476F',
+  zone_district_33: '#28B770',
+  zone_district_34: '#FFD626',
+  zone_district_35: '#1EB2F2',
+  zone_district_36: '#FF4443',
 }
 
 // Official MTA line colors
@@ -158,7 +158,7 @@ export default function GameMap({
     zones.forEach((zone) => {
       const isClosed = closed.includes(zone.id)
       const owner = ownership?.get(zone.id)
-      const defaultColor = ZONE_COLORS[zone.id] || '#ffffff'
+      const defaultColor = ZONE_COLORS[zone.id] || '#202122'
 
       let fillColor: string
       let fillOpacity: number
@@ -185,11 +185,11 @@ export default function GameMap({
       } else if (isClosed) {
         // GM-closed but NOT locked → black out. (A locked zone is also closed,
         // but the owner?.locked branch above already handled it.)
-        fillColor = '#000000'
-        fillOpacity = 0.75
-        borderColor = '#444444'
+        fillColor = '#202122'
+        fillOpacity = 0.55
+        borderColor = '#55544E'
         borderWidth = 2
-        labelColor = '#6f6e6e'
+        labelColor = '#55544E'
         labelText = `🔒 ${zone.name}\nCLOSED`
       } else if (owner) {
         if (owner.claimed) {
@@ -223,9 +223,9 @@ export default function GameMap({
         // No points — transparent, white outline until a team earns points
         fillColor = defaultColor
         fillOpacity = 0
-        borderColor = '#ffffff'
+        borderColor = '#202122'
         borderWidth = 1.5
-        labelColor = '#ffffff'
+        labelColor = '#202122'
       }
 
       try {
@@ -258,7 +258,7 @@ export default function GameMap({
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/light-v11',
       center: [-73.95, 40.7],
       zoom: compact ? 11.5 : 12,
       interactive: !compact,
@@ -271,7 +271,7 @@ export default function GameMap({
 
       // ---- Zone layers ----
       zones.forEach((zone) => {
-        const color = ZONE_COLORS[zone.id] || '#ffffff'
+        const color = ZONE_COLORS[zone.id] || '#202122'
 
         map.current!.addSource(`zone-${zone.id}`, {
           type: 'geojson',
@@ -296,7 +296,7 @@ export default function GameMap({
           type: 'line',
           source: `zone-${zone.id}`,
           paint: {
-            'line-color': '#ffffff',
+            'line-color': '#202122',
             'line-width': 1.5,
             'line-dasharray': [1, 0],
           },
@@ -333,8 +333,8 @@ export default function GameMap({
           },
           paint: {
             'text-color': color,
-            'text-halo-color': '#000000',
-            'text-halo-width': 1,
+            'text-halo-color': '#FDFFF1',
+            'text-halo-width': 1.5,
           },
         })
       })
@@ -363,7 +363,7 @@ export default function GameMap({
               'interpolate', ['linear'], ['zoom'],
               11, 1, 13, 1.5,
             ],
-            'circle-stroke-color': '#0a0a0a',
+            'circle-stroke-color': '#202122',
             'circle-opacity': 0.95,
           },
         })
@@ -426,7 +426,7 @@ export default function GameMap({
               width: 48px !important;
               height: 48px !important;
               background: rgba(15,15,15,0.92) !important;
-              border: 2px solid #FFD166 !important;
+              border: 2px solid #FFD626 !important;
               border-radius: 12px !important;
               display: flex !important;
               align-items: center !important;
@@ -507,7 +507,7 @@ export default function GameMap({
           height: 14px;
           border-radius: 50%;
           background: ${player.teamColor};
-          border: 2px solid #0a0a0a;
+          border: 2px solid #FDFFF1;
           box-shadow: 0 0 0 2px ${player.teamColor}60;
         `
 
@@ -516,11 +516,11 @@ export default function GameMap({
         label.textContent = player.name
         label.style.cssText = `
           margin-top: 3px;
-          background: rgba(10,10,10,0.85);
+          background: rgba(253,255,241,0.92);
           color: ${player.teamColor};
           font-size: 10px;
           font-weight: 700;
-          font-family: 'DM Sans', sans-serif;
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
           padding: 2px 5px;
           border-radius: 4px;
           border: 1px solid ${player.teamColor}50;

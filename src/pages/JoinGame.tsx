@@ -82,9 +82,9 @@ export default function JoinGame() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0a',
-      color: '#fff',
-      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: '#FDFFF1',
+      color: '#202122',
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -96,7 +96,7 @@ export default function JoinGame() {
         <button
           onClick={() => navigate('/')}
           style={{
-            background: 'none', border: 'none', color: '#555',
+            background: 'none', border: 'none', color: '#6F6E66',
             cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem',
             padding: 0, marginBottom: 32,
           }}
@@ -109,7 +109,7 @@ export default function JoinGame() {
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
             Join Game
           </h1>
-          <p style={{ color: '#666', fontSize: '0.88rem', marginTop: 8 }}>
+          <p style={{ color: '#5F5E57', fontSize: '0.88rem', marginTop: 8 }}>
             Enter the 6-character code from your Game Master
           </p>
         </div>
@@ -125,14 +125,14 @@ export default function JoinGame() {
           autoCapitalize="characters"
           style={{
             width: '100%',
-            background: 'rgba(255,255,255,0.05)',
-            border: '2px solid ' + (code.length === 6 ? '#06D6A0' : '#333'),
+            background: 'rgba(32,33,34,0.05)',
+            border: '2px solid ' + (code.length === 6 ? '#28B770' : '#D6D5CA'),
             borderRadius: 12,
             padding: '18px 20px',
-            color: '#fff',
+            color: '#202122',
             fontSize: '1.8rem',
             fontWeight: 800,
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "'Martian Mono', monospace",
             textAlign: 'center',
             letterSpacing: 8,
             outline: 'none',
@@ -145,7 +145,7 @@ export default function JoinGame() {
         <p style={{
           textAlign: 'center',
           fontSize: '0.78rem',
-          color: code.length === 6 ? '#06D6A0' : '#444',
+          color: code.length === 6 ? '#28B770' : '#8F8E85',
           marginTop: 10,
           marginBottom: 24,
         }}>
@@ -155,11 +155,11 @@ export default function JoinGame() {
         {/* Error */}
         {error && (
           <p style={{
-            color: '#EF476F',
+            color: '#FF4443',
             fontSize: '0.85rem',
             marginBottom: 16,
             padding: '10px 14px',
-            background: 'rgba(239,71,111,0.08)',
+            background: 'rgba(255,68,67,0.08)',
             borderRadius: 8,
             textAlign: 'center',
           }}>
@@ -174,10 +174,10 @@ export default function JoinGame() {
           style={{
             width: '100%',
             background: code.length === 6
-              ? 'rgba(6,214,160,0.15)'
-              : 'rgba(255,255,255,0.03)',
-            border: `1px solid ${code.length === 6 ? 'rgba(6,214,160,0.3)' : '#222'}`,
-            color: code.length === 6 ? '#06D6A0' : '#444',
+              ? 'rgba(40,183,112,0.15)'
+              : 'rgba(32,33,34,0.03)',
+            border: `1px solid ${code.length === 6 ? 'rgba(40,183,112,0.3)' : '#E6E5DA'}`,
+            color: code.length === 6 ? '#28B770' : '#8F8E85',
             padding: '16px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',

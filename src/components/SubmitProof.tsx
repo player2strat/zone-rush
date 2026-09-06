@@ -224,24 +224,24 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
   if (submitted) {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#0a0a0a', zIndex: 200,
+        position: 'fixed', inset: 0, background: '#FDFFF1', zIndex: 200,
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', fontFamily: "'DM Sans', sans-serif", padding: 24,
+        justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", padding: 24,
       }}>
         <div style={{
           width: 64, height: 64, borderRadius: '50%',
-          background: 'rgba(6,214,160,0.15)', display: 'flex',
+          background: 'rgba(40,183,112,0.15)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', marginBottom: 20,
         }}>
           <span style={{ fontSize: '1.8rem' }}>✓</span>
         </div>
-        <h2 style={{ color: '#06D6A0', fontWeight: 700, marginBottom: 8 }}>Submitted!</h2>
-        <p style={{ color: '#888', fontSize: '0.9rem', textAlign: 'center', marginBottom: 24 }}>
+        <h2 style={{ color: '#28B770', fontWeight: 700, marginBottom: 8 }}>Submitted!</h2>
+        <p style={{ color: '#55544E', fontSize: '0.9rem', textAlign: 'center', marginBottom: 24 }}>
           Your proof is pending GM review. You'll see the status update on your card.
         </p>
         <button onClick={onClose} style={{
-          background: 'rgba(6,214,160,0.15)', border: '1px solid rgba(6,214,160,0.3)',
-          color: '#06D6A0', padding: '12px 32px', borderRadius: 8,
+          background: 'rgba(40,183,112,0.15)', border: '1px solid rgba(40,183,112,0.3)',
+          color: '#28B770', padding: '12px 32px', borderRadius: 8,
           fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
         }}>
           Back to Hand
@@ -253,22 +253,22 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
   // ---- Main submission screen ----
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: '#0a0a0a', zIndex: 200,
+      position: 'fixed', inset: 0, background: '#FDFFF1', zIndex: 200,
       display: 'flex', flexDirection: 'column',
-      fontFamily: "'DM Sans', sans-serif", color: '#fff',
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", color: '#202122',
     }}>
       {/* Header */}
       <div style={{
-        padding: '14px 20px', borderBottom: '1px solid #1a1a1a',
+        padding: '14px 20px', borderBottom: '1px solid #E6E5DA',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0,
       }}>
         <button onClick={onClose} style={{
-          background: 'none', border: 'none', color: '#888',
+          background: 'none', border: 'none', color: '#55544E',
           fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 0',
         }}>
           ← Back
         </button>
-        <span style={{ fontSize: '0.75rem', color: '#555', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+        <span style={{ fontSize: '0.75rem', color: '#6F6E66', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
           Submit Proof
         </span>
         <div style={{ width: 50 }} />
@@ -278,13 +278,13 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 20px 40px' }}>
         {/* Challenge reminder */}
         <div style={{
-          background: 'rgba(255,255,255,0.03)', border: '1px solid #1a1a1a',
+          background: 'rgba(32,33,34,0.03)', border: '1px solid #E6E5DA',
           borderRadius: 10, padding: '14px 16px', marginBottom: 20,
         }}>
-          <p style={{ color: '#888', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+          <p style={{ color: '#55544E', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
             Challenge
           </p>
-          <p style={{ color: '#e0e0e0', fontSize: '0.9rem', lineHeight: 1.6 }}>
+          <p style={{ color: '#2A2B2C', fontSize: '0.9rem', lineHeight: 1.6 }}>
             {challenge.description}
           </p>
         </div>
@@ -293,9 +293,9 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         <div
           style={{
             background: canSubmitWithLocation
-              ? 'rgba(6,214,160,0.06)'
-              : 'rgba(239,71,111,0.06)',
-            border: `1px solid ${canSubmitWithLocation ? 'rgba(6,214,160,0.25)' : 'rgba(239,71,111,0.25)'}`,
+              ? 'rgba(40,183,112,0.06)'
+              : 'rgba(255,68,67,0.06)',
+            border: `1px solid ${canSubmitWithLocation ? 'rgba(40,183,112,0.25)' : 'rgba(255,68,67,0.25)'}`,
             borderRadius: 10,
             padding: '12px 14px',
             marginBottom: 20,
@@ -307,17 +307,17 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
                 width: 9,
                 height: 9,
                 borderRadius: '50%',
-                background: canSubmitWithLocation ? '#06D6A0' : '#EF476F',
+                background: canSubmitWithLocation ? '#28B770' : '#FF4443',
                 flexShrink: 0,
               }}
             />
-            <p style={{ color: canSubmitWithLocation ? '#06D6A0' : '#EF476F', fontWeight: 700, fontSize: '0.85rem', margin: 0 }}>
+            <p style={{ color: canSubmitWithLocation ? '#28B770' : '#FF4443', fontWeight: 700, fontSize: '0.85rem', margin: 0 }}>
               {locationStatusLabel(location.status)}
             </p>
           </div>
           {!canSubmitWithLocation && (
             <>
-              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 10 }}>
+              <p style={{ color: '#55544E', fontSize: '0.78rem', lineHeight: 1.5, marginBottom: 10 }}>
                 {location.status === 'denied'
                   ? 'Location access is denied. Re-enable it in your browser/phone settings, then reload this page.'
                   : location.status === 'acquiring' || location.status === 'prompt'
@@ -327,9 +327,9 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
               <button
                 onClick={() => location.refresh()}
                 style={{
-                  background: 'rgba(255,209,102,0.12)',
-                  border: '1px solid rgba(255,209,102,0.3)',
-                  color: '#FFD166',
+                  background: 'rgba(255,214,38,0.12)',
+                  border: '1px solid rgba(255,214,38,0.3)',
+                  color: '#FFD626',
                   padding: '8px 14px',
                   borderRadius: 8,
                   fontSize: '0.78rem',
@@ -364,14 +364,14 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
                 }
               }}
               style={{
-                background: 'rgba(255,209,102,0.08)', border: '1px solid rgba(255,209,102,0.2)',
+                background: 'rgba(255,214,38,0.08)', border: '1px solid rgba(255,214,38,0.2)',
                 borderRadius: 10, padding: '24px 20px', cursor: 'pointer',
                 fontFamily: 'inherit', textAlign: 'center',
               }}
             >
               <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: 8 }}>📷</span>
-              <span style={{ color: '#FFD166', fontWeight: 600, fontSize: '0.9rem' }}>Take Photo / Video</span>
-              <span style={{ color: '#555', fontSize: '0.78rem', display: 'block', marginTop: 4 }}>Opens your camera</span>
+              <span style={{ color: '#FFD626', fontWeight: 600, fontSize: '0.9rem' }}>Take Photo / Video</span>
+              <span style={{ color: '#6F6E66', fontSize: '0.78rem', display: 'block', marginTop: 4 }}>Opens your camera</span>
             </button>
 
             <button
@@ -382,29 +382,29 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
                 }
               }}
               style={{
-                background: 'rgba(255,255,255,0.03)', border: '1px solid #222',
+                background: 'rgba(32,33,34,0.03)', border: '1px solid #E6E5DA',
                 borderRadius: 10, padding: '16px 20px', cursor: 'pointer',
                 fontFamily: 'inherit', textAlign: 'center',
               }}
             >
-              <span style={{ color: '#888', fontWeight: 600, fontSize: '0.85rem' }}>Choose from Gallery</span>
+              <span style={{ color: '#55544E', fontWeight: 600, fontSize: '0.85rem' }}>Choose from Gallery</span>
             </button>
           </div>
         ) : (
           <div style={{ marginBottom: 20 }}>
             {file.type.startsWith('video/') ? (
-              <video src={preview || ''} controls style={{ width: '100%', borderRadius: 10, maxHeight: 140, background: '#111', objectFit: 'contain' }} />
+              <video src={preview || ''} controls style={{ width: '100%', borderRadius: 10, maxHeight: 140, background: '#FFFFFF', objectFit: 'contain' }} />
             ) : file.type.startsWith('audio/') ? (
-              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 20, textAlign: 'center' }}>
+              <div style={{ background: 'rgba(32,33,34,0.03)', borderRadius: 10, padding: 20, textAlign: 'center' }}>
                 <span style={{ fontSize: '2rem' }}>🎙️</span>
                 <audio src={preview || ''} controls style={{ width: '100%', marginTop: 12 }} />
               </div>
             ) : (
-              <img src={preview || ''} alt="Preview" style={{ width: '100%', borderRadius: 10, maxHeight: 140, objectFit: 'contain', background: '#111' }} />
+              <img src={preview || ''} alt="Preview" style={{ width: '100%', borderRadius: 10, maxHeight: 140, objectFit: 'contain', background: '#FFFFFF' }} />
             )}
             <button
               onClick={() => { setFile(null); setPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
-              style={{ background: 'none', border: 'none', color: '#666', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', marginTop: 8, padding: 0 }}
+              style={{ background: 'none', border: 'none', color: '#5F5E57', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', marginTop: 8, padding: 0 }}
             >
               ✕ Remove and pick again
             </button>
@@ -414,12 +414,12 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Zones still loading — submit is gated until this resolves */}
         {canSubmitWithLocation && !zonesLoaded && !zonesError && (
           <div style={{
-            background: 'rgba(255,255,255,0.03)', border: '1px solid #222',
+            background: 'rgba(32,33,34,0.03)', border: '1px solid #E6E5DA',
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
             display: 'flex', gap: 10, alignItems: 'center',
           }}>
             <span style={{ fontSize: '1rem', flexShrink: 0 }}>⏳</span>
-            <p style={{ color: '#888', fontSize: '0.8rem', lineHeight: 1.5, margin: 0 }}>
+            <p style={{ color: '#55544E', fontSize: '0.8rem', lineHeight: 1.5, margin: 0 }}>
               Loading game zones…
             </p>
           </div>
@@ -428,16 +428,16 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Zone load failed — can't safely tag a submission without zones */}
         {zonesError && (
           <div style={{
-            background: 'rgba(239,71,111,0.06)', border: '1px solid rgba(239,71,111,0.25)',
+            background: 'rgba(255,68,67,0.06)', border: '1px solid rgba(255,68,67,0.25)',
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
             display: 'flex', gap: 10, alignItems: 'flex-start',
           }}>
             <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
             <div>
-              <p style={{ color: '#EF476F', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
+              <p style={{ color: '#FF4443', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
                 Couldn't load game zones
               </p>
-              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5 }}>
+              <p style={{ color: '#55544E', fontSize: '0.78rem', lineHeight: 1.5 }}>
                 Reload the page and try again. If it keeps happening, tell the GM.
               </p>
             </div>
@@ -447,16 +447,16 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Out-of-zone warning — only meaningful once zones have actually loaded */}
         {canSubmitWithLocation && zonesLoaded && !detectedZoneId && (
           <div style={{
-            background: 'rgba(255,209,102,0.08)', border: '1px solid rgba(255,209,102,0.25)',
+            background: 'rgba(255,214,38,0.08)', border: '1px solid rgba(255,214,38,0.25)',
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
             display: 'flex', gap: 10, alignItems: 'flex-start',
           }}>
             <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
             <div>
-              <p style={{ color: '#FFD166', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
+              <p style={{ color: '#FFD626', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
                 You appear to be outside an active zone
               </p>
-              <p style={{ color: '#888', fontSize: '0.78rem', lineHeight: 1.5 }}>
+              <p style={{ color: '#55544E', fontSize: '0.78rem', lineHeight: 1.5 }}>
                 Make sure you're in one of the game zones before submitting.
                 The GM will see your location — submissions from outside zones may be rejected.
               </p>
@@ -470,8 +470,8 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             onClick={() => setAttemptTier2(!attemptTier2)}
             style={{
               width: '100%', textAlign: 'left',
-              background: attemptTier2 ? 'rgba(155,93,229,0.08)' : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${attemptTier2 ? 'rgba(155,93,229,0.3)' : '#1a1a1a'}`,
+              background: attemptTier2 ? 'rgba(230,125,209,0.08)' : 'rgba(32,33,34,0.02)',
+              border: `1px solid ${attemptTier2 ? 'rgba(230,125,209,0.3)' : '#E6E5DA'}`,
               borderRadius: 10, padding: '14px 16px', marginBottom: 20,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
@@ -479,17 +479,17 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
                 width: 20, height: 20, borderRadius: 4,
-                border: `2px solid ${attemptTier2 ? '#9B5DE5' : '#333'}`,
-                background: attemptTier2 ? 'rgba(155,93,229,0.2)' : 'transparent',
+                border: `2px solid ${attemptTier2 ? '#E67DD1' : '#D6D5CA'}`,
+                background: attemptTier2 ? 'rgba(230,125,209,0.2)' : 'transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
-                {attemptTier2 && <span style={{ color: '#9B5DE5', fontSize: '0.65rem', fontWeight: 800 }}>✓</span>}
+                {attemptTier2 && <span style={{ color: '#E67DD1', fontSize: '0.65rem', fontWeight: 800 }}>✓</span>}
               </div>
               <div>
-                <p style={{ color: attemptTier2 ? '#9B5DE5' : '#888', fontWeight: 600, fontSize: '0.85rem' }}>
+                <p style={{ color: attemptTier2 ? '#E67DD1' : '#55544E', fontWeight: 600, fontSize: '0.85rem' }}>
                   Tier 2 Bonus (+{challenge.tier2.bonus_points}pt)
                 </p>
-                <p style={{ color: '#555', fontSize: '0.78rem', marginTop: 2 }}>
+                <p style={{ color: '#6F6E66', fontSize: '0.78rem', marginTop: 2 }}>
                   {challenge.tier2.description}
                 </p>
               </div>
@@ -500,8 +500,8 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Error message */}
         {error && (
           <p style={{
-            color: '#EF476F', fontSize: '0.82rem',
-            background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
+            color: '#FF4443', fontSize: '0.82rem',
+            background: 'rgba(255,68,67,0.08)', border: '1px solid rgba(255,68,67,0.2)',
             borderRadius: 8, padding: '10px 14px', marginBottom: 16,
           }}>
             {error}
@@ -511,14 +511,14 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Upload progress */}
         {uploading && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ height: 6, background: '#1a1a1a', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: 6, background: '#E6E5DA', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: `${uploadProgress}%`,
-                background: 'linear-gradient(90deg, #06D6A0, #118AB2)',
+                background: 'linear-gradient(90deg, #28B770, #1EB2F2)',
                 borderRadius: 3, transition: 'width 0.2s',
               }} />
             </div>
-            <p style={{ fontSize: '0.78rem', color: '#888', textAlign: 'center', marginTop: 6 }}>
+            <p style={{ fontSize: '0.78rem', color: '#55544E', textAlign: 'center', marginTop: 6 }}>
               Uploading... {uploadProgress}%
             </p>
           </div>
@@ -527,13 +527,13 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {/* Submit button — DISABLED if no GPS */}
         {isZoneClosedOrLocked ? (
           <div style={{
-            background: 'rgba(239,71,111,0.08)', border: '1px solid rgba(239,71,111,0.2)',
+            background: 'rgba(255,68,67,0.08)', border: '1px solid rgba(255,68,67,0.2)',
             borderRadius: 10, padding: '16px 20px', textAlign: 'center',
           }}>
-            <p style={{ color: '#EF476F', fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>
+            <p style={{ color: '#FF4443', fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>
               🔒 Zone {isZoneLocked ? 'Locked' : 'Closed'}
             </p>
-            <p style={{ color: '#888', fontSize: '0.82rem' }}>
+            <p style={{ color: '#55544E', fontSize: '0.82rem' }}>
               {detectedZoneId?.replace('zone_district_', 'District ').replace('zone_mn_', '')} is no longer accepting submissions.
               Points and claims already earned here are kept.
             </p>
@@ -544,9 +544,9 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             disabled={!canSubmit}
             style={{
               width: '100%',
-              background: !canSubmit ? '#1a1a1a' : 'rgba(6,214,160,0.15)',
-              border: `1px solid ${!canSubmit ? '#222' : 'rgba(6,214,160,0.3)'}`,
-              color: !canSubmit ? '#444' : '#06D6A0',
+              background: !canSubmit ? '#E6E5DA' : 'rgba(40,183,112,0.15)',
+              border: `1px solid ${!canSubmit ? '#E6E5DA' : 'rgba(40,183,112,0.3)'}`,
+              color: !canSubmit ? '#8F8E85' : '#28B770',
               padding: '14px 20px',
               borderRadius: 10,
               fontSize: '0.95rem',

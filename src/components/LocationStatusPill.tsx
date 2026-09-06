@@ -14,14 +14,14 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<LocationState['status'], string> = {
-  good:         '#06D6A0',
-  low_accuracy: '#FFD166',
-  stale:        '#FFD166',
-  acquiring:    '#888',
-  prompt:       '#FFD166',
-  denied:       '#EF476F',
-  unavailable:  '#EF476F',
-  error:        '#EF476F',
+  good:         '#28B770',
+  low_accuracy: '#FFD626',
+  stale:        '#FFD626',
+  acquiring:    '#55544E',
+  prompt:       '#FFD626',
+  denied:       '#FF4443',
+  unavailable:  '#FF4443',
+  error:        '#FF4443',
 }
 
 function detectPlatform(): 'ios' | 'android' | 'other' {
@@ -93,7 +93,7 @@ export default function LocationStatusPill({ location, onRefresh }: Props) {
             style={{
               width: '100%',
               maxWidth: 500,
-              background: '#0d0d0d',
+              background: '#FDFFF1',
               borderTop: `2px solid ${color}`,
               borderRadius: '14px 14px 0 0',
               padding: '20px 20px 32px',
@@ -116,7 +116,7 @@ export default function LocationStatusPill({ location, onRefresh }: Props) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#555',
+                  color: '#6F6E66',
                   fontSize: '1.2rem',
                   cursor: 'pointer',
                 }}
@@ -136,9 +136,9 @@ export default function LocationStatusPill({ location, onRefresh }: Props) {
                 style={{
                   marginTop: 16,
                   width: '100%',
-                  background: 'rgba(255,209,102,0.15)',
-                  border: '1px solid rgba(255,209,102,0.3)',
-                  color: '#FFD166',
+                  background: 'rgba(255,214,38,0.15)',
+                  border: '1px solid rgba(255,214,38,0.3)',
+                  color: '#FFD626',
                   padding: '12px',
                   borderRadius: 10,
                   fontSize: '0.88rem',
@@ -170,7 +170,7 @@ function DetailsBody({
       : null
 
   const Para = ({ children }: { children: React.ReactNode }) => (
-    <p style={{ color: '#bbb', fontSize: '0.85rem', lineHeight: 1.6, marginBottom: 10 }}>
+    <p style={{ color: '#3A3935', fontSize: '0.85rem', lineHeight: 1.6, marginBottom: 10 }}>
       {children}
     </p>
   )
@@ -184,7 +184,7 @@ function DetailsBody({
             : 'Your location is being picked up but accuracy is low. Walk a few steps or move away from tall buildings for a better fix.'}
         </Para>
         {ageSeconds != null && (
-          <p style={{ color: '#555', fontSize: '0.75rem' }}>
+          <p style={{ color: '#6F6E66', fontSize: '0.75rem' }}>
             Last update: {ageSeconds}s ago
           </p>
         )}
@@ -198,14 +198,14 @@ function DetailsBody({
         <Para>You denied location access. To submit challenges, you need to re-enable it.</Para>
         {platform === 'ios' && (
           <Para>
-            <strong style={{ color: '#fff' }}>On iPhone:</strong> open Settings → Safari → Location →
+            <strong style={{ color: '#202122' }}>On iPhone:</strong> open Settings → Safari → Location →
             choose "Ask" or "Allow." If you installed Foray to your home screen, also check
             Settings → Foray → Location.
           </Para>
         )}
         {platform === 'android' && (
           <Para>
-            <strong style={{ color: '#fff' }}>On Android:</strong> tap the lock icon in your browser's
+            <strong style={{ color: '#202122' }}>On Android:</strong> tap the lock icon in your browser's
             address bar → Permissions → Location → Allow. Then reload the page.
           </Para>
         )}
@@ -248,7 +248,7 @@ function DetailsBody({
       </Para>
       <Para>Try walking outside, away from tall buildings, then tap "Try again."</Para>
       {location.errorMessage && (
-        <p style={{ color: '#555', fontSize: '0.72rem', fontFamily: "'JetBrains Mono', monospace" }}>
+        <p style={{ color: '#6F6E66', fontSize: '0.72rem', fontFamily: "'Martian Mono', monospace" }}>
           {location.errorMessage}
         </p>
       )}

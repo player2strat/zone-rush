@@ -1,11 +1,11 @@
 {
   "name": "Foray",
   "short_name": "Foray",
-  "description": "Team-based urban scavenger hunt",
+  "description": "Team-based city exploration game",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "background_color": "#FDFFF1",
+  "theme_color": "#FFD626",
   "orientation": "portrait",
   "icons": [
     {

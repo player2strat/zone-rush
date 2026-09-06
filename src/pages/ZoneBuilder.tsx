@@ -374,14 +374,14 @@ export default function ZoneBuilder() {
         id: `${SRC_BOUNDARY}-fill`,
         type: "fill",
         source: SRC_BOUNDARY,
-        paint: { "fill-color": "#FFD166", "fill-opacity": 0.04 },
+        paint: { "fill-color": "#FFD626", "fill-opacity": 0.04 },
       });
       map.current.addLayer({
         id: `${SRC_BOUNDARY}-line`,
         type: "line",
         source: SRC_BOUNDARY,
         paint: {
-          "line-color": "#FFD166",
+          "line-color": "#FFD626",
           "line-width": 2,
           "line-dasharray": [3, 2],
         },
@@ -393,13 +393,13 @@ export default function ZoneBuilder() {
         id: `${SRC_ZONES}-fill`,
         type: "fill",
         source: SRC_ZONES,
-        paint: { "fill-color": "#4C9AFF", "fill-opacity": 0.18 },
+        paint: { "fill-color": "#1EB2F2", "fill-opacity": 0.18 },
       });
       map.current.addLayer({
         id: `${SRC_ZONES}-line`,
         type: "line",
         source: SRC_ZONES,
-        paint: { "line-color": "#4C9AFF", "line-width": 1.5 },
+        paint: { "line-color": "#1EB2F2", "line-width": 1.5 },
       });
 
       // Coverage gap — uncovered space inside the boundary. Drawn above zone
@@ -427,13 +427,13 @@ export default function ZoneBuilder() {
         id: `${SRC_TOOL_HL}-fill`,
         type: "fill",
         source: SRC_TOOL_HL,
-        paint: { "fill-color": "#9B5DE5", "fill-opacity": 0.35 },
+        paint: { "fill-color": "#E67DD1", "fill-opacity": 0.35 },
       });
       map.current.addLayer({
         id: `${SRC_TOOL_HL}-line`,
         type: "line",
         source: SRC_TOOL_HL,
-        paint: { "line-color": "#9B5DE5", "line-width": 2.5 },
+        paint: { "line-color": "#E67DD1", "line-width": 2.5 },
       });
       // Split preview — the two halves in contrasting colors.
       map.current.addSource(SRC_SPLIT_PREVIEW, { type: "geojson", data: emptyFC() });
@@ -442,7 +442,7 @@ export default function ZoneBuilder() {
         type: "fill",
         source: SRC_SPLIT_PREVIEW,
         paint: {
-          "fill-color": ["match", ["get", "side"], "a", "#06D6A0", "#FFD166"],
+          "fill-color": ["match", ["get", "side"], "a", "#28B770", "#FFD626"],
           "fill-opacity": 0.4,
         },
       });
@@ -450,7 +450,7 @@ export default function ZoneBuilder() {
         id: `${SRC_SPLIT_PREVIEW}-line`,
         type: "line",
         source: SRC_SPLIT_PREVIEW,
-        paint: { "line-color": "#fff", "line-width": 2 },
+        paint: { "line-color": "#202122", "line-width": 2 },
       });
       // The sliver picked for filling — solid highlight over the gap layer.
       map.current.addSource(SRC_GAP_SELECTED, { type: "geojson", data: emptyFC() });
@@ -458,13 +458,13 @@ export default function ZoneBuilder() {
         id: `${SRC_GAP_SELECTED}-fill`,
         type: "fill",
         source: SRC_GAP_SELECTED,
-        paint: { "fill-color": "#FFD166", "fill-opacity": 0.45 },
+        paint: { "fill-color": "#FFD626", "fill-opacity": 0.45 },
       });
       map.current.addLayer({
         id: `${SRC_GAP_SELECTED}-line`,
         type: "line",
         source: SRC_GAP_SELECTED,
-        paint: { "line-color": "#FFD166", "line-width": 2 },
+        paint: { "line-color": "#FFD626", "line-width": 2 },
       });
 
       // Zone labels at each zone's stored center.
@@ -484,7 +484,7 @@ export default function ZoneBuilder() {
         },
         paint: {
           "text-color": "#cfe4ff",
-          "text-halo-color": "#000000",
+          "text-halo-color": "#FDFFF1",
           "text-halo-width": 1,
         },
       });
@@ -498,7 +498,7 @@ export default function ZoneBuilder() {
         paint: {
           "circle-radius": 6,
           "circle-color": "#FF2D95",
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": "#202122",
           "circle-stroke-width": 2,
         },
       });
@@ -1890,9 +1890,9 @@ export default function ZoneBuilder() {
       style={{
         display: "flex",
         height: "100vh",
-        background: "#0a0a0a",
-        color: "#fff",
-        fontFamily: "'DM Sans', sans-serif",
+        background: "#FDFFF1",
+        color: "#202122",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}
     >
       {/* Control panel */}
@@ -1900,7 +1900,7 @@ export default function ZoneBuilder() {
         style={{
           width: 320,
           minWidth: 320,
-          borderRight: "1px solid #1a1a1a",
+          borderRight: "1px solid #E6E5DA",
           padding: 20,
           overflowY: "auto",
           boxSizing: "border-box",
@@ -1908,14 +1908,14 @@ export default function ZoneBuilder() {
       >
         <button
           onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+          style={{ background: 'none', border: 'none', color: '#6F6E66', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
         >
           ← Home
         </button>
         <h1 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Builder
         </h1>
-        <p style={{ color: "#888", fontSize: "0.82rem", marginBottom: 12 }}>
+        <p style={{ color: "#55544E", fontSize: "0.82rem", marginBottom: 12 }}>
           Open a map to draw its boundary and zones, or create a new one.
         </p>
         <button
@@ -1939,8 +1939,8 @@ export default function ZoneBuilder() {
             gap: 6,
             marginTop: 18,
             padding: 4,
-            background: "#111",
-            border: "1px solid #222",
+            background: "#FFFFFF",
+            border: "1px solid #E6E5DA",
             borderRadius: 10,
           }}
         >
@@ -1995,7 +1995,7 @@ export default function ZoneBuilder() {
             >
               {creatingBusy ? "Creating…" : "Create empty map"}
             </button>
-            <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 10 }}>
+            <p style={{ color: "#6F6E66", fontSize: "0.75rem", marginTop: 10 }}>
               Creates a draft map, then opens it so you can draw its boundary and
               zones.
             </p>
@@ -2006,13 +2006,13 @@ export default function ZoneBuilder() {
                 alignItems: "center",
                 gap: 10,
                 margin: "18px 0",
-                color: "#555",
+                color: "#6F6E66",
                 fontSize: "0.75rem",
               }}
             >
-              <div style={{ flex: 1, height: 1, background: "#1a1a1a" }} />
+              <div style={{ flex: 1, height: 1, background: "#E6E5DA" }} />
               or
-              <div style={{ flex: 1, height: 1, background: "#1a1a1a" }} />
+              <div style={{ flex: 1, height: 1, background: "#E6E5DA" }} />
             </div>
 
             <label
@@ -2034,7 +2034,7 @@ export default function ZoneBuilder() {
                 style={{ display: "none" }}
               />
             </label>
-            <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 8 }}>
+            <p style={{ color: "#6F6E66", fontSize: "0.75rem", marginTop: 8 }}>
               One polygon per zone. Creates a new draft map containing just those
               zones, with a boundary derived from them. Uses the name above, or
               the file name.
@@ -2049,7 +2049,7 @@ export default function ZoneBuilder() {
             <select
               value={selectedMapId}
               onChange={(e) => setSelectedMapId(e.target.value)}
-              style={{ ...inputStyle, color: selectedMapId ? "#fff" : "#888" }}
+              style={{ ...inputStyle, color: selectedMapId ? "#202122" : "#55544E" }}
             >
               <option value="">
                 {loadingMaps
@@ -2067,7 +2067,7 @@ export default function ZoneBuilder() {
             </select>
 
             {!selectedMap && maps.length > 0 && (
-              <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 10 }}>
+              <p style={{ color: "#6F6E66", fontSize: "0.75rem", marginTop: 10 }}>
                 Pick a map to edit its zones and boundary.
               </p>
             )}
@@ -2077,16 +2077,16 @@ export default function ZoneBuilder() {
             style={{
               marginTop: 16,
               padding: "12px 14px",
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid #1a1a1a",
+              background: "rgba(32,33,34,0.02)",
+              border: "1px solid #E6E5DA",
               borderRadius: 10,
               fontSize: "0.82rem",
             }}
           >
-            <div style={{ color: "#888", marginBottom: 6 }}>
+            <div style={{ color: "#55544E", marginBottom: 6 }}>
               {loadingZones ? "Loading zones…" : `${zones.length} zone(s)`}
             </div>
-            <div style={{ color: selectedMap.boundary ? "#06D6A0" : "#EF476F" }}>
+            <div style={{ color: selectedMap.boundary ? "#28B770" : "#FF4443" }}>
               {selectedMap.boundary
                 ? "✓ boundary set"
                 : "no boundary drawn yet"}
@@ -2095,7 +2095,7 @@ export default function ZoneBuilder() {
               <div
                 style={{
                   marginTop: 4,
-                  color: gapPercent === 0 ? "#06D6A0" : "#FF6B35",
+                  color: gapPercent === 0 ? "#28B770" : "#FF6B35",
                 }}
               >
                 {gapPercent === 0
@@ -2107,22 +2107,22 @@ export default function ZoneBuilder() {
               <div
                 style={{
                   marginTop: 10,
-                  background: "rgba(255,209,102,0.08)",
-                  border: "1px solid rgba(255,209,102,0.4)",
+                  background: "rgba(255,214,38,0.08)",
+                  border: "1px solid rgba(255,214,38,0.4)",
                   borderRadius: 8,
                   padding: 12,
                 }}
               >
-                <p style={{ color: "#FFD166", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                <p style={{ color: "#FFD626", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
                   Fill gap (~{Math.round(area(fillGap.piece)).toLocaleString()} m²)
                 </p>
                 {fillGap.candidates.length === 0 ? (
-                  <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 10px", lineHeight: 1.5 }}>
+                  <p style={{ color: "#3A3935", fontSize: "0.78rem", margin: "0 0 10px", lineHeight: 1.5 }}>
                     No zone touches this area. Draw a new zone over it instead.
                   </p>
                 ) : (
                   <>
-                    <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 8px" }}>
+                    <p style={{ color: "#3A3935", fontSize: "0.78rem", margin: "0 0 8px" }}>
                       Add this area to:
                     </p>
                     <select
@@ -2131,9 +2131,9 @@ export default function ZoneBuilder() {
                       disabled={fillBusy}
                       style={{
                         width: "100%",
-                        background: "#111",
-                        color: "#eee",
-                        border: "1px solid #333",
+                        background: "#FFFFFF",
+                        color: "#2A2B2C",
+                        border: "1px solid #D6D5CA",
                         borderRadius: 6,
                         padding: "8px 10px",
                         fontFamily: "inherit",
@@ -2157,8 +2157,8 @@ export default function ZoneBuilder() {
                       disabled={fillBusy || !fillGap.targetId}
                       style={{
                         flex: 1,
-                        background: "#FFD166",
-                        color: "#000",
+                        background: "#FFD626",
+                        color: "#FDFFF1",
                         border: "none",
                         borderRadius: 8,
                         padding: "9px 12px",
@@ -2185,7 +2185,7 @@ export default function ZoneBuilder() {
               style={{
                 marginTop: 10,
                 paddingTop: 10,
-                borderTop: "1px solid #1a1a1a",
+                borderTop: "1px solid #E6E5DA",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -2193,7 +2193,7 @@ export default function ZoneBuilder() {
             >
               <span
                 style={{
-                  color: selectedMap.is_active ? "#06D6A0" : "#888",
+                  color: selectedMap.is_active ? "#28B770" : "#55544E",
                   fontSize: "0.8rem",
                   fontWeight: 600,
                 }}
@@ -2206,10 +2206,10 @@ export default function ZoneBuilder() {
                 style={{
                   background: selectedMap.is_active
                     ? "transparent"
-                    : "#06D6A0",
-                  color: selectedMap.is_active ? "#aaa" : "#000",
+                    : "#28B770",
+                  color: selectedMap.is_active ? "#4A4944" : "#FDFFF1",
                   border: selectedMap.is_active
-                    ? "1px solid #333"
+                    ? "1px solid #D6D5CA"
                     : "none",
                   borderRadius: 7,
                   padding: "7px 14px",
@@ -2240,8 +2240,8 @@ export default function ZoneBuilder() {
               style={{
                 marginTop: 16,
                 padding: 14,
-                background: "rgba(255,255,255,0.02)",
-                border: "1px solid #1a1a1a",
+                background: "rgba(32,33,34,0.02)",
+                border: "1px solid #E6E5DA",
                 borderRadius: 10,
               }}
             >
@@ -2300,7 +2300,7 @@ export default function ZoneBuilder() {
                 style={{
                   marginTop: 14,
                   paddingTop: 14,
-                  borderTop: "1px solid #1a1a1a",
+                  borderTop: "1px solid #E6E5DA",
                 }}
               >
                 {deleteConfirm === null ? (
@@ -2310,9 +2310,9 @@ export default function ZoneBuilder() {
                       disabled={emBusy}
                       style={{
                         width: "100%",
-                        background: "rgba(239,71,111,0.1)",
-                        color: "#EF476F",
-                        border: "1px solid rgba(239,71,111,0.3)",
+                        background: "rgba(255,68,67,0.1)",
+                        color: "#FF4443",
+                        border: "1px solid rgba(255,68,67,0.3)",
                         borderRadius: 8,
                         padding: "9px 16px",
                         fontWeight: 700,
@@ -2323,37 +2323,37 @@ export default function ZoneBuilder() {
                     >
                       Delete this map &amp; its zones
                     </button>
-                    <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 6 }}>
+                    <p style={{ color: "#6F6E66", fontSize: "0.72rem", marginTop: 6 }}>
                       Permanent — removes the map and every zone on it.
                     </p>
                   </>
                 ) : (
                   <div
                     style={{
-                      background: "rgba(239,71,111,0.08)",
-                      border: "1px solid rgba(239,71,111,0.4)",
+                      background: "rgba(255,68,67,0.08)",
+                      border: "1px solid rgba(255,68,67,0.4)",
                       borderRadius: 8,
                       padding: 12,
                     }}
                   >
-                    <p style={{ color: "#EF476F", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                    <p style={{ color: "#FF4443", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
                       Delete "{selectedMap?.name}"{selectedMap?.is_active ? " (PUBLISHED)" : ""}?
                     </p>
                     {deleteConfirm.liveGames > 0 ? (
-                      <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
-                        <strong style={{ color: "#EF476F" }}>Can't delete:</strong>{" "}
+                      <p style={{ color: "#3A3935", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                        <strong style={{ color: "#FF4443" }}>Can't delete:</strong>{" "}
                         {deleteConfirm.liveGames} game{deleteConfirm.liveGames === 1 ? " is" : "s are"}{" "}
                         in progress on this map. End {deleteConfirm.liveGames === 1 ? "it" : "them"} first.
                       </p>
                     ) : (
-                      <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                      <p style={{ color: "#3A3935", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
                         This permanently removes the map and its{" "}
                         <strong>{deleteConfirm.zoneCount} zone{deleteConfirm.zoneCount === 1 ? "" : "s"}</strong>.
                         It can't be undone.
                         {deleteConfirm.endedGames > 0 && (
                           <>
                             {" "}
-                            <strong style={{ color: "#FFD166" }}>
+                            <strong style={{ color: "#FFD626" }}>
                               {deleteConfirm.endedGames} finished game{deleteConfirm.endedGames === 1 ? "" : "s"}
                             </strong>{" "}
                             used this map. Games created since zone snapshots (Aug 2026) keep their
@@ -2370,8 +2370,8 @@ export default function ZoneBuilder() {
                         disabled={emBusy}
                         style={{
                           flex: 1,
-                          background: "#EF476F",
-                          color: "#fff",
+                          background: "#FF4443",
+                          color: "#202122",
                           border: "none",
                           borderRadius: 8,
                           padding: "9px 12px",
@@ -2412,8 +2412,8 @@ export default function ZoneBuilder() {
               style={{
                 marginTop: 16,
                 padding: 14,
-                background: "rgba(255,255,255,0.02)",
-                border: "1px solid #1a1a1a",
+                background: "rgba(32,33,34,0.02)",
+                border: "1px solid #E6E5DA",
                 borderRadius: 10,
               }}
             >
@@ -2427,7 +2427,7 @@ export default function ZoneBuilder() {
                 style={inputStyle}
                 autoFocus
               />
-              <p style={{ color: "#555", fontSize: "0.75rem", marginTop: 8 }}>
+              <p style={{ color: "#6F6E66", fontSize: "0.75rem", marginTop: 8 }}>
                 Copies {zones.length} zone{zones.length === 1 ? "" : "s"}
                 {selectedMap.boundary ? " + boundary" : ""} into a new draft.
                 The original stays unchanged.
@@ -2478,12 +2478,12 @@ export default function ZoneBuilder() {
               padding: 14,
               background:
                 drawingMode === "boundary"
-                  ? "rgba(255,209,102,0.1)"
-                  : "rgba(6,214,160,0.1)",
+                  ? "rgba(255,214,38,0.1)"
+                  : "rgba(40,183,112,0.1)",
               border: `1px solid ${
                 drawingMode === "boundary"
-                  ? "rgba(255,209,102,0.5)"
-                  : "rgba(6,214,160,0.5)"
+                  ? "rgba(255,214,38,0.5)"
+                  : "rgba(40,183,112,0.5)"
               }`,
               borderRadius: 10,
             }}
@@ -2492,7 +2492,7 @@ export default function ZoneBuilder() {
               ✎ Drawing {drawingMode === "boundary" ? "map boundary" : "zone"}…
             </div>
             <div
-              style={{ color: "#999", fontSize: "0.8rem", marginBottom: 12 }}
+              style={{ color: "#4A4944", fontSize: "0.8rem", marginBottom: 12 }}
             >
               Click points on the map; double-click (or Enter) to finish, or Esc
               to cancel.
@@ -2512,8 +2512,8 @@ export default function ZoneBuilder() {
             style={{
               marginTop: 16,
               padding: 14,
-              background: "rgba(155,93,229,0.1)",
-              border: "1px solid rgba(155,93,229,0.5)",
+              background: "rgba(230,125,209,0.1)",
+              border: "1px solid rgba(230,125,209,0.5)",
               borderRadius: 10,
             }}
           >
@@ -2522,26 +2522,26 @@ export default function ZoneBuilder() {
             </div>
             {tool === "merge" && (
               <>
-                <div style={{ color: "#999", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
+                <div style={{ color: "#4A4944", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
                   {mergeSel.length === 0 && "Click the zone to keep."}
                   {mergeSel.length === 1 && (
                     <>
-                      Keeping <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
+                      Keeping <strong style={{ color: "#2A2B2C" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
                       Now click a neighboring zone to merge into it.
                     </>
                   )}
                   {mergeSel.length === 2 && (
                     <>
-                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[1])?.name}</strong>{" "}
+                      <strong style={{ color: "#2A2B2C" }}>{zones.find((z) => z.id === mergeSel[1])?.name}</strong>{" "}
                       will be removed and its area added to{" "}
-                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
+                      <strong style={{ color: "#2A2B2C" }}>{zones.find((z) => z.id === mergeSel[0])?.name}</strong>.
                       Tags, transit and landmarks are combined.
                     </>
                   )}
                 </div>
                 {mergeSel.length === 2 && (
                   <>
-                    <label style={{ color: "#888", fontSize: "0.75rem" }}>Merged zone name</label>
+                    <label style={{ color: "#55544E", fontSize: "0.75rem" }}>Merged zone name</label>
                     <input
                       value={mergeName}
                       onChange={(e) => setMergeName(e.target.value)}
@@ -2554,12 +2554,12 @@ export default function ZoneBuilder() {
             )}
             {tool === "split" && (
               <>
-                <div style={{ color: "#999", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
+                <div style={{ color: "#4A4944", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
                   {splitPhase === "pick" && "Click the zone you want to split."}
                   {splitPhase === "line" && (
                     <>
                       Draw a line all the way across{" "}
-                      <strong style={{ color: "#ddd" }}>{zones.find((z) => z.id === splitZoneId)?.name}</strong>.
+                      <strong style={{ color: "#2A2B2C" }}>{zones.find((z) => z.id === splitZoneId)?.name}</strong>.
                       Double-click (or Enter) to finish, Esc to cancel.
                     </>
                   )}
@@ -2567,11 +2567,11 @@ export default function ZoneBuilder() {
                 </div>
                 {splitPhase === "preview" && splitPieces && (
                   <>
-                    <label style={{ color: "#06D6A0", fontSize: "0.75rem" }}>
+                    <label style={{ color: "#28B770", fontSize: "0.75rem" }}>
                       Green piece (keeps this zone's id) — {Math.round(area(splitPieces.a)).toLocaleString()} m²
                     </label>
                     <input value={splitNameA} onChange={(e) => setSplitNameA(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
-                    <label style={{ color: "#FFD166", fontSize: "0.75rem" }}>
+                    <label style={{ color: "#FFD626", fontSize: "0.75rem" }}>
                       Yellow piece (new zone) — {Math.round(area(splitPieces.b)).toLocaleString()} m²
                     </label>
                     <input value={splitNameB} onChange={(e) => setSplitNameB(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
@@ -2584,7 +2584,7 @@ export default function ZoneBuilder() {
                 <button
                   onClick={confirmMerge}
                   disabled={toolBusy}
-                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#9B5DE5", color: "#fff" }}
+                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#E67DD1", color: "#202122" }}
                 >
                   {toolBusy ? "Merging…" : "Merge zones"}
                 </button>
@@ -2593,7 +2593,7 @@ export default function ZoneBuilder() {
                 <button
                   onClick={confirmSplit}
                   disabled={toolBusy}
-                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#9B5DE5", color: "#fff" }}
+                  style={{ ...primaryBtnStyle, marginTop: 0, flex: 1, background: "#E67DD1", color: "#202122" }}
                 >
                   {toolBusy ? "Splitting…" : "Split zone"}
                 </button>
@@ -2677,15 +2677,15 @@ export default function ZoneBuilder() {
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                        background: "rgba(255,255,255,0.02)",
-                        border: "1px solid #1a1a1a",
+                        background: "rgba(32,33,34,0.02)",
+                        border: "1px solid #E6E5DA",
                         borderRadius: 8,
                         padding: "8px 10px",
                       }}
                     >
                       {confirmZoneDeleteId === z.id ? (
                         <>
-                          <span style={{ flex: 1, color: "#EF476F", fontSize: "0.8rem", fontWeight: 600 }}>
+                          <span style={{ flex: 1, color: "#FF4443", fontSize: "0.8rem", fontWeight: 600 }}>
                             Delete "{z.name || "Untitled zone"}"?
                           </span>
                           <button onClick={() => deleteZone(z.id)} disabled={saving} style={zoneRowDangerBtn}>
@@ -2705,7 +2705,7 @@ export default function ZoneBuilder() {
                               textAlign: "left",
                               background: "none",
                               border: "none",
-                              color: "#ddd",
+                              color: "#2A2B2C",
                               fontSize: "0.85rem",
                               fontWeight: 600,
                               cursor: "pointer",
@@ -2724,7 +2724,7 @@ export default function ZoneBuilder() {
                             style={{
                               background: "none",
                               border: "none",
-                              color: "#7a3a48",
+                              color: "#B02F2E",
                               cursor: "pointer",
                               fontSize: "0.9rem",
                               fontFamily: "inherit",
@@ -2748,8 +2748,8 @@ export default function ZoneBuilder() {
             style={{
               marginTop: 16,
               padding: 14,
-              background: "rgba(255,209,102,0.06)",
-              border: "1px solid rgba(255,209,102,0.35)",
+              background: "rgba(255,214,38,0.06)",
+              border: "1px solid rgba(255,214,38,0.35)",
               borderRadius: 10,
             }}
           >
@@ -2868,18 +2868,18 @@ export default function ZoneBuilder() {
                 style={{
                   marginTop: 14,
                   padding: "10px 12px",
-                  background: "rgba(239,71,111,0.1)",
-                  border: "1px solid rgba(239,71,111,0.4)",
+                  background: "rgba(255,68,67,0.1)",
+                  border: "1px solid rgba(255,68,67,0.4)",
                   borderRadius: 8,
                   fontSize: "0.8rem",
-                  color: "#EF476F",
+                  color: "#FF4443",
                 }}
               >
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>
                   ⚠ Overlaps {overlaps.length} saved zone
                   {overlaps.length > 1 ? "s" : ""}
                 </div>
-                <div style={{ color: "#f2a6ba", lineHeight: 1.5 }}>
+                <div style={{ color: "#FF4443", lineHeight: 1.5 }}>
                   {overlaps
                     .map((o) => `${o.name} (${Math.round(o.areaSqM)} m²)`)
                     .join(", ")}
@@ -2890,7 +2890,7 @@ export default function ZoneBuilder() {
                     alignItems: "center",
                     gap: 8,
                     marginTop: 10,
-                    color: "#f2a6ba",
+                    color: "#FF4443",
                     cursor: "pointer",
                   }}
                 >
@@ -2909,8 +2909,8 @@ export default function ZoneBuilder() {
                   style={{
                     marginTop: 12,
                     width: "100%",
-                    background: "#06D6A0",
-                    color: "#000",
+                    background: "#28B770",
+                    color: "#FDFFF1",
                     border: "none",
                     borderRadius: 8,
                     padding: "9px 16px",
@@ -2938,8 +2938,8 @@ export default function ZoneBuilder() {
                       ...primaryBtnStyle,
                       marginTop: 0,
                       flex: 1,
-                      background: blocked ? "#333" : primaryBtnStyle.background,
-                      color: blocked ? "#888" : primaryBtnStyle.color,
+                      background: blocked ? "#D6D5CA" : primaryBtnStyle.background,
+                      color: blocked ? "#55544E" : primaryBtnStyle.color,
                       opacity: saving ? 0.6 : 1,
                       cursor: disabled ? "not-allowed" : "pointer",
                     }}
@@ -2970,9 +2970,9 @@ export default function ZoneBuilder() {
                 style={{
                   marginTop: 10,
                   width: "100%",
-                  background: "rgba(239,71,111,0.1)",
-                  color: "#EF476F",
-                  border: "1px solid rgba(239,71,111,0.3)",
+                  background: "rgba(255,68,67,0.1)",
+                  color: "#FF4443",
+                  border: "1px solid rgba(255,68,67,0.3)",
                   borderRadius: 8,
                   padding: "9px 16px",
                   fontWeight: 700,
@@ -2988,16 +2988,16 @@ export default function ZoneBuilder() {
               <div
                 style={{
                   marginTop: 10,
-                  background: "rgba(239,71,111,0.08)",
-                  border: "1px solid rgba(239,71,111,0.4)",
+                  background: "rgba(255,68,67,0.08)",
+                  border: "1px solid rgba(255,68,67,0.4)",
                   borderRadius: 8,
                   padding: 12,
                 }}
               >
-                <p style={{ color: "#EF476F", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
+                <p style={{ color: "#FF4443", fontWeight: 700, fontSize: "0.85rem", margin: "0 0 6px" }}>
                   Delete "{zoneName.trim() || "this zone"}"?
                 </p>
-                <p style={{ color: "#bbb", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
+                <p style={{ color: "#3A3935", fontSize: "0.78rem", margin: "0 0 12px", lineHeight: 1.5 }}>
                   This permanently removes the zone. It can't be undone.
                 </p>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -3006,8 +3006,8 @@ export default function ZoneBuilder() {
                     disabled={saving}
                     style={{
                       flex: 1,
-                      background: "#EF476F",
-                      color: "#fff",
+                      background: "#FF4443",
+                      color: "#202122",
                       border: "none",
                       borderRadius: 8,
                       padding: "9px 12px",
@@ -3035,16 +3035,16 @@ export default function ZoneBuilder() {
             style={{
               marginTop: 16,
               background: message.startsWith("Error")
-                ? "rgba(239,71,111,0.1)"
-                : "rgba(6,214,160,0.1)",
+                ? "rgba(255,68,67,0.1)"
+                : "rgba(40,183,112,0.1)",
               border: `1px solid ${
                 message.startsWith("Error")
-                  ? "rgba(239,71,111,0.3)"
-                  : "rgba(6,214,160,0.3)"
+                  ? "rgba(255,68,67,0.3)"
+                  : "rgba(40,183,112,0.3)"
               }`,
               borderRadius: 8,
               padding: "10px 12px",
-              color: message.startsWith("Error") ? "#EF476F" : "#06D6A0",
+              color: message.startsWith("Error") ? "#FF4443" : "#28B770",
               fontSize: "0.82rem",
             }}
           >
@@ -3096,7 +3096,7 @@ function splitTags(s: string): string[] {
 
 const labelStyle: React.CSSProperties = {
   fontSize: "0.72rem",
-  color: "#888",
+  color: "#55544E",
   display: "block",
   marginBottom: 6,
   fontWeight: 600,
@@ -3105,9 +3105,9 @@ const labelStyle: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "#111",
-  border: "1px solid #333",
-  color: "#fff",
+  background: "#FFFFFF",
+  border: "1px solid #D6D5CA",
+  color: "#202122",
   padding: "9px 12px",
   borderRadius: 8,
   fontSize: "0.88rem",
@@ -3118,8 +3118,8 @@ const inputStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   marginTop: 16,
   width: "100%",
-  background: "#06D6A0",
-  color: "#000",
+  background: "#28B770",
+  color: "#FDFFF1",
   border: "none",
   borderRadius: 8,
   padding: "11px 16px",
@@ -3130,8 +3130,8 @@ const primaryBtnStyle: React.CSSProperties = {
 };
 
 const zoneRowDangerBtn: React.CSSProperties = {
-  background: "#EF476F",
-  color: "#fff",
+  background: "#FF4443",
+  color: "#202122",
   border: "none",
   borderRadius: 6,
   padding: "4px 10px",
@@ -3143,8 +3143,8 @@ const zoneRowDangerBtn: React.CSSProperties = {
 
 const zoneRowQuietBtn: React.CSSProperties = {
   background: "none",
-  color: "#888",
-  border: "1px solid #333",
+  color: "#55544E",
+  border: "1px solid #D6D5CA",
   borderRadius: 6,
   padding: "4px 10px",
   fontWeight: 600,
@@ -3155,9 +3155,9 @@ const zoneRowQuietBtn: React.CSSProperties = {
 
 const toolInputStyle: React.CSSProperties = {
   width: "100%",
-  background: "#111",
-  color: "#eee",
-  border: "1px solid #333",
+  background: "#FFFFFF",
+  color: "#2A2B2C",
+  border: "1px solid #D6D5CA",
   borderRadius: 6,
   padding: "8px 10px",
   fontFamily: "inherit",
@@ -3168,8 +3168,8 @@ const toolInputStyle: React.CSSProperties = {
 
 const secondaryBtnStyle: React.CSSProperties = {
   background: "transparent",
-  color: "#aaa",
-  border: "1px solid #333",
+  color: "#4A4944",
+  border: "1px solid #D6D5CA",
   borderRadius: 8,
   padding: "11px 16px",
   fontWeight: 600,
@@ -3190,7 +3190,7 @@ const secondaryFullBtnStyle: React.CSSProperties = {
 const crossLinkStyle: React.CSSProperties = {
   background: "none",
   border: "none",
-  color: "#4C9AFF",
+  color: "#1EB2F2",
   cursor: "pointer",
   fontFamily: "inherit",
   fontSize: "0.8rem",
@@ -3203,8 +3203,8 @@ const crossLinkStyle: React.CSSProperties = {
 function segBtnStyle(active: boolean): React.CSSProperties {
   return {
     flex: 1,
-    background: active ? "#222" : "transparent",
-    color: active ? "#fff" : "#888",
+    background: active ? "#E6E5DA" : "transparent",
+    color: active ? "#202122" : "#55544E",
     border: "none",
     borderRadius: 7,
     padding: "8px 12px",

@@ -88,33 +88,37 @@ export default function AuthPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0a',
+      background: '#FDFFF1',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px',
-      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
         {/* Logo / Header */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: '3rem', marginBottom: 12 }}>🏙️</div>
-          <h1 style={{ color: '#FFD166', fontWeight: 800, fontSize: '2rem', margin: 0, letterSpacing: -1 }}>
-            Foray
-          </h1>
-          <p style={{ color: '#555', marginTop: 8, fontSize: '0.9rem' }}>
-            Urban Scavenger Hunt
+          <img
+            src="/brand/logo.svg"
+            alt="Foray"
+            style={{ width: '100%', maxWidth: 320, height: 'auto', display: 'block', margin: '0 auto 16px' }}
+          />
+          <p style={{
+            color: '#202122', margin: 0, fontSize: '0.78rem', fontWeight: 700,
+            fontFamily: "'Martian Mono', monospace", textTransform: 'uppercase', letterSpacing: 2,
+          }}>
+            Claim the city
           </p>
         </div>
 
         {/* Mode toggle */}
         <div style={{
           display: 'flex',
-          background: '#111',
+          background: '#FFFFFF',
           borderRadius: 10,
           padding: 4,
           marginBottom: 24,
-          border: '1px solid #1a1a1a',
+          border: '1px solid #E6E5DA',
         }}>
           {(['login', 'signup'] as const).map((m) => (
             <button
@@ -125,8 +129,8 @@ export default function AuthPage() {
                 padding: '10px',
                 borderRadius: 8,
                 border: 'none',
-                background: mode === m ? '#FFD166' : 'transparent',
-                color: mode === m ? '#0a0a0a' : '#555',
+                background: mode === m ? '#FFD626' : 'transparent',
+                color: mode === m ? '#202122' : '#6F6E66',
                 fontWeight: 700,
                 fontSize: '0.88rem',
                 cursor: 'pointer',
@@ -166,7 +170,7 @@ export default function AuthPage() {
           />
 
           {error && (
-            <p style={{ color: '#EF476F', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
+            <p style={{ color: '#FF4443', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
               {error}
             </p>
           )}
@@ -176,8 +180,8 @@ export default function AuthPage() {
             disabled={loading}
             style={{
               ...buttonStyle,
-              background: '#FFD166',
-              color: '#0a0a0a',
+              background: '#FFD626',
+              color: '#202122',
               opacity: loading ? 0.6 : 1,
             }}
           >
@@ -185,9 +189,9 @@ export default function AuthPage() {
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0' }}>
-            <div style={{ flex: 1, height: 1, background: '#1a1a1a' }} />
-            <span style={{ color: '#333', fontSize: '0.78rem' }}>or</span>
-            <div style={{ flex: 1, height: 1, background: '#1a1a1a' }} />
+            <div style={{ flex: 1, height: 1, background: '#E6E5DA' }} />
+            <span style={{ color: '#A3A298', fontSize: '0.78rem' }}>or</span>
+            <div style={{ flex: 1, height: 1, background: '#E6E5DA' }} />
           </div>
 
           <button
@@ -195,9 +199,9 @@ export default function AuthPage() {
             disabled={loading}
             style={{
               ...buttonStyle,
-              background: '#111',
-              color: '#e0e0e0',
-              border: '1px solid #222',
+              background: '#FFFFFF',
+              color: '#2A2B2C',
+              border: '1px solid #E6E5DA',
               opacity: loading ? 0.6 : 1,
             }}
           >
@@ -211,11 +215,11 @@ export default function AuthPage() {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#111',
-  border: '1px solid #222',
+  background: '#FFFFFF',
+  border: '1px solid #E6E5DA',
   borderRadius: 10,
   padding: '14px 16px',
-  color: '#fff',
+  color: '#202122',
   fontSize: '1rem',
   fontFamily: 'inherit',
   outline: 'none',

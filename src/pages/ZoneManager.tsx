@@ -458,8 +458,8 @@ export default function ZoneManager() {
       <div
         style={{
           minHeight: "100vh",
-          background: "#0a0a0a",
-          color: "#fff",
+          background: "#FDFFF1",
+          color: "#202122",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -479,23 +479,23 @@ export default function ZoneManager() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#0a0a0a",
-        color: "#fff",
-        fontFamily: "'DM Sans', sans-serif",
+        background: "#FDFFF1",
+        color: "#202122",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         padding: "24px",
       }}
     >
       <div style={{ maxWidth: 700, margin: "0 auto" }}>
         <button
           onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+          style={{ background: 'none', border: 'none', color: '#6F6E66', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
         >
           ← Home
         </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: 4 }}>
           Zone Manager
         </h1>
-        <p style={{ color: "#888", marginBottom: 8, fontSize: "0.9rem" }}>
+        <p style={{ color: "#55544E", marginBottom: 8, fontSize: "0.9rem" }}>
           Upload a GeoJSON file to add zones, fill in metadata, then save to
           Firestore. No code needed.
         </p>
@@ -504,7 +504,7 @@ export default function ZoneManager() {
           style={{
             background: "none",
             border: "none",
-            color: "#4C9AFF",
+            color: "#1EB2F2",
             cursor: "pointer",
             fontFamily: "inherit",
             fontSize: "0.85rem",
@@ -529,7 +529,7 @@ export default function ZoneManager() {
             <label
               style={{
                 fontSize: "0.75rem",
-                color: "#666",
+                color: "#5F5E57",
                 display: "block",
                 marginBottom: 4,
               }}
@@ -540,9 +540,9 @@ export default function ZoneManager() {
               value={cityId}
               onChange={(e) => setCityId(e.target.value.toLowerCase())}
               style={{
-                background: "#111",
-                border: "1px solid #333",
-                color: "#fff",
+                background: "#FFFFFF",
+                border: "1px solid #D6D5CA",
+                color: "#202122",
                 padding: "8px 12px",
                 borderRadius: 8,
                 fontSize: "0.9rem",
@@ -554,7 +554,7 @@ export default function ZoneManager() {
             <label
               style={{
                 fontSize: "0.75rem",
-                color: "#666",
+                color: "#5F5E57",
                 display: "block",
                 marginBottom: 4,
               }}
@@ -565,9 +565,9 @@ export default function ZoneManager() {
               value={cityName}
               onChange={(e) => setCityName(e.target.value)}
               style={{
-                background: "#111",
-                border: "1px solid #333",
-                color: "#fff",
+                background: "#FFFFFF",
+                border: "1px solid #D6D5CA",
+                color: "#202122",
                 padding: "8px 12px",
                 borderRadius: 8,
                 fontSize: "0.9rem",
@@ -579,7 +579,7 @@ export default function ZoneManager() {
             <label
               style={{
                 fontSize: "0.75rem",
-                color: "#666",
+                color: "#5F5E57",
                 display: "block",
                 marginBottom: 4,
               }}
@@ -590,9 +590,9 @@ export default function ZoneManager() {
               value={assignMapId}
               onChange={(e) => setAssignMapId(e.target.value)}
               style={{
-                background: "#111",
-                border: "1px solid #333",
-                color: assignMapId ? "#fff" : "#888",
+                background: "#FFFFFF",
+                border: "1px solid #D6D5CA",
+                color: assignMapId ? "#202122" : "#55544E",
                 padding: "8px 12px",
                 borderRadius: 8,
                 fontSize: "0.9rem",
@@ -608,7 +608,7 @@ export default function ZoneManager() {
                 </option>
               ))}
             </select>
-            <p style={{ color: "#555", fontSize: "0.72rem", marginTop: 4, maxWidth: 240 }}>
+            <p style={{ color: "#6F6E66", fontSize: "0.72rem", marginTop: 4, maxWidth: 240 }}>
               Applied to zones that don't already belong to a map. Existing zones keep theirs.
             </p>
           </div>
@@ -617,22 +617,22 @@ export default function ZoneManager() {
         {/* Upload */}
         <div
           style={{
-            background: "#111",
-            border: "2px dashed #333",
+            background: "#FFFFFF",
+            border: "2px dashed #D6D5CA",
             borderRadius: 12,
             padding: 24,
             textAlign: "center",
             marginBottom: 20,
           }}
         >
-          <p style={{ color: "#aaa", marginBottom: 12, fontSize: "0.9rem" }}>
+          <p style={{ color: "#4A4944", marginBottom: 12, fontSize: "0.9rem" }}>
             Upload a GeoJSON file with district/neighborhood boundaries
           </p>
           <input
             type="file"
             accept=".geojson,.json"
             onChange={handleFileUpload}
-            style={{ color: "#888" }}
+            style={{ color: "#55544E" }}
           />
         </div>
 
@@ -641,17 +641,17 @@ export default function ZoneManager() {
           <div
             style={{
               background: message.startsWith("Error")
-                ? "rgba(239,71,111,0.1)"
-                : "rgba(6,214,160,0.1)",
+                ? "rgba(255,68,67,0.1)"
+                : "rgba(40,183,112,0.1)",
               border: `1px solid ${
                 message.startsWith("Error")
-                  ? "rgba(239,71,111,0.3)"
-                  : "rgba(6,214,160,0.3)"
+                  ? "rgba(255,68,67,0.3)"
+                  : "rgba(40,183,112,0.3)"
               }`,
               borderRadius: 8,
               padding: "10px 14px",
               marginBottom: 20,
-              color: message.startsWith("Error") ? "#EF476F" : "#06D6A0",
+              color: message.startsWith("Error") ? "#FF4443" : "#28B770",
               fontSize: "0.88rem",
             }}
           >
@@ -664,7 +664,7 @@ export default function ZoneManager() {
           <label
             style={{
               fontSize: "0.75rem",
-              color: "#666",
+              color: "#5F5E57",
               display: "block",
               marginBottom: 4,
             }}
@@ -675,9 +675,9 @@ export default function ZoneManager() {
             value={filterMapId}
             onChange={(e) => setFilterMapId(e.target.value)}
             style={{
-              background: "#111",
-              border: "1px solid #333",
-              color: "#fff",
+              background: "#FFFFFF",
+              border: "1px solid #D6D5CA",
+              color: "#202122",
               padding: "8px 12px",
               borderRadius: 8,
               fontSize: "0.9rem",
@@ -703,15 +703,15 @@ export default function ZoneManager() {
             marginBottom: 16,
           }}
         >
-          <span style={{ color: "#888", fontSize: "0.85rem" }}>
+          <span style={{ color: "#55544E", fontSize: "0.85rem" }}>
             Showing {visibleZones.length} of {zones.length} zones
           </span>
           <button
             onClick={saveAll}
             disabled={saving || zones.length === 0}
             style={{
-              background: saving ? "#333" : "#06D6A0",
-              color: saving ? "#888" : "#000",
+              background: saving ? "#D6D5CA" : "#28B770",
+              color: saving ? "#55544E" : "#FDFFF1",
               border: "none",
               borderRadius: 8,
               padding: "10px 24px",
@@ -728,8 +728,8 @@ export default function ZoneManager() {
         {zones.length > 0 && (
           <div
             style={{
-              background: "rgba(155,93,229,0.06)",
-              border: "1px solid rgba(155,93,229,0.3)",
+              background: "rgba(230,125,209,0.06)",
+              border: "1px solid rgba(230,125,209,0.3)",
               borderRadius: 12,
               padding: 16,
               marginBottom: 20,
@@ -738,7 +738,7 @@ export default function ZoneManager() {
             <div style={{ fontWeight: 700, marginBottom: 4 }}>
               Save selected zones as a new map
             </div>
-            <p style={{ color: "#888", fontSize: "0.8rem", marginBottom: 12 }}>
+            <p style={{ color: "#55544E", fontSize: "0.8rem", marginBottom: 12 }}>
               Check zones below, name the map, and save. It becomes a picker card
               in Create Game (writes a <code>maps</code> doc + sets each zone's{" "}
               <code>map_id</code>).
@@ -774,7 +774,7 @@ export default function ZoneManager() {
             >
               <span
                 style={{
-                  color: selectedForMap.size > 0 ? "#9B5DE5" : "#666",
+                  color: selectedForMap.size > 0 ? "#E67DD1" : "#5F5E57",
                   fontSize: "0.82rem",
                   fontWeight: 600,
                 }}
@@ -799,12 +799,12 @@ export default function ZoneManager() {
                   style={{
                     background:
                       savingMap || selectedForMap.size === 0 || !mapName.trim()
-                        ? "#333"
-                        : "#9B5DE5",
+                        ? "#D6D5CA"
+                        : "#E67DD1",
                     color:
                       savingMap || selectedForMap.size === 0 || !mapName.trim()
-                        ? "#888"
-                        : "#fff",
+                        ? "#55544E"
+                        : "#202122",
                     border: "none",
                     borderRadius: 8,
                     padding: "9px 18px",
@@ -830,9 +830,9 @@ export default function ZoneManager() {
             key={zone.id}
             style={{
               background: zone.isNew
-                ? "rgba(255,209,102,0.05)"
-                : "rgba(255,255,255,0.02)",
-              border: `1px solid ${zone.isNew ? "#FFD16640" : "#1a1a1a"}`,
+                ? "rgba(255,214,38,0.05)"
+                : "rgba(32,33,34,0.02)",
+              border: `1px solid ${zone.isNew ? "#FFD16640" : "#E6E5DA"}`,
               borderRadius: 12,
               marginBottom: 10,
               overflow: "hidden",
@@ -850,7 +850,7 @@ export default function ZoneManager() {
                   width: 16,
                   height: 16,
                   cursor: "pointer",
-                  accentColor: "#9B5DE5",
+                  accentColor: "#E67DD1",
                   flexShrink: 0,
                 }}
               />
@@ -873,14 +873,14 @@ export default function ZoneManager() {
               <div style={{ textAlign: "left" }}>
                 <span
                   style={{
-                    color: "#FFD166",
+                    color: "#FFD626",
                     fontSize: "0.75rem",
                     fontWeight: 600,
                   }}
                 >
                   #{zone.district_number}
                 </span>
-                <span style={{ color: "#fff", marginLeft: 10, fontWeight: 600 }}>
+                <span style={{ color: "#202122", marginLeft: 10, fontWeight: 600 }}>
                   {zone.name}
                 </span>
                 {zone.isNew && (
@@ -888,8 +888,8 @@ export default function ZoneManager() {
                     style={{
                       marginLeft: 8,
                       fontSize: "0.7rem",
-                      color: "#FFD166",
-                      background: "rgba(255,209,102,0.15)",
+                      color: "#FFD626",
+                      background: "rgba(255,214,38,0.15)",
                       padding: "2px 8px",
                       borderRadius: 4,
                     }}
@@ -909,8 +909,8 @@ export default function ZoneManager() {
                       style={{
                         marginLeft: 8,
                         fontSize: "0.7rem",
-                        color: mid ? "#06D6A0" : "#EF476F",
-                        background: mid ? "rgba(6,214,160,0.12)" : "rgba(239,71,111,0.12)",
+                        color: mid ? "#28B770" : "#FF4443",
+                        background: mid ? "rgba(40,183,112,0.12)" : "rgba(255,68,67,0.12)",
                         padding: "2px 8px",
                         borderRadius: 4,
                       }}
@@ -922,7 +922,7 @@ export default function ZoneManager() {
               </div>
               <span
                 style={{
-                  color: "#555",
+                  color: "#6F6E66",
                   transform:
                     expandedZone === zone.id ? "rotate(180deg)" : "none",
                   transition: "0.2s",
@@ -1022,16 +1022,16 @@ export default function ZoneManager() {
                     paddingTop: 8,
                   }}
                 >
-                  <span style={{ color: "#555", fontSize: "0.75rem" }}>
+                  <span style={{ color: "#6F6E66", fontSize: "0.75rem" }}>
                     Center: {zone.center_lat.toFixed(4)},{" "}
                     {zone.center_lng.toFixed(4)}
                   </span>
                   <button
                     onClick={() => removeZone(zone.id)}
                     style={{
-                      background: "rgba(239,71,111,0.1)",
-                      color: "#EF476F",
-                      border: "1px solid rgba(239,71,111,0.3)",
+                      background: "rgba(255,68,67,0.1)",
+                      color: "#FF4443",
+                      border: "1px solid rgba(255,68,67,0.3)",
                       borderRadius: 6,
                       padding: "6px 14px",
                       fontSize: "0.8rem",
@@ -1052,16 +1052,16 @@ export default function ZoneManager() {
 
 const labelStyle: React.CSSProperties = {
   fontSize: "0.75rem",
-  color: "#888",
+  color: "#55544E",
   display: "block",
   marginBottom: 4,
   fontWeight: 600,
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "#111",
-  border: "1px solid #333",
-  color: "#fff",
+  background: "#FFFFFF",
+  border: "1px solid #D6D5CA",
+  color: "#202122",
   padding: "8px 12px",
   borderRadius: 8,
   fontSize: "0.88rem",
@@ -1070,9 +1070,9 @@ const inputStyle: React.CSSProperties = {
 };
 
 const ghostBtn: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid #333",
-  color: "#aaa",
+  background: "rgba(32,33,34,0.03)",
+  border: "1px solid #D6D5CA",
+  color: "#4A4944",
   borderRadius: 8,
   padding: "9px 14px",
   fontWeight: 600,

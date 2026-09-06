@@ -120,20 +120,20 @@ export default function SideQuestExplorer() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#0a0a0a', color: '#fff',
-      fontFamily: "'DM Sans', sans-serif", padding: 24,
+      minHeight: '100vh', background: '#FDFFF1', color: '#202122',
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", padding: 24,
     }}>
       <div style={{ maxWidth: 860, margin: '0 auto' }}>
         <button
           onClick={() => navigate('/')}
-          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
+          style={{ background: 'none', border: 'none', color: '#6F6E66', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}
         >
           ← Home
         </button>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px' }}>
           🧩 Side Quest Explorer
         </h1>
-        <p style={{ color: '#888', fontSize: '0.9rem', margin: '0 0 20px' }}>
+        <p style={{ color: '#55544E', fontSize: '0.9rem', margin: '0 0 20px' }}>
           Every submission across all games — for reviewing history and sharing
           with external partners.
         </p>
@@ -143,7 +143,7 @@ export default function SideQuestExplorer() {
           <select
             value={questId}
             onChange={(e) => setQuestId(e.target.value)}
-            style={{ background: '#111', border: '1px solid rgba(155,93,229,0.35)', color: '#c9a6f5', borderRadius: 8, padding: '9px 12px', fontSize: '0.88rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
+            style={{ background: '#FFFFFF', border: '1px solid rgba(230,125,209,0.35)', color: '#E67DD1', borderRadius: 8, padding: '9px 12px', fontSize: '0.88rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
           >
             {knownQuests.map((q) => (
               <option key={q.id} value={q.id}>{q.title}</option>
@@ -154,9 +154,9 @@ export default function SideQuestExplorer() {
               key={f}
               onClick={() => setStatusFilter(f)}
               style={{
-                background: statusFilter === f ? 'rgba(155,93,229,0.15)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${statusFilter === f ? 'rgba(155,93,229,0.4)' : '#1a1a1a'}`,
-                color: statusFilter === f ? '#c9a6f5' : '#555',
+                background: statusFilter === f ? 'rgba(230,125,209,0.15)' : 'rgba(32,33,34,0.03)',
+                border: `1px solid ${statusFilter === f ? 'rgba(230,125,209,0.4)' : '#E6E5DA'}`,
+                color: statusFilter === f ? '#E67DD1' : '#6F6E66',
                 padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
                 cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize',
               }}
@@ -169,9 +169,9 @@ export default function SideQuestExplorer() {
             onClick={exportCsv}
             disabled={visible.length === 0}
             style={{
-              background: visible.length ? 'rgba(155,93,229,0.15)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${visible.length ? 'rgba(155,93,229,0.4)' : '#222'}`,
-              color: visible.length ? '#c9a6f5' : '#444',
+              background: visible.length ? 'rgba(230,125,209,0.15)' : 'rgba(32,33,34,0.03)',
+              border: `1px solid ${visible.length ? 'rgba(230,125,209,0.4)' : '#E6E5DA'}`,
+              color: visible.length ? '#E67DD1' : '#8F8E85',
               padding: '9px 16px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700,
               cursor: visible.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
             }}
@@ -182,17 +182,17 @@ export default function SideQuestExplorer() {
 
         {/* Results */}
         {loadedQuestId !== questId ? (
-          <p style={{ color: '#555', fontSize: '0.85rem' }}>Loading…</p>
+          <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>Loading…</p>
         ) : visible.length === 0 ? (
-          <p style={{ color: '#555', fontSize: '0.85rem' }}>
+          <p style={{ color: '#6F6E66', fontSize: '0.85rem' }}>
             No {statusFilter === 'all' ? '' : statusFilter + ' '}submissions for this quest yet.
           </p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
             {visible.map((s) => (
-              <div key={s.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #1a1a1a', borderRadius: 12, overflow: 'hidden' }}>
+              <div key={s.id} style={{ background: 'rgba(32,33,34,0.02)', border: '1px solid #E6E5DA', borderRadius: 12, overflow: 'hidden' }}>
                 {deadMedia.has(s.id) ? (
-                  <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '0.75rem', background: '#111' }}>
+                  <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8F8E85', fontSize: '0.75rem', background: '#FFFFFF' }}>
                     🖼️ Media no longer available
                   </div>
                 ) : (
@@ -200,21 +200,21 @@ export default function SideQuestExplorer() {
                     <img
                       src={s.media_url} alt="" loading="lazy"
                       onError={() => setDeadMedia((prev) => new Set(prev).add(s.id))}
-                      style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block', background: '#111' }}
+                      style={{ width: '100%', height: 150, objectFit: 'cover', display: 'block', background: '#FFFFFF' }}
                     />
                   </a>
                 )}
                 <div style={{ padding: '9px 12px' }}>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#ddd', fontWeight: 600 }}>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#2A2B2C', fontWeight: 600 }}>
                     {s.submitter_name}
                     <span style={{
                       float: 'right', fontWeight: 700, fontSize: '0.68rem',
-                      color: s.status === 'approved' ? '#06D6A0' : s.status === 'rejected' ? '#EF476F' : '#FFD166',
+                      color: s.status === 'approved' ? '#28B770' : s.status === 'rejected' ? '#FF4443' : '#FFD626',
                     }}>
                       {s.status}
                     </span>
                   </p>
-                  <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: '#666' }}>
+                  <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: '#5F5E57' }}>
                     {gameNames.get(s.game_id) ?? s.game_id}
                     {s.submitted_at?.seconds && (
                       <> · {new Date(s.submitted_at.seconds * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</>
@@ -224,7 +224,7 @@ export default function SideQuestExplorer() {
                     <a
                       href={`https://www.google.com/maps?q=${s.gps_lat},${s.gps_lng}`}
                       target="_blank" rel="noreferrer"
-                      style={{ fontSize: '0.7rem', color: '#4C9AFF', textDecoration: 'none' }}
+                      style={{ fontSize: '0.7rem', color: '#1EB2F2', textDecoration: 'none' }}
                     >
                       📍 {s.gps_lat.toFixed(5)}, {s.gps_lng.toFixed(5)}
                     </a>

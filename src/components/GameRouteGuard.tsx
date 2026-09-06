@@ -33,12 +33,12 @@ export default function GameRouteGuard({
       <div
         style={{
           minHeight: '100vh',
-          background: '#0a0a0a',
-          color: '#555',
+          background: '#FDFFF1',
+          color: '#6F6E66',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         }}
       >
         Loading game...
@@ -54,7 +54,13 @@ export default function GameRouteGuard({
   // We check the *prefix* (e.g. '/lobby') because the actual route has the
   // gameId baked in, and expectedPath also has the gameId — so comparing
   // prefixes tells us "is the user on the right type of screen?"
-  if (route.expectedPath && !route.expectedPath.startsWith(expectedPathPrefix)) {
+  // Brand-preview only (dev server + ?preview=game): stay on the requested
+  // screen even if the game state says otherwise, so an ended game can be
+  // used to review the in-game design. Never active in a production build.
+  const previewPinned =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'game'
+
+  if (!previewPinned && route.expectedPath && !route.expectedPath.startsWith(expectedPathPrefix)) {
     return <Navigate to={route.expectedPath} replace />
   }
 

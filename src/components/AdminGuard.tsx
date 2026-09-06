@@ -14,12 +14,12 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0a',
-        color: '#555',
+        background: '#FDFFF1',
+        color: '#6F6E66',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}>
         Checking access...
       </div>

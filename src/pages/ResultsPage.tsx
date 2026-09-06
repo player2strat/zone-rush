@@ -70,8 +70,8 @@ interface ZoneScoreData {
 // --------------- Confetti ---------------
 
 const CONFETTI_COLORS = [
-  '#FFD166', '#06D6A0', '#EF476F', '#118AB2',
-  '#9B5DE5', '#F77F00', '#FF6B8A', '#2EC4B6',
+  '#FFD626', '#28B770', '#FF4443', '#1EB2F2',
+  '#E67DD1', '#F77F00', '#FF6B8A', '#67DAF5',
 ]
 
 interface ConfettiPiece {
@@ -160,7 +160,7 @@ function ConfettiOverlay({ onDone }: { onDone: () => void }) {
 // --------------- Medal colors ---------------
 
 const RANK_STYLES = [
-  { label: '1st', bg: 'rgba(255,209,102,0.12)', border: 'rgba(255,209,102,0.35)', color: '#FFD166', medal: '🥇' },
+  { label: '1st', bg: 'rgba(255,214,38,0.12)', border: 'rgba(255,214,38,0.35)', color: '#FFD626', medal: '🥇' },
   { label: '2nd', bg: 'rgba(180,180,200,0.08)', border: 'rgba(180,180,200,0.25)', color: '#b0b0c0', medal: '🥈' },
   { label: '3rd', bg: 'rgba(205,127,50,0.08)',  border: 'rgba(205,127,50,0.25)',  color: '#cd7f32', medal: '🥉' },
 ]
@@ -389,14 +389,14 @@ export default function ResultsPage() {
   if (loading || !game) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#0a0a0a', color: '#555',
+        minHeight: '100vh', background: '#FDFFF1', color: '#6F6E66',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            width: 32, height: 32, border: '3px solid #222',
-            borderTopColor: '#FFD166', borderRadius: '50%',
+            width: 32, height: 32, border: '3px solid #E6E5DA',
+            borderTopColor: '#FFD626', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading results...</p>
@@ -414,9 +414,9 @@ export default function ResultsPage() {
     return (
       <div style={{
         minHeight: '100vh',
-        background: '#0a0a0a',
-        color: '#fff',
-        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+        background: '#FDFFF1',
+        color: '#202122',
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         paddingBottom: 60,
       }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -441,14 +441,14 @@ export default function ResultsPage() {
 
         {/* Header */}
         <div style={{
-          background: 'linear-gradient(160deg, #0a0a0a 0%, #1a0a2e 60%, #0a1628 100%)',
+          background: 'linear-gradient(160deg, #FDFFF1 0%, #FFF4BF 100%)',
           padding: '40px 24px 32px',
-          borderBottom: '1px solid #1a1a1a',
+          borderBottom: '1px solid #E6E5DA',
           textAlign: 'center',
         }}>
           <p style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.72rem', color: '#FFD166',
+            fontFamily: "'Martian Mono', monospace",
+            fontSize: '0.72rem', color: '#FFD626',
             textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
           }}>
             Foray · Game Over
@@ -460,7 +460,7 @@ export default function ResultsPage() {
             {game.name}
           </h1>
           {duration && (
-            <p style={{ color: '#444', fontSize: '0.82rem' }}>
+            <p style={{ color: '#8F8E85', fontSize: '0.82rem' }}>
               Duration: {duration}
             </p>
           )}
@@ -475,8 +475,8 @@ export default function ResultsPage() {
               style={{
                 animationDelay: '0.05s',
                 marginBottom: 24,
-                background: 'rgba(255,209,102,0.10)',
-                border: '1px solid rgba(255,209,102,0.35)',
+                background: 'rgba(255,214,38,0.10)',
+                border: '1px solid rgba(255,214,38,0.35)',
                 borderRadius: 14,
                 padding: '16px 18px',
                 display: 'flex', alignItems: 'flex-start', gap: 12,
@@ -485,14 +485,14 @@ export default function ResultsPage() {
               <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>📢</span>
               <div style={{ minWidth: 0 }}>
                 <p style={{
-                  fontSize: '0.66rem', color: '#FFD166',
+                  fontSize: '0.66rem', color: '#FFD626',
                   textTransform: 'uppercase', letterSpacing: 1.5,
                   fontWeight: 700, marginBottom: 5,
                 }}>
                   Message from the GM
                 </p>
                 <p style={{
-                  color: '#FFD166', fontSize: '0.95rem', fontWeight: 600,
+                  color: '#FFD626', fontSize: '0.95rem', fontWeight: 600,
                   lineHeight: 1.5, margin: 0,
                 }}>
                   {latestBroadcast}
@@ -520,27 +520,27 @@ export default function ResultsPage() {
               gap: 10, marginBottom: 18,
             }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: myTeam.color }} />
-              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#fff' }}>
+              <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#202122' }}>
                 {myTeam.name}
               </span>
             </div>
 
             <p style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "'Martian Mono', monospace",
               fontSize: '4rem', fontWeight: 800,
               color: myTeam.color, lineHeight: 1, marginBottom: 8,
             }}>
               {myTeam.total_points}
             </p>
             <p style={{
-              fontSize: '0.72rem', color: '#888',
+              fontSize: '0.72rem', color: '#55544E',
               textTransform: 'uppercase', letterSpacing: 2, fontWeight: 600,
             }}>
               Total Points
             </p>
 
             {myTeam.member_names?.length > 0 && (
-              <p style={{ color: '#666', fontSize: '0.82rem', marginTop: 16 }}>
+              <p style={{ color: '#5F5E57', fontSize: '0.82rem', marginTop: 16 }}>
                 {myTeam.member_names.join(' · ')}
               </p>
             )}
@@ -550,13 +550,13 @@ export default function ResultsPage() {
           {activeZones.length > 0 && (
             <div className="results-section" style={{ animationDelay: '0.15s', marginBottom: 28 }}>
               <p style={{
-                fontSize: '0.72rem', color: '#FFD166',
+                fontSize: '0.72rem', color: '#FFD626',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
                 Final Zone Map
               </p>
-              <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a' }}>
+              <div style={{ height: 260, borderRadius: 12, overflow: 'hidden', border: '1px solid #E6E5DA' }}>
                 <GameMap
                   zones={activeZones}
                   zoneOwnership={zoneOwnership.size > 0 ? zoneOwnership : undefined}
@@ -571,7 +571,7 @@ export default function ResultsPage() {
           {teamSubs.length > 0 && (
             <div className="results-section" style={{ animationDelay: '0.18s', marginBottom: 28 }}>
               <p style={{
-                fontSize: '0.72rem', color: '#FFD166',
+                fontSize: '0.72rem', color: '#FFD626',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
@@ -580,16 +580,16 @@ export default function ResultsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {teamSubs.map((sub) => (
                   <div key={sub.id} style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid #1a1a1a',
+                    background: 'rgba(32,33,34,0.02)',
+                    border: '1px solid #E6E5DA',
                     borderRadius: 12, overflow: 'hidden',
                   }}>
-                    <div style={{ height: 130, background: '#111' }}>
+                    <div style={{ height: 130, background: '#FFFFFF' }}>
                       {!sub.media_url || deadMedia.has(sub.id) ? (
                         <div style={{
                           width: '100%', height: '100%', display: 'flex',
                           flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                          gap: 6, color: '#444',
+                          gap: 6, color: '#8F8E85',
                         }}>
                           <span style={{ fontSize: '1.4rem' }}>🖼️</span>
                           <span style={{ fontSize: '0.7rem' }}>Media no longer available</span>
@@ -608,21 +608,21 @@ export default function ResultsPage() {
                     </div>
                     <div style={{ padding: '8px 10px' }}>
                       <p style={{
-                        margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#ddd',
+                        margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#2A2B2C',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {sub.challengeTitle}
                       </p>
                       <p style={{ margin: '3px 0 0', fontSize: '0.7rem' }}>
                         <span style={{
-                          color: sub.status === 'approved' ? '#06D6A0'
-                            : sub.status === 'rejected' ? '#EF476F' : '#FFD166',
+                          color: sub.status === 'approved' ? '#28B770'
+                            : sub.status === 'rejected' ? '#FF4443' : '#FFD626',
                           fontWeight: 700,
                         }}>
                           {sub.status === 'approved' ? '✓ Approved' : sub.status === 'rejected' ? '✕ Rejected' : '⏳ Pending'}
                         </span>
                         {sub.zone_id && (
-                          <span style={{ color: '#555' }}> · {formatZoneLabel(sub.zone_id)}</span>
+                          <span style={{ color: '#6F6E66' }}> · {formatZoneLabel(sub.zone_id)}</span>
                         )}
                       </p>
                     </div>
@@ -639,7 +639,7 @@ export default function ResultsPage() {
               animationDelay: '0.2s',
               marginBottom: 28,
               textAlign: 'center',
-              color: '#555', fontSize: '0.85rem', lineHeight: 1.6,
+              color: '#6F6E66', fontSize: '0.85rem', lineHeight: 1.6,
               padding: '0 12px',
             }}
           >
@@ -653,9 +653,9 @@ export default function ResultsPage() {
               onClick={() => navigate('/')}
               style={{
                 width: '100%',
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid #222',
-                color: '#888',
+                background: 'rgba(32,33,34,0.04)',
+                border: '1px solid #E6E5DA',
+                color: '#55544E',
                 padding: '14px 24px', borderRadius: 10,
                 fontSize: '0.9rem', fontWeight: 600,
                 cursor: 'pointer', fontFamily: 'inherit',
@@ -678,14 +678,14 @@ export default function ResultsPage() {
   if (!isGM) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#0a0a0a', color: '#555',
+        minHeight: '100vh', background: '#FDFFF1', color: '#6F6E66',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            width: 32, height: 32, border: '3px solid #222',
-            borderTopColor: '#FFD166', borderRadius: '50%',
+            width: 32, height: 32, border: '3px solid #E6E5DA',
+            borderTopColor: '#FFD626', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading results...</p>
@@ -698,9 +698,9 @@ export default function ResultsPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0a',
-      color: '#fff',
-      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: '#FDFFF1',
+      color: '#202122',
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       paddingBottom: 60,
     }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -727,14 +727,14 @@ export default function ResultsPage() {
 
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(160deg, #0a0a0a 0%, #1a0a2e 60%, #0a1628 100%)',
+        background: 'linear-gradient(160deg, #FDFFF1 0%, #FFF4BF 100%)',
         padding: '40px 24px 32px',
-        borderBottom: '1px solid #1a1a1a',
+        borderBottom: '1px solid #E6E5DA',
         textAlign: 'center',
       }}>
         <p style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '0.72rem', color: '#FFD166',
+          fontFamily: "'Martian Mono', monospace",
+          fontSize: '0.72rem', color: '#FFD626',
           textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
         }}>
           Foray · Game Over
@@ -746,7 +746,7 @@ export default function ResultsPage() {
           {game.name}
         </h1>
         {duration && (
-          <p style={{ color: '#444', fontSize: '0.82rem' }}>
+          <p style={{ color: '#8F8E85', fontSize: '0.82rem' }}>
             Duration: {duration}
           </p>
         )}
@@ -762,9 +762,9 @@ export default function ResultsPage() {
               animationDelay: '0.1s',
               marginBottom: 28,
               background: isTie
-                ? 'rgba(255,255,255,0.03)'
+                ? 'rgba(32,33,34,0.03)'
                 : `linear-gradient(135deg, ${winner.color}18 0%, ${winner.color}08 100%)`,
-              border: `1px solid ${isTie ? '#333' : winner.color + '50'}`,
+              border: `1px solid ${isTie ? '#D6D5CA' : winner.color + '50'}`,
               borderRadius: 16,
               padding: '24px 20px',
               textAlign: 'center',
@@ -775,7 +775,7 @@ export default function ResultsPage() {
               {isTie ? '🤝' : '🏆'}
             </p>
             <p style={{
-              fontSize: '0.72rem', color: isTie ? '#888' : winner.color,
+              fontSize: '0.72rem', color: isTie ? '#55544E' : winner.color,
               textTransform: 'uppercase', letterSpacing: 2,
               fontWeight: 700, marginBottom: 6,
             }}>
@@ -783,14 +783,14 @@ export default function ResultsPage() {
             </p>
             <p style={{
               fontSize: '1.6rem', fontWeight: 800, letterSpacing: -0.5,
-              color: isTie ? '#fff' : winner.color,
+              color: isTie ? '#202122' : winner.color,
             }}>
               {isTie
                 ? `${scoreboard[0].name} & ${scoreboard[1].name}`
                 : winner.name}
             </p>
             {!isTie && (
-              <p style={{ color: '#666', fontSize: '0.82rem', marginTop: 6 }}>
+              <p style={{ color: '#5F5E57', fontSize: '0.82rem', marginTop: 6 }}>
                 {winner.member_names?.join(' · ')}
               </p>
             )}
@@ -800,7 +800,7 @@ export default function ResultsPage() {
         {/* ====== FINAL STANDINGS ====== */}
         <div className="results-section" style={{ animationDelay: '0.2s', marginBottom: 28 }}>
           <p style={{
-            fontSize: '0.72rem', color: '#FFD166',
+            fontSize: '0.72rem', color: '#FFD626',
             textTransform: 'uppercase', letterSpacing: 1.5,
             fontWeight: 700, marginBottom: 14,
           }}>
@@ -810,8 +810,8 @@ export default function ResultsPage() {
           <div style={{ display: 'grid', gap: 10 }}>
             {scoreboard.map((team, rank) => {
               const rankStyle = RANK_STYLES[rank] ?? {
-                label: `${rank + 1}th`, bg: 'rgba(255,255,255,0.02)',
-                border: '#1a1a1a', color: '#555', medal: '',
+                label: `${rank + 1}th`, bg: 'rgba(32,33,34,0.02)',
+                border: '#E6E5DA', color: '#6F6E66', medal: '',
               }
               const basePoints = team.total_points - team.bonusPoints
               return (
@@ -835,7 +835,7 @@ export default function ResultsPage() {
                       <div>
                         <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{team.name}</span>
                         {team.member_names?.length > 0 && (
-                          <p style={{ fontSize: '0.72rem', color: '#555', marginTop: 2 }}>
+                          <p style={{ fontSize: '0.72rem', color: '#6F6E66', marginTop: 2 }}>
                             {team.member_names.join(' · ')}
                           </p>
                         )}
@@ -845,17 +845,17 @@ export default function ResultsPage() {
                     {/* Points */}
                     <div style={{ textAlign: 'right' }}>
                       <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "'Martian Mono', monospace",
                         fontSize: '1.4rem', fontWeight: 700,
                         color: rankStyle.color,
                       }}>
                         {team.total_points}
                       </span>
-                      <span style={{ color: '#555', fontSize: '0.78rem', marginLeft: 4 }}>pts</span>
+                      <span style={{ color: '#6F6E66', fontSize: '0.78rem', marginLeft: 4 }}>pts</span>
                       {team.bonusPoints > 0 && (
                         <p style={{
-                          fontSize: '0.7rem', color: '#FFD166',
-                          marginTop: 2, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: '0.7rem', color: '#FFD626',
+                          marginTop: 2, fontFamily: "'Martian Mono', monospace",
                         }}>
                           {basePoints} + {team.bonusPoints} bonus
                         </p>
@@ -865,19 +865,19 @@ export default function ResultsPage() {
 
                   {/* Stats row */}
                   <div style={{
-                    display: 'flex', gap: 16, fontSize: '0.75rem', color: '#555',
+                    display: 'flex', gap: 16, fontSize: '0.75rem', color: '#6F6E66',
                     marginBottom: team.zoneBreakdown.length > 0 ? 10 : 0,
                   }}>
                     <span>
-                      <span style={{ color: '#888' }}>
+                      <span style={{ color: '#55544E' }}>
                         {team.zoneBreakdown.filter(z => z.status === 'claimed' || z.status === 'locked').length}
                       </span> zones claimed
                     </span>
                     <span>
-                      <span style={{ color: '#888' }}>{team.challengesCompleted}</span> challenges
+                      <span style={{ color: '#55544E' }}>{team.challengesCompleted}</span> challenges
                     </span>
                     {team.bonusPoints > 0 && (
-                      <span style={{ color: '#FFD166' }}>
+                      <span style={{ color: '#FFD626' }}>
                         +{team.bonusPoints} bonus
                       </span>
                     )}
@@ -891,12 +891,12 @@ export default function ResultsPage() {
                         .map((zs) => (
                           <span key={zs.zone_id} style={{
                             fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4,
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "'Martian Mono', monospace",
                             background: (zs.status === 'claimed' || zs.status === 'locked')
-                              ? `${team.color}20` : 'rgba(255,255,255,0.04)',
+                              ? `${team.color}20` : 'rgba(32,33,34,0.04)',
                             border: `1px solid ${(zs.status === 'claimed' || zs.status === 'locked')
-                              ? team.color + '40' : '#1a1a1a'}`,
-                            color: (zs.status === 'claimed' || zs.status === 'locked') ? team.color : '#444',
+                              ? team.color + '40' : '#E6E5DA'}`,
+                            color: (zs.status === 'claimed' || zs.status === 'locked') ? team.color : '#8F8E85',
                             fontWeight: 600,
                           }}>
                             {formatZoneLabel(zs.zone_id)} · {zs.points}pt
@@ -915,7 +915,7 @@ export default function ResultsPage() {
         {activeZones.length > 0 && (
           <div className="results-section" style={{ animationDelay: '0.3s', marginBottom: 28 }}>
             <p style={{
-              fontSize: '0.72rem', color: '#FFD166',
+              fontSize: '0.72rem', color: '#FFD626',
               textTransform: 'uppercase', letterSpacing: 1.5,
               fontWeight: 700, marginBottom: 14,
             }}>
@@ -923,7 +923,7 @@ export default function ResultsPage() {
             </p>
             <div style={{
               height: 280, borderRadius: 12, overflow: 'hidden',
-              border: '1px solid #1a1a1a',
+              border: '1px solid #E6E5DA',
             }}>
               <GameMap
                 zones={activeZones}
@@ -945,7 +945,7 @@ export default function ResultsPage() {
                       width: 8, height: 8, borderRadius: 2,
                       background: owner.teamColor,
                     }} />
-                    <span style={{ fontSize: '0.72rem', color: '#666' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#5F5E57' }}>
                       {formatZoneLabel(zoneId)} — {owner.teamName}
                     </span>
                   </div>
@@ -959,15 +959,15 @@ export default function ResultsPage() {
         {game.bonuses_applied && Object.keys(bonusMap).length > 0 && (
           <div className="results-section" style={{ animationDelay: '0.4s', marginBottom: 28 }}>
             <p style={{
-              fontSize: '0.72rem', color: '#FFD166',
+              fontSize: '0.72rem', color: '#FFD626',
               textTransform: 'uppercase', letterSpacing: 1.5,
               fontWeight: 700, marginBottom: 14,
             }}>
               Side Quests
             </p>
             <div style={{
-              background: 'rgba(255,209,102,0.04)',
-              border: '1px solid rgba(255,209,102,0.15)',
+              background: 'rgba(255,214,38,0.04)',
+              border: '1px solid rgba(255,214,38,0.15)',
               borderRadius: 12, padding: '16px 18px',
             }}>
                 {Object.entries(bonusMap).map(([teamId, pts], idx, arr) => {
@@ -979,24 +979,24 @@ export default function ResultsPage() {
                       alignItems: 'center',
                       paddingBottom: idx < arr.length - 1 ? 10 : 0,
                       marginBottom: idx < arr.length - 1 ? 10 : 0,
-                      borderBottom: idx < arr.length - 1 ? '1px solid #111' : 'none',
+                      borderBottom: idx < arr.length - 1 ? '1px solid #FFFFFF' : 'none',
                     }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: team.color }} />
-                      <span style={{ fontSize: '0.85rem', color: '#ccc', fontWeight: 600 }}>
+                      <span style={{ fontSize: '0.85rem', color: '#3A3935', fontWeight: 600 }}>
                         {team.name}
                       </span>
                     </div>
                     <span style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: '#FFD166', fontWeight: 700, fontSize: '0.9rem',
+                      fontFamily: "'Martian Mono', monospace",
+                      color: '#FFD626', fontWeight: 700, fontSize: '0.9rem',
                     }}>
                       +{pts}pt{pts !== 1 ? 's' : ''}
                     </span>
                   </div>
                 )
               })}
-              <p style={{ fontSize: '0.72rem', color: '#444', marginTop: 4 }}>
+              <p style={{ fontSize: '0.72rem', color: '#8F8E85', marginTop: 4 }}>
                 Bonuses include: Most zones claimed (+8) · Most zones with a challenge (+8)
               </p>
             </div>
@@ -1009,9 +1009,9 @@ export default function ResultsPage() {
             onClick={() => navigate('/')}
             style={{
               width: '100%',
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid #222',
-              color: '#888',
+              background: 'rgba(32,33,34,0.04)',
+              border: '1px solid #E6E5DA',
+              color: '#55544E',
               padding: '14px 24px', borderRadius: 10,
               fontSize: '0.9rem', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',

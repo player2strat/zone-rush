@@ -32,9 +32,9 @@ export default function HomePage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0a0a0a',
-      color: '#fff',
-      fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+      background: '#FDFFF1',
+      color: '#202122',
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -43,25 +43,20 @@ export default function HomePage() {
     }}>
       {/* Logo / Title */}
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <p style={{
-          fontSize: '0.75rem',
-          color: '#FFD166',
-          textTransform: 'uppercase',
-          letterSpacing: 2,
-          marginBottom: 8,
-        }}>
-          Foray
-        </p>
+        <img
+          src="/brand/logo.svg"
+          alt="Foray"
+          style={{ width: '100%', maxWidth: 280, height: 'auto', display: 'block', margin: '0 auto 20px' }}
+        />
         <h1 style={{
-          fontSize: '2rem',
-          fontWeight: 800,
+          fontSize: '1.5rem',
+          fontWeight: 700,
           margin: 0,
-          letterSpacing: -1,
         }}>
           {isGM ? 'Game Master' : 'Ready to explore?'}
         </h1>
         <p style={{
-          color: '#666',
+          color: '#5F5E57',
           fontSize: '0.9rem',
           marginTop: 8,
         }}>
@@ -83,9 +78,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/create')}
           style={{
-            background: 'rgba(255,209,102,0.12)',
-            border: '1px solid rgba(255,209,102,0.3)',
-            color: '#FFD166',
+            background: 'rgba(255,214,38,0.12)',
+            border: '1px solid rgba(255,214,38,0.3)',
+            color: '#FFD626',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -100,7 +95,7 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#997a3d',
+            color: '#7A6400',
             marginTop: 4,
           }}>
             Set up zones, invite players
@@ -114,9 +109,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/admin/zone-builder')}
           style={{
-            background: 'rgba(155,93,229,0.12)',
-            border: '1px solid rgba(155,93,229,0.3)',
-            color: '#9B5DE5',
+            background: 'rgba(230,125,209,0.12)',
+            border: '1px solid rgba(230,125,209,0.3)',
+            color: '#E67DD1',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -131,7 +126,7 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#6e4a9e',
+            color: '#9B4F8C',
             marginTop: 4,
           }}>
             Draw maps & zones
@@ -143,9 +138,9 @@ export default function HomePage() {
         <button
           onClick={() => navigate('/join')}
           style={{
-            background: 'rgba(6,214,160,0.12)',
-            border: '1px solid rgba(6,214,160,0.3)',
-            color: '#06D6A0',
+            background: '#FFD626',
+            border: 'none',
+            color: '#202122',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',
@@ -160,7 +155,8 @@ export default function HomePage() {
             display: 'block',
             fontSize: '0.78rem',
             fontWeight: 400,
-            color: '#3d8a6e',
+            color: '#202122',
+            opacity: 0.75,
             marginTop: 4,
           }}>
             {isGM ? 'Enter a game code' : 'Enter the code from your Game Master'}
@@ -175,13 +171,13 @@ export default function HomePage() {
           marginTop: 32,
           width: '100%',
           maxWidth: 320,
-          border: '1px solid #1a1a1a',
+          border: '1px solid #E6E5DA',
           borderRadius: 12,
           padding: 16,
         }}>
           <p style={{
             fontSize: '0.7rem',
-            color: '#666',
+            color: '#5F5E57',
             textTransform: 'uppercase',
             letterSpacing: 1.5,
             fontWeight: 700,
@@ -195,8 +191,8 @@ export default function HomePage() {
                 key={link.path}
                 onClick={() => navigate(link.path)}
                 style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid #222',
+                  background: 'rgba(32,33,34,0.02)',
+                  border: '1px solid #E6E5DA',
                   borderRadius: 8,
                   padding: '10px 12px',
                   textAlign: 'left',
@@ -204,12 +200,12 @@ export default function HomePage() {
                   fontFamily: 'inherit',
                 }}
               >
-                <span style={{ color: '#ddd', fontWeight: 600, fontSize: '0.9rem' }}>
+                <span style={{ color: '#2A2B2C', fontWeight: 600, fontSize: '0.9rem' }}>
                   {link.label}
                 </span>
                 <span style={{
                   display: 'block',
-                  color: '#666',
+                  color: '#5F5E57',
                   fontSize: '0.75rem',
                   marginTop: 2,
                 }}>
@@ -221,40 +217,41 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Bottom links */}
+      {/* Bottom actions — secondary outlined buttons */}
       <div style={{
-        marginTop: 48,
+        marginTop: 32,
         display: 'flex',
-        gap: 24,
-        fontSize: '0.82rem',
+        gap: 12,
+        width: '100%',
+        maxWidth: 320,
       }}>
         <button
           onClick={() => navigate('/forays')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#555',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-          }}
+          style={secondaryButtonStyle}
         >
           Past Forays
         </button>
         <button
           onClick={handleSignOut}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#555',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-          }}
+          style={secondaryButtonStyle}
         >
           Sign Out
         </button>
       </div>
     </div>
   )
+}
+const secondaryButtonStyle: React.CSSProperties = {
+  flex: 1,
+  background: 'none',
+  border: 'none',
+  color: '#5F5E57',
+  padding: '12px 8px',
+  fontSize: '0.9rem',
+  fontWeight: 500,
+  textDecoration: 'underline',
+  textDecorationThickness: 1,
+  textUnderlineOffset: 4,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
 }

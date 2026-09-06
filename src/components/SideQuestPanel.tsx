@@ -114,19 +114,19 @@ export default function SideQuestPanel({
 
   return (
     <div style={{
-      background: 'rgba(155,93,229,0.05)',
-      border: '1px solid rgba(155,93,229,0.25)',
+      background: 'rgba(230,125,209,0.05)',
+      border: '1px solid rgba(230,125,209,0.25)',
       borderRadius: 14,
       padding: '18px 18px 14px',
       marginBottom: 20,
     }}>
       <p style={{
-        fontSize: '0.72rem', color: '#9B5DE5', textTransform: 'uppercase',
+        fontSize: '0.72rem', color: '#E67DD1', textTransform: 'uppercase',
         letterSpacing: 1.5, fontWeight: 700, margin: '0 0 4px',
       }}>
         🧩 Side Quests
       </p>
-      <p style={{ color: '#666', fontSize: '0.78rem', margin: '0 0 14px', lineHeight: 1.5 }}>
+      <p style={{ color: '#5F5E57', fontSize: '0.78rem', margin: '0 0 14px', lineHeight: 1.5 }}>
         Submit as many as you spot — the team with the most approved wins bonus
         points at the end. No points during the game.
       </p>
@@ -136,25 +136,25 @@ export default function SideQuestPanel({
         const uploading = uploadingQuest === quest.id
         return (
           <div key={quest.id} style={{
-            borderTop: '1px solid rgba(155,93,229,0.15)',
+            borderTop: '1px solid rgba(230,125,209,0.15)',
             padding: '12px 0',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
               <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, color: '#eee', fontWeight: 700, fontSize: '0.9rem' }}>
+                <p style={{ margin: 0, color: '#2A2B2C', fontWeight: 700, fontSize: '0.9rem' }}>
                   {quest.title}
                 </p>
-                <p style={{ margin: '3px 0 0', color: '#888', fontSize: '0.8rem', lineHeight: 1.45 }}>
+                <p style={{ margin: '3px 0 0', color: '#55544E', fontSize: '0.8rem', lineHeight: 1.45 }}>
                   {quest.description}
                 </p>
                 <p style={{ margin: '6px 0 0', fontSize: '0.78rem' }}>
-                  <span style={{ color: '#06D6A0', fontWeight: 700 }}>
+                  <span style={{ color: '#28B770', fontWeight: 700 }}>
                     {tally.approved} approved
                   </span>
                   {tally.pending > 0 && (
-                    <span style={{ color: '#FFD166' }}> · {tally.pending} pending</span>
+                    <span style={{ color: '#FFD626' }}> · {tally.pending} pending</span>
                   )}
-                  <span style={{ color: '#555' }}> · +{quest.bonus_points}pt bonus for most</span>
+                  <span style={{ color: '#6F6E66' }}> · +{quest.bonus_points}pt bonus for most</span>
                 </p>
               </div>
 
@@ -174,9 +174,9 @@ export default function SideQuestPanel({
                   onClick={() => fileInputs.current.get(quest.id)?.click()}
                   disabled={uploading || !gameActive}
                   style={{
-                    background: gameActive ? 'rgba(155,93,229,0.15)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${gameActive ? 'rgba(155,93,229,0.4)' : '#222'}`,
-                    color: gameActive ? '#c9a6f5' : '#444',
+                    background: gameActive ? 'rgba(230,125,209,0.15)' : 'rgba(32,33,34,0.03)',
+                    border: `1px solid ${gameActive ? 'rgba(230,125,209,0.4)' : '#E6E5DA'}`,
+                    color: gameActive ? '#E67DD1' : '#8F8E85',
                     borderRadius: 8,
                     padding: '9px 14px',
                     fontSize: '0.82rem',
@@ -196,8 +196,8 @@ export default function SideQuestPanel({
 
       {error && (
         <p style={{
-          color: '#EF476F', fontSize: '0.8rem', margin: '10px 0 0',
-          padding: '8px 12px', background: 'rgba(239,71,111,0.08)', borderRadius: 8,
+          color: '#FF4443', fontSize: '0.8rem', margin: '10px 0 0',
+          padding: '8px 12px', background: 'rgba(255,68,67,0.08)', borderRadius: 8,
         }}>
           {error}
         </p>

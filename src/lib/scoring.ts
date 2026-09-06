@@ -539,7 +539,7 @@ export async function getZoneOwnershipMap(
       if (teamSnap.exists()) {
         const data = teamSnap.data()
         teamData.set(teamId, {
-          color: data.color ?? '#ffffff',
+          color: data.color ?? '#202122',
           name: data.name ?? 'Unknown Team',
         })
       }

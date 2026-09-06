@@ -183,7 +183,7 @@ export interface Team {
   dealt_challenges?: string[]     // Immutable record of initial hand (set on game start)
   discard_used: number            // How many discards have been used (max: settings.discard_limit)
   discarded_challenges?: string[] // Challenge IDs this team has discarded (never recycled back)
-  color: string                   // Hex color for map display (e.g. "#EF476F")
+  color: string                   // Hex color for map display (e.g. "#FF4443")
 }
 
 // ─── ZoneScore (sub-collection of Game) ──────────────────────────────────────
