@@ -44,6 +44,7 @@ import {
   sendTeamMessage,
   subscribeToPlayerMessages,
   markMessagesRead,
+  markMessageRead,
 } from '../lib/chat'
 import { logEvent } from '../lib/activityLog'
 import { useLocation } from '../hooks/useLocation'
@@ -183,8 +184,35 @@ export default function GamePage() {
   const [chatSending, setChatSending] = useState(false)
   const chatBottomRef = useRef<HTMLDivElement>(null)
 
-  const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
-  const [broadcastDismissed, setBroadcastDismissed] = useState<string | null>(null)
+  // Broadcast banner. Dismissing (✕) marks the message read in Firestore so
+  // it stays gone across reloads; dismissedBroadcastIds hides it instantly
+  // while that write is in flight. The banner shows the newest unread
+  // broadcast and a "+N more" hint when others are queued behind it.
+  const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<Set<string>>(new Set())
+  const unreadBroadcasts = useMemo(
+    () =>
+      chatMessages
+        .filter(
+          (m: any) =>
+            m.channel_type === 'gm_broadcast' &&
+            !m.read_by?.includes(user?.uid) &&
+            !dismissedBroadcastIds.has(m.id)
+        )
+        .sort((a: any, b: any) =>
+          (b.sent_at?.toMillis?.() ?? 0) - (a.sent_at?.toMillis?.() ?? 0)
+        ),
+    [chatMessages, user?.uid, dismissedBroadcastIds]
+  )
+  const latestBroadcast = unreadBroadcasts[0] ?? null
+
+  const dismissBroadcast = (msg: { id: string }) => {
+    setDismissedBroadcastIds(prev => new Set(prev).add(msg.id))
+    if (gameId && user) {
+      markMessageRead(gameId, msg.id, user.uid).catch(err =>
+        console.error('Failed to mark broadcast read:', err)
+      )
+    }
+  }
 
   // The player's display name for THIS game comes from their team's
   // member_names (the name they picked at join), not the auth profile.
@@ -369,21 +397,6 @@ export default function GamePage() {
     if (!gameId || !myTeam) return
     const unsub = subscribeToPlayerMessages(gameId, myTeam.id, (msgs) => {
       setChatMessages(msgs)
-
-      const latestUnreadBroadcast = msgs
-        .filter(
-          (m: any) =>
-            m.channel_type === 'gm_broadcast' &&
-            !m.read_by?.includes(user?.uid)
-        )
-        .sort((a: any, b: any) =>
-          (b.sent_at?.toMillis?.() ?? 0) - (a.sent_at?.toMillis?.() ?? 0)
-        )[0]
-
-      if (latestUnreadBroadcast) {
-        setLatestBroadcast(latestUnreadBroadcast.text)
-        setBroadcastDismissed(null)
-      }
 
       setTimeout(() => {
         chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -664,7 +677,7 @@ export default function GamePage() {
       </div>
 
       {/* GM broadcast banner */}
-      {latestBroadcast && broadcastDismissed !== latestBroadcast && activeTab !== 'chat' && (
+      {latestBroadcast && activeTab !== 'chat' && (
         <div style={{
           marginTop: 10,
           background: 'rgba(var(--marigold-rgb), 0.10)', border: '1px solid rgba(var(--marigold-rgb), 0.3)',
@@ -678,8 +691,13 @@ export default function GamePage() {
               lineHeight: 1.4, margin: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {latestBroadcast}
+              {latestBroadcast.text}
             </p>
+            {unreadBroadcasts.length > 1 && (
+              <span style={{ color: 'var(--ink-faint)', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 }}>
+                +{unreadBroadcasts.length - 1} more
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
@@ -693,7 +711,8 @@ export default function GamePage() {
               View
             </button>
             <button
-              onClick={() => setBroadcastDismissed(latestBroadcast)}
+              onClick={() => dismissBroadcast(latestBroadcast)}
+              aria-label="Dismiss"
               style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
             >
               ✕

@@ -15,7 +15,7 @@
 import {
   collection, addDoc, query, where, orderBy,
   onSnapshot, updateDoc, doc, serverTimestamp,
-  getDocs,
+  getDocs, arrayUnion,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { Message } from '../types/game'
@@ -234,6 +234,20 @@ export async function markMessagesRead(
   })
 
   await Promise.all(updatePromises)
+}
+
+/**
+ * Mark a single message as read for this user. Used by the broadcast banner's
+ * ✕ so a dismissal is persisted (survives reloads) instead of living only in
+ * component state.
+ */
+export async function markMessageRead(
+  gameId: string,
+  messageId: string,
+  uid: string
+): Promise<void> {
+  const msgRef = doc(db, 'games', gameId, 'messages', messageId)
+  await updateDoc(msgRef, { read_by: arrayUnion(uid) })
 }
 
 // ─── Unread Count ─────────────────────────────────────────────────────────────
