@@ -169,6 +169,7 @@ export default function GMDashboard() {
   const [joinBusy, setJoinBusy] = useState<string | null>(null)
   // Side quest submissions for this game (live) + which one is being reviewed.
   const [sideQuestSubs, setSideQuestSubs] = useState<SideQuestSubmission[]>([])
+  const [sideQuestSubsLoaded, setSideQuestSubsLoaded] = useState(false)
   const [sqProcessing, setSqProcessing] = useState<string | null>(null)
   const [submissions, setSubmissions] = useState<SubmissionData[]>([])
   const [challenges, setChallenges] = useState<Map<string, ChallengeData>>(new Map())
@@ -176,10 +177,56 @@ export default function GMDashboard() {
   const [loading, setLoading] = useState(true)
   const [allZoneData, setAllZoneData] = useState<any[]>([])
 
-  const [reviewState, setReviewState] = useState<
-    Map<string, { tier2Approved: boolean; phoneFreeBonus: number; notes: string }>
-  >(new Map())
+  interface ReviewState { tier2Approved: boolean; phoneFreeBonus: number; notes: string }
+  const [reviewState, setReviewState] = useState<Map<string, ReviewState>>(new Map())
   const [processing, setProcessing] = useState<string | null>(null)
+
+  // Deferred verdicts. Approve/Reject doesn't fire immediately: the card
+  // shows "Approving in 15s… Undo" and the real write happens when the
+  // countdown ends (or on "Apply now"). Undo just cancels the timer, so a
+  // mistaken tap never touches Firestore — which matters because an approval
+  // can claim/lock a zone and deal a new card, none of which is reversible.
+  const UNDO_WINDOW_MS = 15000
+  interface PendingVerdict {
+    kind: 'approve' | 'reject'
+    sub: SubmissionData
+    review: ReviewState
+    deadline: number
+    timer: ReturnType<typeof setTimeout>
+  }
+  const [pendingVerdicts, setPendingVerdicts] = useState<Map<string, PendingVerdict>>(new Map())
+  const pendingVerdictsRef = useRef(pendingVerdicts)
+  pendingVerdictsRef.current = pendingVerdicts
+  // Latest commit functions, so a timer set 15s ago runs against fresh state.
+  const commitRef = useRef<{ approve: (sub: SubmissionData, review: ReviewState) => Promise<void>; reject: (sub: SubmissionData, review: ReviewState) => Promise<void> } | null>(null)
+  // Commits run one at a time: two approvals in the same zone must not
+  // compute from the same pre-state.
+  const commitChainRef = useRef<Promise<void>>(Promise.resolve())
+  // Re-render every 500ms while a countdown is showing.
+  const [, setCountdownTick] = useState(0)
+  useEffect(() => {
+    if (pendingVerdicts.size === 0) return
+    const id = setInterval(() => setCountdownTick((t) => t + 1), 500)
+    return () => clearInterval(id)
+  }, [pendingVerdicts.size])
+  // Leaving the page with verdicts still counting down: fire them now rather
+  // than silently dropping them, and warn on tab close.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingVerdictsRef.current.size === 0) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      for (const pv of pendingVerdictsRef.current.values()) {
+        clearTimeout(pv.timer)
+        const run = pv.kind === 'approve' ? commitRef.current?.approve : commitRef.current?.reject
+        if (run) commitChainRef.current = commitChainRef.current.then(() => run(pv.sub, pv.review)).catch(() => {})
+      }
+    }
+  }, [])
 
   const [activeTab, setActiveTab] = useState<'submissions' | 'map' | 'chat' | 'activity'>('submissions')
 
@@ -202,6 +249,7 @@ export default function GMDashboard() {
       const secs = (v: unknown) => (v as { seconds?: number } | null)?.seconds ?? 0
       subs.sort((a, b) => secs(b.submitted_at) - secs(a.submitted_at))
       setSideQuestSubs(subs)
+      setSideQuestSubsLoaded(true)
     })
     return unsub
   }, [gameId, game?.settings?.side_quests?.length])
@@ -777,8 +825,38 @@ export default function GMDashboard() {
     if (!zone?.boundary?.coordinates) return 'unknown'
     return isPointInPolygon(sub.gps_lat, sub.gps_lng, zone.boundary.coordinates) ? 'inside' : 'outside'
   }
-const handleApprove = async (sub: SubmissionData) => {
-    if (!gameId || !game || processing) return
+  // ---- Scheduling (what the buttons call) ----
+
+  const finalizeVerdict = (subId: string) => {
+    const pv = pendingVerdictsRef.current.get(subId)
+    if (!pv) return
+    clearTimeout(pv.timer)
+    setPendingVerdicts((prev) => { const next = new Map(prev); next.delete(subId); return next })
+    const run = pv.kind === 'approve' ? commitRef.current?.approve : commitRef.current?.reject
+    if (!run) return
+    commitChainRef.current = commitChainRef.current.then(() => run(pv.sub, pv.review)).catch(() => {})
+  }
+
+  const undoVerdict = (subId: string) => {
+    const pv = pendingVerdictsRef.current.get(subId)
+    if (!pv) return
+    clearTimeout(pv.timer)
+    setPendingVerdicts((prev) => { const next = new Map(prev); next.delete(subId); return next })
+  }
+
+  const scheduleVerdict = (kind: 'approve' | 'reject', sub: SubmissionData) => {
+    if (pendingVerdictsRef.current.has(sub.id)) return
+    const review = getReviewState(sub.id)
+    const timer = setTimeout(() => finalizeVerdict(sub.id), UNDO_WINDOW_MS)
+    setPendingVerdicts((prev) => {
+      const next = new Map(prev)
+      next.set(sub.id, { kind, sub, review, deadline: Date.now() + UNDO_WINDOW_MS, timer })
+      return next
+    })
+  }
+
+  const handleApprove = (sub: SubmissionData) => {
+    if (!gameId || !game) return
 
     // HARD BLOCK: a submission in a LOCKED zone can never be approved.
     // Reads lock status from zone_scores (same source as the map).
@@ -796,10 +874,22 @@ const handleApprove = async (sub: SubmissionData) => {
       const confirmed = window.confirm(`⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — approve anyway?`)
       if (!confirmed) return
     }
+    scheduleVerdict('approve', sub)
+  }
+
+  const handleReject = (sub: SubmissionData) => {
+    if (!gameId) return
+    const review = getReviewState(sub.id)
+    if (!review.notes.trim()) { alert('Please add a note explaining why you are rejecting this.'); return }
+    scheduleVerdict('reject', sub)
+  }
+
+  // ---- Commits (run when the undo window closes) ----
+
+  const commitApprove = async (sub: SubmissionData, review: ReviewState) => {
+    if (!gameId || !game) return
     setProcessing(sub.id)
     try {
-      const review = getReviewState(sub.id)
-
       // Snapshot who owns this zone BEFORE approval (for steal detection)
       const previousOwner = zoneOwnership.get(sub.zone_id)
 
@@ -882,10 +972,8 @@ const handleApprove = async (sub: SubmissionData) => {
     } finally { setProcessing(null) }
   }
 
-  const handleReject = async (sub: SubmissionData) => {
-    if (!gameId || processing) return
-    const review = getReviewState(sub.id)
-    if (!review.notes.trim()) { alert('Please add a note explaining why you are rejecting this.'); return }
+  const commitReject = async (sub: SubmissionData, review: ReviewState) => {
+    if (!gameId) return
     setProcessing(sub.id)
     try {
       await updateDoc(doc(db, 'submissions', sub.id), {
@@ -897,11 +985,69 @@ const handleApprove = async (sub: SubmissionData) => {
     } catch (err) { alert('Error rejecting: ' + ((err as Error).message || 'Unknown error')) }
     finally { setProcessing(null) }
   }
+  commitRef.current = { approve: commitApprove, reject: commitReject }
 
   const handleEndGame = async () => {
-  if (!gameId || !window.confirm('End this game? This cannot be undone.')) return
-  await updateDoc(doc(db, 'games', gameId), { status: 'ended' })
+  if (!gameId || !window.confirm('End this game? Side quest bonus points will be awarded automatically. This cannot be undone.')) return
+  try {
+    await updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() })
+  } catch (err) {
+    alert('Failed to end the game: ' + (err as Error).message)
   }
+  // Bonuses are applied by the "game ended" effect below, which also covers
+  // the clock running out and a GM opening the dashboard after the fact.
+  }
+
+  // Apply side quest points automatically once the game is over. Winners are
+  // auto-picked (most zones claimed, most zones with a challenge, and each
+  // photo side quest by approved count); an exact tie awards nothing for that
+  // category. Runs once per dashboard session and is guarded server-side by
+  // the bonuses_applied flag, so a second dashboard can't double-award.
+  const autoApplyStartedRef = useRef(false)
+  const sideQuestTalliesRef = useRef(sideQuestTallies)
+  sideQuestTalliesRef.current = sideQuestTallies
+  useEffect(() => {
+    if (!gameId || !user || game?.status !== 'ended' || game.bonuses_applied) return
+    const questCount = game.settings?.side_quests?.length ?? 0
+    if (questCount > 0 && !sideQuestSubsLoaded) return   // wait for the tally before picking photo winners
+    if (autoApplyStartedRef.current) return
+    autoApplyStartedRef.current = true
+
+    ;(async () => {
+      try {
+        const summaries = await getTeamBonusSummaries(gameId)
+        const awards: BonusAwards = {
+          mostZonesClaimed: autoSelectMostZonesClaimed(summaries),
+          mostZonesWithChallenges: autoSelectMostZonesWithChallenges(summaries),
+          sideQuests: {},
+        }
+        for (const quest of (game.settings?.side_quests ?? []) as SideQuest[]) {
+          const byTeam = sideQuestTalliesRef.current.get(quest.id)
+          let winner: string | null = null
+          if (byTeam && byTeam.size > 0) {
+            const sorted = [...byTeam.entries()].sort((a, b) => b[1] - a[1])
+            winner = sorted.length > 1 && sorted[0][1] === sorted[1][1] ? null : sorted[0][0]
+          }
+          awards.sideQuests![quest.id] = winner
+        }
+        await applyEndGameBonuses(gameId, awards)
+        setBonusAwards(awards)
+        setBonusesApplied(true)
+        await logEvent(gameId, {
+          team_id: null,
+          event_type: 'side_quests_applied',
+          actor_id: user.uid,
+          metadata: { awards, auto: true },
+        })
+      } catch (err) {
+        const msg = (err as Error).message || ''
+        if (/already applied/i.test(msg)) { setBonusesApplied(true); return }
+        console.error('Auto side quest application failed:', err)
+        alert('Side quest points could not be applied automatically. Use "Apply Side Quest Points" in the Side Quests panel.')
+        autoApplyStartedRef.current = false
+      }
+    })()
+  }, [gameId, user, game?.status, game?.bonuses_applied, game?.settings?.side_quests, sideQuestSubsLoaded])
 
   const handlePauseResume = async () => {
   if (!gameId || !game) return
@@ -1550,6 +1696,28 @@ const handleApprove = async (sub: SubmissionData) => {
                           })()}
 
                           <input type="text" placeholder="Rejection reason (required to reject)" value={review.notes} onChange={(e) => updateReviewState(sub.id, { notes: e.target.value })} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', color: 'var(--ink-soft)', fontSize: '0.82rem', fontFamily: 'inherit', marginBottom: 10, boxSizing: 'border-box' }} />
+                          {(() => {
+                            const pv = pendingVerdicts.get(sub.id)
+                            if (pv) {
+                              const secsLeft = Math.max(0, Math.ceil((pv.deadline - Date.now()) / 1000))
+                              const isApprove = pv.kind === 'approve'
+                              const rgb = isApprove ? 'var(--green-rgb)' : 'var(--red-rgb)'
+                              const ink = isApprove ? 'var(--green)' : 'var(--red)'
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `rgba(${rgb}, 0.08)`, border: `1px solid rgba(${rgb}, 0.25)`, borderRadius: 10, padding: '10px 12px' }}>
+                                  <span style={{ flex: 1, color: ink, fontSize: '0.85rem', fontWeight: 700 }}>
+                                    {isApprove ? '✓ Approving' : '✗ Rejecting'} in {secsLeft}s…
+                                  </span>
+                                  <button onClick={() => undoVerdict(sub.id)} style={{ background: 'var(--surface)', border: '1px solid var(--line-strong)', color: 'var(--ink)', padding: '8px 14px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    Undo
+                                  </button>
+                                  <button onClick={() => finalizeVerdict(sub.id)} style={{ background: `rgba(${rgb}, 0.15)`, border: `1px solid rgba(${rgb}, 0.3)`, color: ink, padding: '8px 14px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    Apply now
+                                  </button>
+                                </div>
+                              )
+                            }
+                            return (
                           <div style={{ display: 'flex', gap: 10 }}>
                             <button onClick={() => handleApprove(sub)} disabled={isProcessing} style={{ flex: 2, background: 'rgba(var(--green-rgb), 0.15)', border: '1px solid rgba(var(--green-rgb), 0.3)', color: 'var(--green)', padding: '12px', borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: isProcessing ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                               {isProcessing ? 'Processing...' : '✓ Approve'}
@@ -1558,6 +1726,8 @@ const handleApprove = async (sub: SubmissionData) => {
                               ✗ Reject
                             </button>
                           </div>
+                            )
+                          })()}
                         </div>
                       )}
                       {sub.status === 'rejected' && sub.gm_notes && (
