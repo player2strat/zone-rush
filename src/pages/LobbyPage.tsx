@@ -28,6 +28,7 @@ import { db, auth } from '../lib/firebase'
 import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
 import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
+import { createTestTeam } from '../lib/testMode'
 
 interface GameData {
   id: string
@@ -363,6 +364,24 @@ export default function LobbyPage() {
       setMyNameError('Failed to save: ' + (err as Error).message)
     } finally {
       setSavingMyName(false)
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // GM: add a test team (fake players) to rehearse without real phones
+  // -----------------------------------------------------------------------
+
+  const [addingTestTeam, setAddingTestTeam] = useState(false)
+  const handleAddTestTeam = async () => {
+    if (!gameId || addingTestTeam) return
+    setAddingTestTeam(true)
+    setError('')
+    try {
+      await createTestTeam(gameId, teams.length, game?.settings.team_size ?? 2)
+    } catch (err) {
+      setError('Failed to add test team: ' + (err as Error).message)
+    } finally {
+      setAddingTestTeam(false)
     }
   }
 
@@ -1070,6 +1089,31 @@ export default function LobbyPage() {
                 marginBottom: 16, textAlign: 'center',
               }}>
                 Need at least 1 team with players
+              </p>
+
+              {/* Test mode: fake team so the GM flow can be rehearsed solo */}
+              <button
+                onClick={handleAddTestTeam}
+                disabled={addingTestTeam}
+                style={{
+                  width: '100%',
+                  background: 'var(--surface)',
+                  border: '1px dashed var(--line-strong)',
+                  color: 'var(--ink-soft)',
+                  padding: '10px 16px', borderRadius: 10,
+                  fontSize: '0.82rem', fontWeight: 700,
+                  cursor: addingTestTeam ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  marginBottom: 6, opacity: addingTestTeam ? 0.6 : 1,
+                }}
+              >
+                {addingTestTeam ? 'Adding…' : '🧪 Add a test team'}
+              </button>
+              <p style={{
+                fontSize: '0.72rem', color: 'var(--ink-faint)',
+                marginBottom: 16, textAlign: 'center', lineHeight: 1.5,
+              }}>
+                Fake players so you can start and rehearse without real phones.
+                Once the game starts, the dashboard can file test submissions for them.
               </p>
             </div>
 

@@ -37,6 +37,7 @@ import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/s
 import type { SideQuest, SideQuestSubmission } from '../types/game'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
+import { createTestSubmissions } from '../lib/testMode'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import {
   sendGMBroadcast,
@@ -987,6 +988,25 @@ export default function GMDashboard() {
   }
   commitRef.current = { approve: commitApprove, reject: commitReject }
 
+  // Test mode: file a few pending submissions so the review queue, zone
+  // claims, broadcasts and results can be exercised without real players.
+  const [addingTestSubs, setAddingTestSubs] = useState(false)
+  const handleAddTestSubmissions = async () => {
+    if (!gameId || !user || !game || addingTestSubs) return
+    setAddingTestSubs(true)
+    try {
+      const liveZones = allZoneData.filter((z: any) => game.zones?.includes(z.id))
+      const made = await createTestSubmissions(gameId, user.uid, teams, liveZones, 3)
+      if (made === 0) {
+        alert('No test submissions created: need at least one team holding cards and one live zone with a boundary.')
+      }
+    } catch (err) {
+      alert('Failed to create test submissions: ' + (err as Error).message)
+    } finally {
+      setAddingTestSubs(false)
+    }
+  }
+
   const handleEndGame = async () => {
   if (!gameId || !window.confirm('End this game? Side quest bonus points will be awarded automatically. This cannot be undone.')) return
   try {
@@ -1198,6 +1218,11 @@ export default function GMDashboard() {
             {game.status !== 'ended' && (
               <button onClick={handlePauseResume} style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                 {game.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
+              </button>
+            )}
+            {game.status !== 'ended' && (
+              <button onClick={handleAddTestSubmissions} disabled={addingTestSubs} title="File 3 fake pending submissions for testing" style={{ background: 'var(--surface)', border: '1px dashed var(--line-strong)', color: 'var(--ink-soft)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: addingTestSubs ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: addingTestSubs ? 0.6 : 1 }}>
+                {addingTestSubs ? 'Adding…' : '🧪 Test submissions'}
               </button>
             )}
             {game.status !== 'ended' && (
