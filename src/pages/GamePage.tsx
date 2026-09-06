@@ -203,16 +203,56 @@ export default function GamePage() {
         ),
     [chatMessages, user?.uid, dismissedBroadcastIds]
   )
-  const latestBroadcast = unreadBroadcasts[0] ?? null
 
-  const dismissBroadcast = (msg: { id: string }) => {
-    setDismissedBroadcastIds(prev => new Set(prev).add(msg.id))
-    if (gameId && user) {
-      markMessageRead(gameId, msg.id, user.uid).catch(err =>
-        console.error('Failed to mark broadcast read:', err)
-      )
-    }
+  // Submission outcome notices ("Approved: ...", "Not approved: ...").
+  // Raised when one of this team's submissions flips from pending to a
+  // verdict while the app is open. Session-only: the card badge on the Hand
+  // tab is the durable record, this is just the heads-up.
+  interface OutcomeNotice { id: string; text: string; at: number; tone: 'good' | 'bad' }
+  const [outcomeNotices, setOutcomeNotices] = useState<OutcomeNotice[]>([])
+  const prevSubStatusRef = useRef<Map<string, string> | null>(null)
+
+  // One banner queue: outcome notices + unread GM broadcasts, newest first.
+  interface BannerItem {
+    key: string
+    icon: string
+    text: string
+    at: number
+    tone: 'good' | 'bad' | 'info'
+    viewTab: 'hand' | 'chat'
+    dismiss: () => void
   }
+  const bannerItems = useMemo<BannerItem[]>(() => {
+    const items: BannerItem[] = outcomeNotices.map(n => ({
+      key: `outcome:${n.id}`,
+      icon: n.tone === 'good' ? '✅' : '❌',
+      text: n.text,
+      at: n.at,
+      tone: n.tone,
+      viewTab: 'hand',
+      dismiss: () => setOutcomeNotices(prev => prev.filter(x => x.id !== n.id)),
+    }))
+    for (const m of unreadBroadcasts) {
+      items.push({
+        key: `broadcast:${m.id}`,
+        icon: '📢',
+        text: m.text,
+        at: m.sent_at?.toMillis?.() ?? 0,
+        tone: 'info',
+        viewTab: 'chat',
+        dismiss: () => {
+          setDismissedBroadcastIds(prev => new Set(prev).add(m.id))
+          if (gameId && user) {
+            markMessageRead(gameId, m.id, user.uid).catch(err =>
+              console.error('Failed to mark broadcast read:', err)
+            )
+          }
+        },
+      })
+    }
+    return items.sort((a, b) => b.at - a.at)
+  }, [outcomeNotices, unreadBroadcasts, gameId, user?.uid])
+  const topBanner = bannerItems[0] ?? null
 
   // The player's display name for THIS game comes from their team's
   // member_names (the name they picked at join), not the auth profile.
@@ -370,8 +410,24 @@ export default function GamePage() {
 
     const unsub = onSnapshot(q, (snapshot) => {
       const statusMap = new Map<string, SubmissionStatus>()
+      // Detect pending → approved/rejected transitions for outcome notices.
+      // The first snapshot only seeds the baseline (no notices on load).
+      const nowStatuses = new Map<string, string>()
+      const fresh: OutcomeNotice[] = []
       snapshot.forEach((d) => {
         const data = d.data()
+        nowStatuses.set(d.id, data.status)
+        const before = prevSubStatusRef.current?.get(d.id)
+        if (prevSubStatusRef.current && before === 'pending' && data.status !== 'pending') {
+          const title = (data.challenge_description ?? 'your challenge').toString()
+          if (data.status === 'approved') {
+            const pts = typeof data.points_awarded === 'number' ? ` +${data.points_awarded} pts` : ''
+            fresh.push({ id: d.id, at: Date.now(), tone: 'good', text: `Approved:${pts} — ${title}` })
+          } else if (data.status === 'rejected') {
+            const note = (data.gm_notes ?? '').toString().trim()
+            fresh.push({ id: d.id, at: Date.now(), tone: 'bad', text: `Not approved — ${title}${note ? ` (${note})` : ''}` })
+          }
+        }
         const existing = statusMap.get(data.challenge_id)
         if (
           !existing ||
@@ -388,9 +444,14 @@ export default function GamePage() {
         }
       })
       setSubmissions(statusMap)
+      prevSubStatusRef.current = nowStatuses
+      if (fresh.length > 0) setOutcomeNotices(prev => [...fresh, ...prev])
     })
 
-    return () => unsub()
+    return () => {
+      unsub()
+      prevSubStatusRef.current = null
+    }
   }, [gameId, myTeam?.id])
 
   // Subscribe to chat messages
@@ -677,42 +738,51 @@ export default function GamePage() {
         )}
       </div>
 
-      {/* GM broadcast banner */}
-      {latestBroadcast && activeTab !== 'chat' && (
+      {/* Notice banner: GM broadcasts + submission outcomes. Hidden on the
+          tab the item points at (Chat already shows broadcasts inline; the
+          Hand tab already shows the verdict badge). */}
+      {topBanner && activeTab !== topBanner.viewTab && (() => {
+        const rgb = topBanner.tone === 'good' ? 'var(--green-rgb)'
+          : topBanner.tone === 'bad' ? 'var(--red-rgb)'
+          : 'var(--marigold-rgb)'
+        const ink = topBanner.tone === 'good' ? 'var(--green)'
+          : topBanner.tone === 'bad' ? 'var(--red)'
+          : 'var(--marigold)'
+        return (
         <div style={{
           marginTop: 10,
-          background: 'rgba(var(--marigold-rgb), 0.10)', border: '1px solid rgba(var(--marigold-rgb), 0.3)',
+          background: `rgba(${rgb}, 0.10)`, border: `1px solid rgba(${rgb}, 0.3)`,
           borderRadius: 8, padding: '8px 12px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>📢</span>
+            <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>{topBanner.icon}</span>
             <p style={{
-              color: 'var(--marigold)', fontSize: '0.78rem', fontWeight: 600,
+              color: ink, fontSize: '0.78rem', fontWeight: 600,
               lineHeight: 1.4, margin: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {latestBroadcast.text}
+              {topBanner.text}
             </p>
-            {unreadBroadcasts.length > 1 && (
+            {bannerItems.length > 1 && (
               <span style={{ color: 'var(--ink-faint)', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 }}>
-                +{unreadBroadcasts.length - 1} more
+                +{bannerItems.length - 1} more
               </span>
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
-              onClick={() => setActiveTab('chat')}
+              onClick={() => setActiveTab(topBanner.viewTab)}
               style={{
-                background: 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)',
-                color: 'var(--marigold)', padding: '4px 10px', borderRadius: 6,
+                background: `rgba(${rgb}, 0.15)`, border: `1px solid rgba(${rgb}, 0.3)`,
+                color: ink, padding: '4px 10px', borderRadius: 6,
                 fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
               View
             </button>
             <button
-              onClick={() => dismissBroadcast(latestBroadcast)}
+              onClick={topBanner.dismiss}
               aria-label="Dismiss"
               style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', fontSize: '0.9rem', cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
             >
@@ -720,7 +790,8 @@ export default function GamePage() {
             </button>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Main content */}
       <div style={{
@@ -790,22 +861,48 @@ export default function GamePage() {
                 Game Rules
               </p>
               <div style={{ display: 'grid', gap: 14 }}>
-                {[
+                {(() => {
+                  // Every number here comes from this game's settings so the
+                  // rules never drift from what the GM configured.
+                  const st = game?.settings ?? ({} as GameData['settings'])
+                  const durationMins = st.duration_minutes ?? 180
+                  const durationText = durationMins % 60 === 0
+                    ? `${durationMins / 60} hour${durationMins / 60 === 1 ? '' : 's'}`
+                    : `${durationMins} minutes`
+                  const otherTeams = Math.max(0, allTeams.length - 1)
+                  const opponentText = otherTeams === 1 ? 'another team' : otherTeams > 1 ? `${otherTeams} other teams` : 'other teams'
+                  const handSize = st.hand_size ?? 6
+                  const ptsEasy = st.points_easy ?? 1
+                  const ptsMed = st.points_medium ?? 3
+                  const ptsHard = st.points_hard ?? 5
+                  const claimAt = st.claim_threshold ?? 6
+                  const lockAt = st.lock_threshold ?? 10
+                  const claimBonus = st.zone_bonus_points ?? 3
+                  const discardLimit = st.discard_limit ?? 1
+                  const mostZonesBonus = st.most_zones_claimed_bonus ?? 8
+                  const mostChallengeZonesBonus = st.most_zones_with_challenges_bonus ?? 8
+                  const photoQuests: { title: string; bonus_points: number }[] = st.side_quests ?? []
+                  const sideQuestParts = [
+                    `most zones claimed (+${mostZonesBonus} pts)`,
+                    `most zones with a challenge completed (+${mostChallengeZonesBonus} pts)`,
+                    ...photoQuests.map(q => `${q.title} (+${q.bonus_points} pts)`),
+                  ]
+                  return [
                   {
                     icon: '👋',
-                    text: `Welcome explorers! Over the next ${Math.round((game?.settings.duration_minutes ?? 180) / 60)} hour(s) you'll compete against another team in a series of challenges across Manhattan that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
+                    text: `Welcome explorers! Over the next ${durationText} you'll compete against ${opponentText} in a series of challenges across the city that will test your resolve, your quick thinking, and spirit of adventuring into new places.`,
                   },
                   {
                     icon: '🃏',
-                    text: 'Each team will have 5 challenges in their hand at a given time.',
+                    text: `Each team holds ${handSize} challenge${handSize === 1 ? '' : 's'} at a time. Finish one and a new card is dealt. You may discard and redraw ${discardLimit === 0 ? 'no cards' : discardLimit === 1 ? 'one card' : `${discardLimit} cards`} per game.`,
                   },
                   {
                     icon: '⭐',
-                    text: 'Challenges are worth 1 (easy), 2 (medium) or 3 (hard) points. The game map is broken up into zones, which you can access on your map tab. Complete a challenge and those points count in the zone you\'re currently located.',
+                    text: `Challenges are worth ${ptsEasy} (easy), ${ptsMed} (medium) or ${ptsHard} (hard) points. The game map is broken up into zones, which you can access on your map tab. Complete a challenge and those points count in the zone you're currently located.`,
                   },
                   {
                     icon: '📍',
-                    text: `Once you've reached ${game?.settings.claim_threshold ?? 4} points in a zone, you have claimed that zone! If at any point a team gains more points in that zone, they steal the claim and the initial team loses those points.  7 points locks a zone.`,
+                    text: `Reach ${claimAt} points in a zone to claim it${claimBonus > 0 ? ` (+${claimBonus} bonus pts on first claim)` : ''}. If another team then earns more points in that zone, they steal the claim. Reach ${lockAt} points to lock a zone for good.`,
                   },
                   {
                     icon: '📸',
@@ -817,9 +914,10 @@ export default function GamePage() {
                   },
                   {
                     icon: '🏆',
-                    text: 'Side Quests: At the end of the game, bonus points are awarded: most zones claimed (+8 pts) most zones with a challenge completed (+8 pts).',
+                    text: `Side Quests: At the end of the game, bonus points are awarded for ${sideQuestParts.join(', ')}.`,
                   },
-                ].map((rule, i) => (
+                  ]
+                })().map((rule, i) => (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
                     <p style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>
