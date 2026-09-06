@@ -59,6 +59,9 @@ interface GameMapProps {
 // --------------- Constants ---------------
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
+// Without a token Mapbox throws synchronously inside `new Map()`, which
+// unmounts the whole page. Guard it and show a message instead.
+const HAS_MAPBOX_TOKEN = Boolean(import.meta.env.VITE_MAPBOX_TOKEN)
 
 const ZONE_COLORS: Record<string, string> = {
   zone_district_33: BRAND.green,
@@ -255,7 +258,7 @@ export default function GameMap({
 
   // ---- Initialize Mapbox ----
   useEffect(() => {
-    if (map.current || !mapContainer.current) return
+    if (map.current || !mapContainer.current || !HAS_MAPBOX_TOKEN) return
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -538,6 +541,20 @@ export default function GameMap({
         playerMarkers.current.set(player.uid, marker)
       })
     }, [playerLocations])
+
+  if (!HAS_MAPBOX_TOKEN) {
+    return (
+      <div style={{
+        width: '100%', height: compact ? '100%' : '100vh', borderRadius: compact ? 10 : 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+        padding: 20, boxSizing: 'border-box', background: 'var(--surface)', color: 'var(--ink-soft)',
+        fontSize: '0.85rem', lineHeight: 1.5,
+      }}>
+        The map can't load: this build has no Mapbox token.<br />
+        Set VITE_MAPBOX_TOKEN in the hosting environment and redeploy.
+      </div>
+    )
+  }
 
   return (
     <div
