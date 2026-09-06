@@ -479,14 +479,18 @@ export default function ZoneBuilder() {
         source: SRC_ZONE_LABELS,
         layout: {
           "text-field": ["get", "name"],
-          "text-size": 13,
+          "text-size": 14,
           "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
           "text-max-width": 8,
+          "text-line-height": 1.15,
         },
         paint: {
-          "text-color": "#cfe4ff",
-          "text-halo-color": BRAND.paper,
-          "text-halo-width": 1,
+          // Dark map style: white text with a dark halo reads far better than
+          // the pale-blue-on-cream combination we had before.
+          "text-color": "#ffffff",
+          "text-halo-color": "rgba(10, 18, 30, 0.9)",
+          "text-halo-width": 2,
+          "text-halo-blur": 0.5,
         },
       });
 
