@@ -63,25 +63,24 @@ function generateJoinCode(): string {
   return code
 }
 
-const OPENING_PRESETS = [
-  { label: 'At start', value: '' },
-  { label: '15 min', value: '15' },
-  { label: '30 min', value: '30' },
-  { label: '45 min', value: '45' },
-  { label: '60 min', value: '60' },
-  { label: '90 min', value: '90' },
-]
+// Schedule dropdown options: every 15 minutes from 15 min up to (but not
+// including) the game length, so the choices always fit the game.
+const SCHEDULE_STEP_MINUTES = 15
 
-const CLOSURE_PRESETS = [
-  { label: 'Never', value: '' },
-  { label: '30 min', value: '30' },
-  { label: '45 min', value: '45' },
-  { label: '60 min', value: '60' },
-  { label: '75 min', value: '75' },
-  { label: '90 min', value: '90' },
-  { label: '120 min', value: '120' },
-  { label: '150 min', value: '150' },
-]
+function formatMinutes(mins: number): string {
+  if (mins < 60) return `${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+function schedulePresets(durationMinutes: number, blankLabel: string) {
+  const options = [{ label: blankLabel, value: '' }]
+  for (let m = SCHEDULE_STEP_MINUTES; m < durationMinutes; m += SCHEDULE_STEP_MINUTES) {
+    options.push({ label: formatMinutes(m), value: String(m) })
+  }
+  return options
+}
 
 // =============================================================================
 // Main Component
@@ -275,13 +274,8 @@ export default function CreateGame() {
   }, {})
 
   // Closure presets filtered to fit within game duration
-  const availablePresets = CLOSURE_PRESETS.filter(
-    (p) => p.value === '' || parseInt(p.value) < durationMinutes
-  )
-
-  const availableOpenPresets = OPENING_PRESETS.filter(
-    (p) => p.value === '' || parseInt(p.value) < durationMinutes
-  )
+  const availablePresets = schedulePresets(durationMinutes, 'Never')
+  const availableOpenPresets = schedulePresets(durationMinutes, 'At start')
 
   const buildOpenSchedule = () => {
     const schedule: { zone_id: string; open_at_minutes: number }[] = []
