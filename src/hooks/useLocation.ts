@@ -66,6 +66,7 @@ const STALE_CHECK_INTERVAL_MS = 5000
 const QUICK_FIX_MAX_AGE_MS = 30000     // a cached fix this recent is fine for a first pin
 const QUICK_FIX_TIMEOUT_MS = 6000
 const REFRESH_MAX_AGE_MS = 10000       // at submit time, a fix ≤10s old is "fresh"
+const STUCK_RESTART_MS = 20000         // no first fix after this long → restart the watch
 
 export function useLocation(config: Partial<LocationConfig> = {}) {
   const cfg: LocationConfig = { ...DEFAULT_LOCATION_CONFIG, ...config }
@@ -221,6 +222,22 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
     }
   }, [startWatch, handleSuccess])
 
+  // Some phones never deliver a first fix to a watch that was started early
+  // (the symptom is "Getting location…" forever, fixed only by a hard reload
+  // of the page). A reload works because it starts a brand-new watch — so do
+  // that ourselves: while there is still no fix, restart the watch every
+  // STUCK_RESTART_MS, alternating high and low accuracy.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const s = stateRef.current
+      if (s.timestamp !== null) return
+      if (s.status === 'denied' || s.status === 'unavailable' || s.status === 'prompt') return
+      if (watchIdRef.current === null) return
+      startWatch(usingLowAccuracyRef.current)   // flips accuracy mode each time
+    }, STUCK_RESTART_MS)
+    return () => clearInterval(interval)
+  }, [startWatch])
+
   // Mark the fix stale if no updates come in for a while
   useEffect(() => {
     const interval = setInterval(() => {
@@ -263,6 +280,12 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
         return cur
       }
 
+      // "Try again" with no fix yet: also restart the watch, since a stuck
+      // watch is the usual reason there is no fix.
+      if (stateRef.current.timestamp === null && stateRef.current.status !== 'denied') {
+        startWatch(true)
+      }
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const s: LocationState = {
@@ -298,7 +321,7 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
         }
       )
     })
-  }, [cfg.high_accuracy_timeout_ms, cfg.max_age_seconds, statusForAccuracy])
+  }, [cfg.high_accuracy_timeout_ms, cfg.max_age_seconds, statusForAccuracy, startWatch])
 
   return { ...state, refresh, config: cfg }
 }
