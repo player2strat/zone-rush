@@ -999,6 +999,7 @@ export default function GamePage() {
                       gameEnded={game?.status === 'ended'}
                       submissionStatus={seqSub?.status}
                       gmNotes={seqSub?.gm_notes}
+                      location={location}
                     />
                   )
                 }
@@ -1064,16 +1065,22 @@ export default function GamePage() {
                               setConfirmCancelSubId(ch.id)
                             }}
                             title="Withdraw this submission"
+                            aria-label="Withdraw this submission"
                             style={{
-                              background: 'none',
-                              border: '1px solid rgba(var(--marigold-rgb), 0.3)',
+                              // Solid ink button. The old marigold outline sat on the
+                              // paper background next to the marigold Pending badge
+                              // and was nearly invisible.
+                              background: 'var(--ink)',
+                              border: '1px solid var(--ink)',
                               borderRadius: 20,
-                              color: 'var(--marigold)',
-                              fontSize: '0.8rem',
+                              color: 'var(--paper)',
+                              fontSize: '0.9rem',
+                              fontWeight: 700,
                               lineHeight: 1,
-                              padding: '3px 8px',
+                              padding: '4px 10px',
                               cursor: 'pointer',
                               fontFamily: 'inherit',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
                             }}
                           >
                             ↺
@@ -1442,6 +1449,7 @@ export default function GamePage() {
           activeZoneIds={game?.zones ?? []}
           onClose={() => setSubmittingChallenge(null)}
           onSubmitted={() => {}}
+          location={location}
         />
       )}
 
