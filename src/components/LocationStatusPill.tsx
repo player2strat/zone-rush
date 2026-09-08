@@ -138,7 +138,7 @@ export default function LocationStatusPill({ location, onRefresh }: Props) {
                   width: '100%',
                   background: 'rgba(var(--marigold-rgb), 0.15)',
                   border: '1px solid rgba(var(--marigold-rgb), 0.3)',
-                  color: 'var(--marigold)',
+                  color: 'var(--marigold-deep)',
                   padding: '12px',
                   borderRadius: 10,
                   fontSize: '0.88rem',

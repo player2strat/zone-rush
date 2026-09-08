@@ -138,7 +138,7 @@ export default function SequentialCard({
           </span>
         </div>
         {submissionStatus && (
-          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isApproved ? 'var(--green)' : isPending ? 'var(--marigold)' : 'var(--red)' }}>
+          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isApproved ? 'var(--green)' : isPending ? 'var(--marigold-deep)' : 'var(--red)' }}>
             {isApproved ? '✅ Approved' : isPending ? '⏳ Pending' : '❌ Rejected'}
           </span>
         )}
@@ -263,7 +263,7 @@ export default function SequentialCard({
           {/* Submit / status button */}
           {allLocked && resolvedTask && !isApproved && (
             isPending ? (
-              <div style={{ width: '100%', background: 'rgba(var(--marigold-rgb), 0.08)', border: '1px solid rgba(var(--marigold-rgb), 0.2)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--marigold)', fontSize: '0.88rem', fontWeight: 600 }}>
+              <div style={{ width: '100%', background: 'rgba(var(--marigold-rgb), 0.08)', border: '1px solid rgba(var(--marigold-rgb), 0.2)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--marigold-deep)', fontSize: '0.88rem', fontWeight: 600 }}>
                 ⏳ Waiting for GM review…
               </div>
             ) : gameEnded ? (

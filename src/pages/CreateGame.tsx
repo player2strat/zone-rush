@@ -450,13 +450,13 @@ export default function CreateGame() {
                 border: `1px solid ${step === n ? 'rgba(var(--marigold-rgb), 0.4)' : step > n ? 'rgba(var(--green-rgb), 0.3)' : 'var(--line)'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '0.78rem', fontWeight: 700,
-                color: step === n ? 'var(--marigold)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
+                color: step === n ? 'var(--marigold-deep)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
               }}>
                 {step > n ? '✓' : n}
               </div>
               <span style={{
                 fontSize: '0.8rem', fontWeight: 600,
-                color: step === n ? 'var(--marigold)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
+                color: step === n ? 'var(--marigold-deep)' : step > n ? 'var(--green)' : 'var(--ink-ghost)',
               }}>
                 {label}
               </span>
@@ -562,7 +562,7 @@ export default function CreateGame() {
                       background: durationMinutes === mins
                         ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
                       border: `1px solid ${durationMinutes === mins ? 'rgba(var(--marigold-rgb), 0.35)' : 'var(--line)'}`,
-                      color: durationMinutes === mins ? 'var(--marigold)' : 'var(--ink-muted)',
+                      color: durationMinutes === mins ? 'var(--marigold-deep)' : 'var(--ink-muted)',
                       borderRadius: 8,
                       padding: '10px 16px',
                       cursor: 'pointer',
@@ -1118,7 +1118,7 @@ export default function CreateGame() {
               padding: 16,
               marginBottom: 24,
             }}>
-              <p style={{ color: 'var(--marigold)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+              <p style={{ color: 'var(--marigold-deep)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
                 Summary
               </p>
               <div style={{ display: 'grid', gap: 6 }}>
@@ -1242,7 +1242,7 @@ function CityPicker({ value, onChange }: { value: string; onChange: (v: string) 
             style={{
               background: value === city.id ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
               border: `1px solid ${value === city.id ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`,
-              color: value === city.id ? 'var(--marigold)' : 'var(--ink-muted)',
+              color: value === city.id ? 'var(--marigold-deep)' : 'var(--ink-muted)',
               borderRadius: 8, padding: '10px 18px',
               cursor: 'pointer', fontFamily: 'inherit',
               fontWeight: 600, fontSize: '0.9rem',
@@ -1263,7 +1263,7 @@ function CityPicker({ value, onChange }: { value: string; onChange: (v: string) 
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '0.75rem',
-  color: 'var(--marigold)',
+  color: 'var(--marigold-deep)',
   textTransform: 'uppercase',
   letterSpacing: 1,
   fontWeight: 700,
@@ -1319,7 +1319,7 @@ const primaryBtnStyle = (disabled: boolean): React.CSSProperties => ({
   width: '100%',
   background: disabled ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.12)',
   border: `1px solid ${disabled ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.3)'}`,
-  color: disabled ? 'var(--ink-ghost)' : 'var(--marigold)',
+  color: disabled ? 'var(--ink-ghost)' : 'var(--marigold-deep)',
   padding: '16px 24px',
   borderRadius: 12,
   fontSize: '1rem',

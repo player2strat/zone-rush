@@ -135,7 +135,7 @@ export default function LateJoinPage() {
   if (request && request.status === 'pending') {
     return shell(
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
           {gameName}
         </p>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 12px' }}>
@@ -147,7 +147,7 @@ export default function LateJoinPage() {
         </p>
         <div style={{
           width: 36, height: 36, margin: '0 auto 32px',
-          border: '3px solid var(--line)', borderTopColor: 'var(--marigold)', borderRadius: '50%',
+          border: '3px solid var(--line)', borderTopColor: 'var(--marigold-deep)', borderRadius: '50%',
           animation: 'zr-spin 1s linear infinite',
         }} />
         <style>{'@keyframes zr-spin { to { transform: rotate(360deg) } }'}</style>
@@ -181,7 +181,7 @@ export default function LateJoinPage() {
         ← Back
       </button>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
           {gameName}
         </p>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
@@ -233,7 +233,7 @@ export default function LateJoinPage() {
           width: '100%',
           background: name.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
           border: `1px solid ${name.trim() ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`,
-          color: name.trim() ? 'var(--marigold)' : 'var(--ink-ghost)',
+          color: name.trim() ? 'var(--marigold-deep)' : 'var(--ink-ghost)',
           padding: '16px 24px',
           borderRadius: 12,
           fontSize: '1.05rem',

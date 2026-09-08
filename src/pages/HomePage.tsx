@@ -80,7 +80,7 @@ export default function HomePage() {
           style={{
             background: 'rgba(var(--marigold-rgb), 0.12)',
             border: '1px solid rgba(var(--marigold-rgb), 0.3)',
-            color: 'var(--marigold)',
+            color: 'var(--marigold-deep)',
             padding: '18px 24px',
             borderRadius: 12,
             fontSize: '1.05rem',

@@ -128,7 +128,7 @@ interface ZoneScoreData {
 
 const DIFFICULTY_STYLES: Record<string, { bg: string; color: string; label: string; pts: number }> = {
   easy:   { bg: 'rgba(var(--green-rgb), 0.15)',  color: 'var(--green)', label: 'Easy',   pts: 1 },
-  medium: { bg: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold)', label: 'Medium', pts: 2 },
+  medium: { bg: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold-deep)', label: 'Medium', pts: 2 },
   hard:   { bg: 'rgba(var(--red-rgb), 0.15)',  color: 'var(--red)', label: 'Hard',   pts: 3 },
 }
 
@@ -146,7 +146,7 @@ const TIME_LABELS: Record<string, string> = {
 }
 
 const STATUS_BADGE: Record<string, { bg: string; border: string; color: string; label: string; icon: string }> = {
-  pending:  { bg: 'rgba(var(--marigold-rgb), 0.10)', border: 'rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', label: 'Pending Review', icon: '⏳' },
+  pending:  { bg: 'rgba(var(--marigold-rgb), 0.10)', border: 'rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold-deep)', label: 'Pending Review', icon: '⏳' },
   approved: { bg: 'rgba(var(--green-rgb), 0.10)',   border: 'rgba(var(--green-rgb), 0.3)',   color: 'var(--green)', label: 'Approved',       icon: '✅' },
   rejected: { bg: 'rgba(var(--red-rgb), 0.10)',  border: 'rgba(var(--red-rgb), 0.3)',  color: 'var(--red)', label: 'Rejected',       icon: '❌' },
 }
@@ -669,7 +669,7 @@ export default function GamePage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 32, height: 32, border: '3px solid var(--line)',
-            borderTopColor: 'var(--marigold)', borderRadius: '50%',
+            borderTopColor: 'var(--marigold-deep)', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading game...</p>
@@ -719,7 +719,7 @@ export default function GamePage() {
             <div style={{
               fontFamily: "'Martian Mono', monospace",
               fontSize: '0.85rem',
-              color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold)',
+              color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold-deep)',
               fontWeight: 600,
             }}>
               {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
@@ -730,7 +730,7 @@ export default function GamePage() {
         {submissions.size > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: 'var(--ink-faint)' }}>
             {approvedCount > 0 && <span style={{ color: 'var(--green)' }}>✅ {approvedCount} approved</span>}
-            {pendingCount > 0 && <span style={{ color: 'var(--marigold)' }}>⏳ {pendingCount} pending</span>}
+            {pendingCount > 0 && <span style={{ color: 'var(--marigold-deep)' }}>⏳ {pendingCount} pending</span>}
             {zoneOwnership.size > 0 && (
               <span style={{ color: 'var(--pink)' }}>
                 🗺️ {Array.from(zoneOwnership.values()).filter(z => z.claimed).length} zone{Array.from(zoneOwnership.values()).filter(z => z.claimed).length !== 1 ? 's' : ''} claimed
@@ -822,7 +822,7 @@ export default function GamePage() {
                 </div>
                 <div style={{ width: 1, background: 'var(--line)' }} />
                 <div>
-                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold)', lineHeight: 1, marginBottom: 6 }}>
+                  <p style={{ fontFamily: "'Martian Mono', monospace", fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold-deep)', lineHeight: 1, marginBottom: 6 }}>
                     {Array.from(zoneOwnership.values()).filter(z => z.claimed && allTeams.find(t => t.color === z.teamColor)?.id === myTeam.id).length}
                   </p>
                   <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Zones Claimed</p>
@@ -856,7 +856,7 @@ export default function GamePage() {
               borderRadius: 14, padding: '20px 18px', marginBottom: 16,
             }}>
               <p style={{
-                fontSize: '0.72rem', color: 'var(--marigold)',
+                fontSize: '0.72rem', color: 'var(--marigold-deep)',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
@@ -1147,7 +1147,7 @@ export default function GamePage() {
                       <div style={{ marginTop: 4 }}>
                         <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '0.78rem', color: 'var(--ink-muted)', flexWrap: 'wrap' }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
-                          {ch.is_time_based && <span style={{ color: 'var(--marigold)' }}>⏱ Timed challenge</span>}
+                          {ch.is_time_based && <span style={{ color: 'var(--marigold-deep)' }}>⏱ Timed challenge</span>}
                         </div>
 
                         {ch.tier2 && (
@@ -1179,7 +1179,7 @@ export default function GamePage() {
                               width: '100%', boxSizing: 'border-box', background: 'rgba(var(--marigold-rgb), 0.08)',
                               border: '1px solid rgba(var(--marigold-rgb), 0.2)',
                               padding: '12px 20px', borderRadius: 8,
-                              textAlign: 'center', color: 'var(--marigold)', fontSize: '0.88rem', fontWeight: 600,
+                              textAlign: 'center', color: 'var(--marigold-deep)', fontSize: '0.88rem', fontWeight: 600,
                               animation: 'pendingPulse 2s ease-in-out infinite',
                             }}>
                               ⏳ Waiting for GM review...
@@ -1335,7 +1335,7 @@ export default function GamePage() {
 
                   return (
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-                      <p style={{ fontSize: '0.68rem', color: isFlaggedToGM ? 'var(--marigold)' : 'var(--ink-ghost)', marginBottom: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0, fontWeight: isFlaggedToGM ? 700 : 400 }}>
+                      <p style={{ fontSize: '0.68rem', color: isFlaggedToGM ? 'var(--marigold-deep)' : 'var(--ink-ghost)', marginBottom: 3, paddingLeft: alignRight ? 0 : 4, paddingRight: alignRight ? 4 : 0, fontWeight: isFlaggedToGM ? 700 : 400 }}>
                         {label}
                       </p>
                       <div style={{
@@ -1359,7 +1359,7 @@ export default function GamePage() {
                         borderRadius: alignRight ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
                         padding: '10px 14px',
                       }}>
-                        <p style={{ color: isBroadcast ? 'var(--marigold)' : 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
+                        <p style={{ color: isBroadcast ? 'var(--marigold-deep)' : 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.55, margin: 0 }}>
                           {msg.text}
                         </p>
                       </div>
@@ -1415,7 +1415,7 @@ export default function GamePage() {
                   width: '100%',
                   background: chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.03)',
                   border: `1px solid ${chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.35)' : 'var(--line)'}`,
-                  color: chatInput.trim() ? 'var(--marigold)' : 'var(--ink-ghost)',
+                  color: chatInput.trim() ? 'var(--marigold-deep)' : 'var(--ink-ghost)',
                   padding: '9px 14px', borderRadius: 10,
                   fontSize: '0.82rem', fontWeight: 700,
                   cursor: chatInput.trim() && !chatSending ? 'pointer' : 'default',
@@ -1463,7 +1463,7 @@ export default function GamePage() {
           gap: 16, padding: '0 32px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         }}>
           <span style={{ fontSize: '2.5rem' }}>🏁</span>
-          <h2 style={{ color: 'var(--marigold)', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
+          <h2 style={{ color: 'var(--marigold-deep)', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
           <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
             The GM has ended the game. Time to see how you did!
           </p>
@@ -1513,7 +1513,7 @@ export default function GamePage() {
               onClick={() => setActiveTab(tab.id)}
               style={{
                 background: 'none', border: 'none',
-                color: activeTab === tab.id ? 'var(--marigold)' : 'var(--ink-faint)',
+                color: activeTab === tab.id ? 'var(--marigold-deep)' : 'var(--ink-faint)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 gap: 4, cursor: 'pointer', fontFamily: 'inherit',
                 fontSize: '0.72rem',

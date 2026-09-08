@@ -105,7 +105,7 @@ export default function PastForaysPage() {
         </button>
 
         <p style={{
-          fontSize: '0.75rem', color: 'var(--marigold)', textTransform: 'uppercase',
+          fontSize: '0.75rem', color: 'var(--marigold-deep)', textTransform: 'uppercase',
           letterSpacing: 2, margin: '0 0 4px',
         }}>
           Foray
@@ -179,7 +179,7 @@ export default function PastForaysPage() {
                     </>
                   ) : (
                     <span style={{
-                      color: 'var(--marigold)', fontSize: '0.7rem', fontWeight: 700,
+                      color: 'var(--marigold-deep)', fontSize: '0.7rem', fontWeight: 700,
                       textTransform: 'uppercase', letterSpacing: 1,
                     }}>
                       Game Master

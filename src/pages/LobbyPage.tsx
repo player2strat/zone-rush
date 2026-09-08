@@ -701,7 +701,7 @@ export default function LobbyPage() {
             Join Code (tap to copy)
           </p>
           <p style={{
-            fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold)',
+            fontSize: '2.2rem', fontWeight: 800, color: 'var(--marigold-deep)',
             letterSpacing: 6, fontFamily: "'Martian Mono', monospace", margin: 0,
           }}>
             {game.join_code}
@@ -1001,7 +1001,7 @@ export default function LobbyPage() {
                       width: '100%',
                       background: 'rgba(var(--marigold-rgb), 0.08)',
                       border: '1px solid rgba(var(--marigold-rgb), 0.25)',
-                      color: 'var(--marigold)',
+                      color: 'var(--marigold-deep)',
                       padding: '8px 14px', borderRadius: 7,
                       fontSize: '0.82rem', fontWeight: 700,
                       cursor: joining ? 'wait' : 'pointer',
@@ -1061,7 +1061,7 @@ export default function LobbyPage() {
           }}>
             <div style={{ padding: '16px 20px 0' }}>
               <p style={{
-                fontSize: '0.72rem', color: 'var(--marigold)',
+                fontSize: '0.72rem', color: 'var(--marigold-deep)',
                 textTransform: 'uppercase', letterSpacing: 1,
                 fontWeight: 700, marginBottom: 12,
               }}>
@@ -1075,7 +1075,7 @@ export default function LobbyPage() {
                   width: '100%',
                   background: 'rgba(var(--marigold-rgb), 0.15)',
                   border: '1px solid rgba(var(--marigold-rgb), 0.3)',
-                  color: 'var(--marigold)',
+                  color: 'var(--marigold-deep)',
                   padding: '14px 24px', borderRadius: 10,
                   fontSize: '1rem', fontWeight: 700,
                   cursor: 'pointer', fontFamily: 'inherit',
@@ -1334,7 +1334,7 @@ export default function LobbyPage() {
                 {/* Saving indicator */}
                 {savingRoster && (
                   <p style={{
-                    color: 'var(--marigold)', fontSize: '0.75rem',
+                    color: 'var(--marigold-deep)', fontSize: '0.75rem',
                     textAlign: 'center', marginTop: 12,
                   }}>
                     Saving...

@@ -209,7 +209,7 @@ export default function SideQuestExplorer() {
                     {s.submitter_name}
                     <span style={{
                       float: 'right', fontWeight: 700, fontSize: '0.68rem',
-                      color: s.status === 'approved' ? 'var(--green)' : s.status === 'rejected' ? 'var(--red)' : 'var(--marigold)',
+                      color: s.status === 'approved' ? 'var(--green)' : s.status === 'rejected' ? 'var(--red)' : 'var(--marigold-deep)',
                     }}>
                       {s.status}
                     </span>

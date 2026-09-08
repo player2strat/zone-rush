@@ -148,7 +148,7 @@ interface ZoneScoreData {
 // --------------- Constants ---------------
 
 const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: 'var(--green)', medium: 'var(--marigold)', hard: 'var(--red)',
+  easy: 'var(--green)', medium: 'var(--marigold-deep)', hard: 'var(--red)',
 }
 
 // Which media types get included in the post-game highlight zip.
@@ -1152,7 +1152,7 @@ export default function GMDashboard() {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ width: 32, height: 32, border: '3px solid var(--line)', borderTopColor: 'var(--marigold)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+          <div style={{ width: 32, height: 32, border: '3px solid var(--line)', borderTopColor: 'var(--marigold-deep)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
           <p>Loading GM Dashboard...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -1168,8 +1168,8 @@ export default function GMDashboard() {
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
-            <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.68rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 2 }}>GM Dashboard</span>
-            <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 4, background: game.status === 'active' ? 'rgba(var(--green-rgb), 0.15)' : game.status === 'paused' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--red-rgb), 0.15)', color: game.status === 'active' ? 'var(--green)' : game.status === 'paused' ? 'var(--marigold)' : 'var(--red)', fontWeight: 700 }}>
+            <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.68rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2 }}>GM Dashboard</span>
+            <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 4, background: game.status === 'active' ? 'rgba(var(--green-rgb), 0.15)' : game.status === 'paused' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--red-rgb), 0.15)', color: game.status === 'active' ? 'var(--green)' : game.status === 'paused' ? 'var(--marigold-deep)' : 'var(--red)', fontWeight: 700 }}>
               {game.status.toUpperCase()}
             </span>
           </div>
@@ -1181,7 +1181,7 @@ export default function GMDashboard() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.2rem', fontWeight: 700, color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold)' }}>
+          <div style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.2rem', fontWeight: 700, color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold-deep)' }}>
             {timeLeft || '—'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1201,7 +1201,7 @@ export default function GMDashboard() {
               </button>
             )}
             {game.status === 'ended' && (
-              <button onClick={() => navigate('/results/' + gameId)} style={{ background: 'rgba(var(--marigold-rgb), 0.12)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => navigate('/results/' + gameId)} style={{ background: 'rgba(var(--marigold-rgb), 0.12)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold-deep)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                 🏆 View Results
               </button>
             )}
@@ -1212,7 +1212,7 @@ export default function GMDashboard() {
       {/* TAB BAR */}
       <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', padding: '0 20px', flexShrink: 0 }}>
         {([
-          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: 'var(--marigold)' },
+          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: 'var(--marigold-deep)' },
           { id: 'map' as const, label: '🗺️ Map & Zones', badge: null, badgeColor: '' },
           { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: 'var(--red)' },
           { id: 'activity' as const, label: '📜 Activity Log', badge: null, badgeColor: '' },
@@ -1223,7 +1223,7 @@ export default function GMDashboard() {
             style={{
               background: 'none', border: 'none',
               borderBottom: activeTab === tab.id ? '2px solid var(--marigold)' : '2px solid transparent',
-              color: activeTab === tab.id ? 'var(--marigold)' : 'var(--ink-faint)',
+              color: activeTab === tab.id ? 'var(--marigold-deep)' : 'var(--ink-faint)',
               padding: '12px 18px', fontSize: '0.85rem', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 7,
@@ -1243,7 +1243,7 @@ export default function GMDashboard() {
      {game.status === 'ended' && (
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: bonusesApplied ? 'rgba(var(--green-rgb), 0.03)' : 'rgba(var(--marigold-rgb), 0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
+            <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
               {bonusesApplied ? '✅ Side Quests Applied' : '🏁 Award Side Quest Points'}
             </p>
             {!bonusesApplied && (
@@ -1265,7 +1265,7 @@ export default function GMDashboard() {
                   <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                       🗺️ Most Zones Claimed
-                      <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
+                      <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
                     </p>
                     <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Auto-calculated — confirm below</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -1299,7 +1299,7 @@ export default function GMDashboard() {
                       <div key={quest.id} style={{ background: 'rgba(var(--pink-rgb), 0.04)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 10, padding: '12px 14px' }}>
                         <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                           🧩 {quest.title}
-                          <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
+                          <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
                         </p>
                         <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Most approved photo submissions — confirm below</p>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -1327,7 +1327,7 @@ export default function GMDashboard() {
                   <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
                       🏆 Most Zones Explored
-                      <span style={{ color: 'var(--marigold)', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
+                      <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
                     </p>
                     <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Zones with at least 1 challenge completed</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
@@ -1384,7 +1384,7 @@ export default function GMDashboard() {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: 'rgba(var(--ink-rgb), 0.01)', flexShrink: 0 }}>
             <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
               <div>
-                <p style={{ fontSize: '0.7rem', color: 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>
+                <p style={{ fontSize: '0.7rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>
                   ⭐ Highlight Reel
                 </p>
                 <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>
@@ -1401,7 +1401,7 @@ export default function GMDashboard() {
               <button
                 onClick={handlePullHighlights}
                 disabled={zipBusy || flaggedCount === 0}
-                style={{ background: zipBusy || flaggedCount === 0 ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: zipBusy || flaggedCount === 0 ? 'var(--ink-ghost)' : 'var(--marigold)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: zipBusy ? 'wait' : flaggedCount === 0 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                style={{ background: zipBusy || flaggedCount === 0 ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: zipBusy || flaggedCount === 0 ? 'var(--ink-ghost)' : 'var(--marigold-deep)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: zipBusy ? 'wait' : flaggedCount === 0 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               >
                 {zipBusy ? 'Working…' : '⬇ Pull All Highlights'}
               </button>
@@ -1414,7 +1414,7 @@ export default function GMDashboard() {
       {joinRequests.length > 0 && (
         <div style={{ background: 'rgba(var(--marigold-rgb), 0.08)', borderBottom: '1px solid rgba(var(--marigold-rgb), 0.3)', padding: '12px 20px', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
-            <p style={{ color: 'var(--marigold)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 10px' }}>
+            <p style={{ color: 'var(--marigold-deep)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, margin: '0 0 10px' }}>
               🙋 {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} asking to join
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1570,7 +1570,7 @@ export default function GMDashboard() {
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {([
-                { id: 'pending', label: `Pending (${pendingCount})`, color: 'var(--marigold)' },
+                { id: 'pending', label: `Pending (${pendingCount})`, color: 'var(--marigold-deep)' },
                 { id: 'approved', label: 'Approved', color: 'var(--green)' },
                 { id: 'rejected', label: 'Rejected', color: 'var(--red)' },
                 { id: 'all', label: 'All', color: 'var(--ink-muted)' },
@@ -1594,7 +1594,7 @@ export default function GMDashboard() {
                   const team = getTeam(sub.team_id)
                   const review = getReviewState(sub.id)
                   const isProcessing = processing === sub.id
-                  const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || 'var(--marigold)'
+                  const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || 'var(--marigold-deep)'
                   const basePts = (game?.settings as any)?.[`points_${challenge?.difficulty || 'medium'}`] ?? ({ easy: 1, medium: 2, hard: 3 }[challenge?.difficulty || 'medium'] ?? 2)
                   const gpsCheck = checkGpsProximity(sub)
 
@@ -1614,7 +1614,7 @@ export default function GMDashboard() {
                               <button
                                 onClick={() => handleToggleHighlight(sub)}
                                 title={sub.highlight ? 'Unstar this highlight' : 'Star as a highlight (included in the post-game pull)'}
-                                style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold)' : 'var(--ink-faint)', padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                                style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold-deep)' : 'var(--ink-faint)', padding: '3px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                               >
                                 {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
@@ -1664,7 +1664,7 @@ export default function GMDashboard() {
 
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--ink-faint)', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
                         {sub.zone_id && <span>📍 {sub.zone_id.replace('zone_district_', 'D')}</span>}
-                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: 'var(--marigold)' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
+                        {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: 'var(--marigold-deep)' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
                         {!sub.zone_id && !sub.gps_lat && <span style={{ color: 'var(--red)' }}>⚠ No zone · No GPS</span>}
                         {sub.submitted_at && <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>}
                         {gpsCheck === 'inside' && <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ GPS in zone</span>}
@@ -1687,7 +1687,7 @@ export default function GMDashboard() {
                               </button>
                             )}
                             {ZIP_MEDIA_TYPES.includes(sub.media_type) && (
-                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold-deep)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
                             )}
@@ -1699,7 +1699,7 @@ export default function GMDashboard() {
                             return (
                               <div style={{ background: 'rgba(var(--ink-rgb), 0.03)', borderRadius: 8, padding: '8px 14px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{basePts}pt base{tierPts > 0 && ` + ${tierPts}pt tier2`}</span>
-                                <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1rem', fontWeight: 700, color: 'var(--marigold)' }}>= {total}pt</span>
+                                <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1rem', fontWeight: 700, color: 'var(--marigold-deep)' }}>= {total}pt</span>
                               </div>
                             )
                           })()}
@@ -1940,7 +1940,7 @@ export default function GMDashboard() {
             <p style={sectionLabel}>Broadcast to All Teams</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
               <input type="text" value={broadcastInput} onChange={(e) => setBroadcastInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast() }} placeholder="📢 Message all teams at once..." style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 10, padding: '12px 14px', color: 'var(--ink)', fontSize: '0.88rem', fontFamily: 'inherit', outline: 'none' }} />
-              <button onClick={handleBroadcast} disabled={!broadcastInput.trim() || broadcasting} style={{ background: broadcastInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '12px 18px', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: broadcasting ? 0.5 : 1 }}>
+              <button onClick={handleBroadcast} disabled={!broadcastInput.trim() || broadcasting} style={{ background: broadcastInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold-deep)', padding: '12px 18px', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: broadcasting ? 0.5 : 1 }}>
                 {broadcasting ? '...' : 'Send All'}
               </button>
             </div>
@@ -1995,7 +1995,7 @@ export default function GMDashboard() {
                       const isFlagged = msg.channel_type === 'team_to_gm'
                       return (
                         <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isFromGM ? 'flex-end' : 'flex-start' }}>
-                          <p style={{ fontSize: '0.65rem', color: isFlagged ? 'var(--marigold)' : 'var(--ink-ghost)', marginBottom: 4, fontWeight: isFlagged ? 700 : 400 }}>
+                          <p style={{ fontSize: '0.65rem', color: isFlagged ? 'var(--marigold-deep)' : 'var(--ink-ghost)', marginBottom: 4, fontWeight: isFlagged ? 700 : 400 }}>
                             {isFromGM ? '🎮 You (GM)' : isFlagged ? `🔔 ${msg.from_name || 'Player'} → GM` : (msg.from_name || 'Player')}
                           </p>
                           <div style={{ maxWidth: '80%', background: isFromGM ? 'rgba(var(--marigold-rgb), 0.08)' : isFlagged ? 'rgba(var(--marigold-rgb), 0.06)' : 'rgba(var(--ink-rgb), 0.04)', border: `1px solid ${isFromGM ? 'rgba(var(--marigold-rgb), 0.2)' : isFlagged ? 'rgba(var(--marigold-rgb), 0.3)' : 'var(--line)'}`, borderRadius: 10, padding: '10px 14px' }}>
@@ -2008,7 +2008,7 @@ export default function GMDashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--line)', background: 'var(--paper)' }}>
                   <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleGMReply() }} placeholder={`Reply to ${teams.find(t => t.id === selectedTeamId)?.name}...`} style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', color: 'var(--ink)', fontSize: '0.85rem', fontFamily: 'inherit', outline: 'none' }} />
-                  <button onClick={handleGMReply} disabled={!chatInput.trim() || chatSending} style={{ background: chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold)', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: chatSending ? 0.5 : 1 }}>↑</button>
+                  <button onClick={handleGMReply} disabled={!chatInput.trim() || chatSending} style={{ background: chatInput.trim() ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold-deep)', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: chatSending ? 0.5 : 1 }}>↑</button>
                 </div>
               </div>
             ) : (
@@ -2052,7 +2052,7 @@ export default function GMDashboard() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
               <button
                 onClick={() => setActivityTeamFilter('all')}
-                style={{ background: activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: activityTeamFilter === 'all' ? 'var(--marigold)' : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ background: activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${activityTeamFilter === 'all' ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: activityTeamFilter === 'all' ? 'var(--marigold-deep)' : 'var(--ink-faint)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 All ({activityRows.length})
               </button>
@@ -2135,7 +2135,7 @@ export default function GMDashboard() {
       {showFullMap && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper)', flexShrink: 0 }}>
-            <p style={{ fontSize: '0.82rem', color: 'var(--marigold)', fontWeight: 700, margin: 0 }}>🗺️ Zone Map — {game.name}</p>
+            <p style={{ fontSize: '0.82rem', color: 'var(--marigold-deep)', fontWeight: 700, margin: 0 }}>🗺️ Zone Map — {game.name}</p>
             <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-soft)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>
@@ -2149,7 +2149,7 @@ export default function GMDashboard() {
 
 const sectionLabel: React.CSSProperties = {
   fontSize: '0.72rem',
-  color: 'var(--marigold)',
+  color: 'var(--marigold-deep)',
   textTransform: 'uppercase',
   letterSpacing: 1.5,
   fontWeight: 700,

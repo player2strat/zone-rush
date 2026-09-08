@@ -749,7 +749,7 @@ export default function SeedMaps() {
           padding: 16,
           marginBottom: 24,
         }}>
-          <p style={{ color: 'var(--marigold)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+          <p style={{ color: 'var(--marigold-deep)', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
             This will:
           </p>
           {[
@@ -759,7 +759,7 @@ export default function SeedMaps() {
             'Backfill map_id onto every zone (first-wins; warns on shared/orphan zones)',
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: 'var(--marigold)' }}>{i + 1}.</span>
+              <span style={{ color: 'var(--marigold-deep)' }}>{i + 1}.</span>
               <span style={{ color: 'var(--ink-soft)', fontSize: '0.88rem' }}>{item}</span>
             </div>
           ))}
@@ -802,7 +802,7 @@ export default function SeedMaps() {
                 color: line.includes('\u2713') ? 'var(--green)'
                   : line.includes('\u2717') ? 'var(--red)'
                   : line.includes('\u2705') ? 'var(--green)'
-                  : line.startsWith('---') ? 'var(--marigold)'
+                  : line.startsWith('---') ? 'var(--marigold-deep)'
                   : 'var(--ink-muted)',
               }}>
                 {line}

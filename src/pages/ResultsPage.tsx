@@ -161,7 +161,7 @@ function ConfettiOverlay({ onDone }: { onDone: () => void }) {
 // --------------- Medal colors ---------------
 
 const RANK_STYLES = [
-  { label: '1st', bg: 'rgba(var(--marigold-rgb), 0.12)', border: 'rgba(var(--marigold-rgb), 0.35)', color: 'var(--marigold)', medal: '🥇' },
+  { label: '1st', bg: 'rgba(var(--marigold-rgb), 0.12)', border: 'rgba(var(--marigold-rgb), 0.35)', color: 'var(--marigold-deep)', medal: '🥇' },
   { label: '2nd', bg: 'rgba(180,180,200,0.08)', border: 'rgba(180,180,200,0.25)', color: '#b0b0c0', medal: '🥈' },
   { label: '3rd', bg: 'rgba(205,127,50,0.08)',  border: 'rgba(205,127,50,0.25)',  color: '#cd7f32', medal: '🥉' },
 ]
@@ -417,7 +417,7 @@ export default function ResultsPage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 32, height: 32, border: '3px solid var(--line)',
-            borderTopColor: 'var(--marigold)', borderRadius: '50%',
+            borderTopColor: 'var(--marigold-deep)', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading results...</p>
@@ -469,7 +469,7 @@ export default function ResultsPage() {
         }}>
           <p style={{
             fontFamily: "'Martian Mono', monospace",
-            fontSize: '0.72rem', color: 'var(--marigold)',
+            fontSize: '0.72rem', color: 'var(--marigold-deep)',
             textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
           }}>
             Foray · Game Over
@@ -506,14 +506,14 @@ export default function ResultsPage() {
               <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>📢</span>
               <div style={{ minWidth: 0 }}>
                 <p style={{
-                  fontSize: '0.66rem', color: 'var(--marigold)',
+                  fontSize: '0.66rem', color: 'var(--marigold-deep)',
                   textTransform: 'uppercase', letterSpacing: 1.5,
                   fontWeight: 700, marginBottom: 5,
                 }}>
                   Message from the GM
                 </p>
                 <p style={{
-                  color: 'var(--marigold)', fontSize: '0.95rem', fontWeight: 600,
+                  color: 'var(--marigold-deep)', fontSize: '0.95rem', fontWeight: 600,
                   lineHeight: 1.5, margin: 0,
                 }}>
                   {latestBroadcast}
@@ -571,7 +571,7 @@ export default function ResultsPage() {
           {activeZones.length > 0 && (
             <div className="results-section" style={{ animationDelay: '0.15s', marginBottom: 28 }}>
               <p style={{
-                fontSize: '0.72rem', color: 'var(--marigold)',
+                fontSize: '0.72rem', color: 'var(--marigold-deep)',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
@@ -592,7 +592,7 @@ export default function ResultsPage() {
           {teamSubs.length > 0 && (
             <div className="results-section" style={{ animationDelay: '0.18s', marginBottom: 28 }}>
               <p style={{
-                fontSize: '0.72rem', color: 'var(--marigold)',
+                fontSize: '0.72rem', color: 'var(--marigold-deep)',
                 textTransform: 'uppercase', letterSpacing: 1.5,
                 fontWeight: 700, marginBottom: 14,
               }}>
@@ -735,7 +735,7 @@ export default function ResultsPage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 32, height: 32, border: '3px solid var(--line)',
-            borderTopColor: 'var(--marigold)', borderRadius: '50%',
+            borderTopColor: 'var(--marigold-deep)', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
           <p>Loading results...</p>
@@ -784,7 +784,7 @@ export default function ResultsPage() {
       }}>
         <p style={{
           fontFamily: "'Martian Mono', monospace",
-          fontSize: '0.72rem', color: 'var(--marigold)',
+          fontSize: '0.72rem', color: 'var(--marigold-deep)',
           textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8,
         }}>
           Foray · Game Over
@@ -850,7 +850,7 @@ export default function ResultsPage() {
         {/* ====== FINAL STANDINGS ====== */}
         <div className="results-section" style={{ animationDelay: '0.2s', marginBottom: 28 }}>
           <p style={{
-            fontSize: '0.72rem', color: 'var(--marigold)',
+            fontSize: '0.72rem', color: 'var(--marigold-deep)',
             textTransform: 'uppercase', letterSpacing: 1.5,
             fontWeight: 700, marginBottom: 14,
           }}>
@@ -904,7 +904,7 @@ export default function ResultsPage() {
                       <span style={{ color: 'var(--ink-faint)', fontSize: '0.78rem', marginLeft: 4 }}>pts</span>
                       {team.bonusPoints > 0 && (
                         <p style={{
-                          fontSize: '0.7rem', color: 'var(--marigold)',
+                          fontSize: '0.7rem', color: 'var(--marigold-deep)',
                           marginTop: 2, fontFamily: "'Martian Mono', monospace",
                         }}>
                           {basePoints} + {team.bonusPoints} bonus
@@ -927,7 +927,7 @@ export default function ResultsPage() {
                       <span style={{ color: 'var(--ink-muted)' }}>{team.challengesCompleted}</span> challenges
                     </span>
                     {team.bonusPoints > 0 && (
-                      <span style={{ color: 'var(--marigold)' }}>
+                      <span style={{ color: 'var(--marigold-deep)' }}>
                         +{team.bonusPoints} bonus
                       </span>
                     )}
@@ -965,7 +965,7 @@ export default function ResultsPage() {
         {activeZones.length > 0 && (
           <div className="results-section" style={{ animationDelay: '0.3s', marginBottom: 28 }}>
             <p style={{
-              fontSize: '0.72rem', color: 'var(--marigold)',
+              fontSize: '0.72rem', color: 'var(--marigold-deep)',
               textTransform: 'uppercase', letterSpacing: 1.5,
               fontWeight: 700, marginBottom: 14,
             }}>
@@ -1009,7 +1009,7 @@ export default function ResultsPage() {
         {game.bonuses_applied && Object.keys(bonusMap).length > 0 && (
           <div className="results-section" style={{ animationDelay: '0.4s', marginBottom: 28 }}>
             <p style={{
-              fontSize: '0.72rem', color: 'var(--marigold)',
+              fontSize: '0.72rem', color: 'var(--marigold-deep)',
               textTransform: 'uppercase', letterSpacing: 1.5,
               fontWeight: 700, marginBottom: 14,
             }}>
@@ -1039,7 +1039,7 @@ export default function ResultsPage() {
                     </div>
                     <span style={{
                       fontFamily: "'Martian Mono', monospace",
-                      color: 'var(--marigold)', fontWeight: 700, fontSize: '0.9rem',
+                      color: 'var(--marigold-deep)', fontWeight: 700, fontSize: '0.9rem',
                     }}>
                       +{pts}pt{pts !== 1 ? 's' : ''}
                     </span>

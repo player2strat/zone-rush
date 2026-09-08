@@ -178,7 +178,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
         </div>
         <div style={divider} />
         <div style={summaryItem}>
-          <span style={{ ...summaryValue, color: 'var(--marigold)' }}>{totalPoints}</span>
+          <span style={{ ...summaryValue, color: 'var(--marigold-deep)' }}>{totalPoints}</span>
           <span style={summaryLabel}>Total pts</span>
         </div>
         {/* Tier 2 hits summary item removed — re-enable when the tier 2 mechanic
