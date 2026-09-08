@@ -1027,70 +1027,17 @@ export default function GMDashboard() {
   }
 
   const handleEndGame = async () => {
-  if (!gameId || !window.confirm('End this game? Side quest bonus points will be awarded automatically. This cannot be undone.')) return
-  try {
-    await updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() })
-  } catch (err) {
-    toast.error('Failed to end the game: ' + (err as Error).message, { retry: () => updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() }) })
+    if (!gameId || !window.confirm('End this game? You\'ll review and award side quest points next. This cannot be undone.')) return
+    const endGame = () => updateDoc(doc(db, 'games', gameId), { status: 'ended', ended_at: serverTimestamp() })
+    try {
+      await endGame()
+    } catch (err) {
+      toast.error('Failed to end the game: ' + (err as Error).message, { retry: endGame })
+    }
+    // Side quest points are NOT applied automatically. Once the game is
+    // ended (button or clock), the "Award Side Quest Points" panel below
+    // pre-fills the winners and waits for the GM to confirm them.
   }
-  // Bonuses are applied by the "game ended" effect below, which also covers
-  // the clock running out and a GM opening the dashboard after the fact.
-  }
-
-  // Apply side quest points automatically once the game is over. Winners are
-  // auto-picked (most zones claimed, most zones with a challenge, and each
-  // photo side quest by approved count); an exact tie awards nothing for that
-  // category. Runs once per dashboard session and is guarded server-side by
-  // the bonuses_applied flag, so a second dashboard can't double-award.
-  const autoApplyStartedRef = useRef(false)
-  const [bonusRetryNonce, setBonusRetryNonce] = useState(0)
-  const sideQuestTalliesRef = useRef(sideQuestTallies)
-  sideQuestTalliesRef.current = sideQuestTallies
-  useEffect(() => {
-    if (!gameId || !user || game?.status !== 'ended' || game.bonuses_applied) return
-    const questCount = game.settings?.side_quests?.length ?? 0
-    if (questCount > 0 && !sideQuestSubsLoaded) return   // wait for the tally before picking photo winners
-    if (autoApplyStartedRef.current) return
-    autoApplyStartedRef.current = true
-
-    ;(async () => {
-      try {
-        const summaries = await getTeamBonusSummaries(gameId)
-        const awards: BonusAwards = {
-          mostZonesClaimed: autoSelectMostZonesClaimed(summaries),
-          mostZonesWithChallenges: autoSelectMostZonesWithChallenges(summaries),
-          sideQuests: {},
-        }
-        for (const quest of (game.settings?.side_quests ?? []) as SideQuest[]) {
-          const byTeam = sideQuestTalliesRef.current.get(quest.id)
-          let winner: string | null = null
-          if (byTeam && byTeam.size > 0) {
-            const sorted = [...byTeam.entries()].sort((a, b) => b[1] - a[1])
-            winner = sorted.length > 1 && sorted[0][1] === sorted[1][1] ? null : sorted[0][0]
-          }
-          awards.sideQuests![quest.id] = winner
-        }
-        await applyEndGameBonuses(gameId, awards)
-        setBonusAwards(awards)
-        setBonusesApplied(true)
-        await logEvent(gameId, {
-          team_id: null,
-          event_type: 'side_quests_applied',
-          actor_id: user.uid,
-          metadata: { awards, auto: true },
-        })
-      } catch (err) {
-        const msg = (err as Error).message || ''
-        if (/already applied/i.test(msg)) { setBonusesApplied(true); return }
-        console.error('Auto side quest application failed:', err)
-        autoApplyStartedRef.current = false
-        toast.error('Side quest points could not be applied automatically.', {
-          retry: () => setBonusRetryNonce((n) => n + 1),
-          duration: 15000,
-        })
-      }
-    })()
-  }, [gameId, user, game?.status, game?.bonuses_applied, game?.settings?.side_quests, sideQuestSubsLoaded, bonusRetryNonce, toast])
 
   const handlePauseResume = async () => {
   if (!gameId || !game) return
@@ -1299,6 +1246,12 @@ export default function GMDashboard() {
             <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
               {bonusesApplied ? '✅ Side Quests Applied' : '🏁 Award Side Quest Points'}
             </p>
+            {!bonusesApplied && (
+              <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -8, marginBottom: 16 }}>
+                The game is over, but side quest points haven't been added to team totals yet.
+                Winners are pre-selected from the tallies below. Change any pick if you need to, then apply.
+              </p>
+            )}
 
             {bonusesApplied ? (
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
@@ -1399,13 +1352,21 @@ export default function GMDashboard() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <button
-                    onClick={handleApplyBonuses}
-                    disabled={applyingBonuses}
-                    style={{ background: applyingBonuses ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.15)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: applyingBonuses ? 'var(--ink-ghost)' : 'var(--marigold)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: applyingBonuses ? 'wait' : 'pointer', fontFamily: 'inherit' }}
-                  >
-                    {applyingBonuses ? 'Applying...' : 'Apply Side Quest Points'}
-                  </button>
+                  {(() => {
+                    // Photo side quest winners come from the approval tally; don't let the
+                    // GM apply before it has loaded or a quest could be awarded to nobody.
+                    const waitingForTally = (game.settings?.side_quests?.length ?? 0) > 0 && !sideQuestSubsLoaded
+                    const busy = applyingBonuses || waitingForTally
+                    return (
+                      <button
+                        onClick={handleApplyBonuses}
+                        disabled={busy}
+                        style={{ background: busy ? 'var(--line)' : 'var(--marigold)', border: '1px solid var(--marigold-deep)', color: busy ? 'var(--ink-ghost)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {applyingBonuses ? 'Applying...' : waitingForTally ? 'Tallying side quests…' : 'Apply Side Quest Points'}
+                      </button>
+                    )
+                  })()}
                   <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)' }}>One-time. Points are permanent.</p>
                 </div>
               </div>

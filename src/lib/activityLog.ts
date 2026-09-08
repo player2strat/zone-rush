@@ -109,6 +109,8 @@ interface BuildContext {
   challenges: Map<string, { title: string; description: string }>
   zones: Map<string, { name: string }>
   users: Map<string, { name: string }>
+  // game.settings — needed to describe side quest awards (point values, quest titles)
+  settings: Record<string, any>
 }
 
 /**
@@ -157,7 +159,16 @@ export async function getActivityLog(
     })
   })
 
-  const ctx: BuildContext = { teams, challenges, zones, users }
+  // Game doc: settings feed the side-quest descriptions; started_at is Source 4.
+  let gameData: Record<string, any> | null = null
+  try {
+    const gameSnap = await getDoc(doc(db, 'games', gameId))
+    if (gameSnap.exists()) gameData = gameSnap.data()
+  } catch (err) {
+    console.error('[activityLog] Game doc read failed:', err)
+  }
+
+  const ctx: BuildContext = { teams, challenges, zones, users, settings: gameData?.settings ?? {} }
   const rows: MergedActivityRow[] = []
 
   // --- Source 1: explicit events ---
@@ -302,9 +313,8 @@ export async function getActivityLog(
 
   // --- Source 4: game lifecycle (started, ended from game doc) ---
   try {
-    const gameSnap = await getDoc(doc(db, 'games', gameId))
-    if (gameSnap.exists()) {
-      const g = gameSnap.data()
+    if (gameData) {
+      const g = gameData
       if (g.started_at) {
         const ts = g.started_at.toDate ? g.started_at.toDate() : new Date(g.started_at)
         rows.push({
@@ -382,7 +392,7 @@ function buildRowFromEvent(
     zone_id: e.zone_id ?? null,
     zone_name: zoneName,
     points_delta: e.points_delta ?? null,
-    details: describeEvent(e, team?.name, challengeTitle, zoneName),
+    details: describeEvent(e, ctx, team?.name, challengeTitle, zoneName),
     gm_notes: null,
     metadata: e.metadata ?? null,
   }
@@ -390,6 +400,7 @@ function buildRowFromEvent(
 
 function describeEvent(
   e: any,
+  ctx: BuildContext,
   teamName?: string | null,
   challengeTitle?: string | null,
   zoneName?: string | null
@@ -423,13 +434,37 @@ function describeEvent(
       return `🚫 ${z} closed by GM`
     case 'zone_reopened':
       return `✅ ${z} reopened by GM`
-    case 'side_quests_applied': {
-      const awards = e.metadata?.awards ?? {}
-      return `🏁 Side Quests applied: ${JSON.stringify(awards)}`
-    }
+    case 'side_quests_applied':
+      return describeSideQuestAwards(e.metadata?.awards ?? {}, e.metadata?.auto === true, ctx)
     default:
       return `${e.event_type} (no description)`
   }
+}
+
+/**
+ * Plain-English summary of the end-game side quest awards, e.g.
+ *   🏁 Side quest points awarded — Most Zones Claimed: Pigeon Squad (+8) ·
+ *   Most Zones Explored: no winner (tie) · Pothole Reporting: The Bodega Cats (+5)
+ */
+function describeSideQuestAwards(
+  awards: Record<string, any>,
+  auto: boolean,
+  ctx: BuildContext
+): string {
+  const teamLabel = (teamId: string | null | undefined, pts: number) =>
+    teamId ? `${ctx.teams.get(teamId)?.name ?? teamId} (+${pts})` : 'no winner (tie)'
+
+  const parts: string[] = [
+    `Most Zones Claimed: ${teamLabel(awards.mostZonesClaimed, ctx.settings.most_zones_claimed_bonus ?? 8)}`,
+    `Most Zones Explored: ${teamLabel(awards.mostZonesWithChallenges, ctx.settings.most_zones_with_challenges_bonus ?? 8)}`,
+  ]
+  const questDefs: { id: string; title?: string; bonus_points?: number }[] = ctx.settings.side_quests ?? []
+  for (const [questId, teamId] of Object.entries(awards.sideQuests ?? {})) {
+    const quest = questDefs.find((q) => q.id === questId)
+    parts.push(`${quest?.title ?? questId}: ${teamLabel(teamId as string | null, quest?.bonus_points ?? 0)}`)
+  }
+  const who = auto ? 'awarded automatically' : 'awarded by GM'
+  return `🏁 Side quest points ${who} — ${parts.join(' · ')}`
 }
 
 // --------------- CSV export ---------------
