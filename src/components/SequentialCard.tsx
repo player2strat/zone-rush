@@ -21,6 +21,7 @@ import {
   subscribeProgress, lockStep, markCompleted, interpolateFinalTask,
 } from '../lib/sequential'
 import type { SequentialProgress } from '../types/game'
+import type { UseLocationResult } from '../hooks/useLocation'
 
 const CYOA = 'var(--pink)' // purple accent, reused from the app palette
 
@@ -50,10 +51,11 @@ interface Props {
   // submission status for THIS card, lifted from GamePage's submissions map
   submissionStatus?: 'pending' | 'approved' | 'rejected'
   gmNotes?: string
+  location: UseLocationResult   // game page's GPS hook, handed through to SubmitProof
 }
 
 export default function SequentialCard({
-  gameId, teamId, challenge, closedZones, lockedZones, activeZoneIds, gameEnded, submissionStatus, gmNotes,
+  gameId, teamId, challenge, closedZones, lockedZones, activeZoneIds, gameEnded, submissionStatus, gmNotes, location,
 }: Props) {
   const steps = challenge.steps ?? []
   const finalTask = challenge.final_task ?? ''
@@ -305,6 +307,7 @@ export default function SequentialCard({
           closedZones={closedZones}
           lockedZones={lockedZones}
           activeZoneIds={activeZoneIds}
+          location={location}
           // NEW passthrough props (see SubmitProof additions):
           resolvedTask={resolvedTask}
           stepChoices={choices}

@@ -23,7 +23,7 @@ import { db, storage, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
-import { useLocation, isLocationSubmittable, locationStatusLabel } from '../hooks/useLocation'
+import { isLocationSubmittable, locationStatusLabel, type UseLocationResult } from '../hooks/useLocation'
 import { compressImage } from '../lib/imageCompress'
 
 interface SubmitProofProps {
@@ -58,10 +58,13 @@ interface SubmitProofProps {
 
   onClose: () => void
   onSubmitted: () => void
+  // The game page's location hook. Passed down (not re-created here) so the
+  // modal never starts a second GPS watcher that competes with the first.
+  location: UseLocationResult
 }
 
 export default function SubmitProof({
-  gameId, teamId, challenge, closedZones, lockedZones, activeZoneIds, resolvedTask, stepChoices, onClose, onSubmitted,
+  gameId, teamId, challenge, closedZones, lockedZones, activeZoneIds, resolvedTask, stepChoices, onClose, onSubmitted, location,
 }: SubmitProofProps) {
   const user = auth.currentUser
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -77,8 +80,9 @@ export default function SubmitProof({
   const [zonesLoaded, setZonesLoaded] = useState(false)
   const [zonesError, setZonesError] = useState(false)
 
-  // Shared location hook — same source as the pill in the top bar
-  const location = useLocation()
+  // Photos are downscaled as soon as they're picked (not when Submit is
+  // tapped), so by the time the player hits Submit the upload can start at once.
+  const preparedUploadRef = useRef<{ file: File; ready: Promise<File> } | null>(null)
 
 // Load zones from Firestore.
   // We track zonesLoaded separately so the Submit button can be gated on it —
@@ -117,7 +121,12 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
     setFile(selected)
     setError(null)
     setPreview(URL.createObjectURL(selected))
+    preparedUploadRef.current = { file: selected, ready: prepareUpload(selected) }
   }
+
+  // Compress a photo for upload; videos/audio pass through untouched.
+  const prepareUpload = (f: File): Promise<File> =>
+    getMediaType(f) === 'photo' ? compressImage(f) : Promise.resolve(f)
 
   const getMediaType = (f: File): 'photo' | 'video' | 'audio' => {
     if (f.type.startsWith('video/')) return 'video'
@@ -141,7 +150,12 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
     try {
       // Re-acquire a FRESH fix at the moment of submit. This is the key fix
       // for "I opened the modal, walked 100m, took a photo, then submitted."
-      const fresh = await location.refresh()
+      // The GPS refresh and the photo compression run at the same time; the
+      // compression usually finished while the player was looking at the preview.
+      const prepared = preparedUploadRef.current?.file === file
+        ? preparedUploadRef.current.ready
+        : prepareUpload(file)
+      const [fresh, upload] = await Promise.all([location.refresh(), prepared])
 
       if (!isLocationSubmittable(fresh)) {
         setError(
@@ -155,8 +169,6 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
 
       const timestamp = Date.now()
       const mediaType = getMediaType(file)
-      // Photos are downscaled on the phone before upload (videos untouched).
-      const upload = mediaType === 'photo' ? await compressImage(file) : file
       const ext = upload.name.split('.').pop() || 'jpg'
       const storagePath = `submissions/${gameId}/${teamId}/${challenge.id}_${timestamp}.${ext}`
       const storageRef = ref(storage, storagePath)
@@ -406,7 +418,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
               <img src={preview || ''} alt="Preview" style={{ width: '100%', borderRadius: 10, maxHeight: 140, objectFit: 'contain', background: 'var(--surface)' }} />
             )}
             <button
-              onClick={() => { setFile(null); setPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+              onClick={() => { setFile(null); setPreview(null); preparedUploadRef.current = null; if (fileInputRef.current) fileInputRef.current.value = '' }}
               style={{ background: 'none', border: 'none', color: 'var(--ink-muted)', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', marginTop: 8, padding: 0 }}
             >
               ✕ Remove and pick again

@@ -63,6 +63,9 @@ export const DEFAULT_LOCATION_CONFIG: LocationConfig = {
 }
 
 const STALE_CHECK_INTERVAL_MS = 5000
+const QUICK_FIX_MAX_AGE_MS = 30000     // a cached fix this recent is fine for a first pin
+const QUICK_FIX_TIMEOUT_MS = 6000
+const REFRESH_MAX_AGE_MS = 10000       // at submit time, a fix ≤10s old is "fresh"
 
 export function useLocation(config: Partial<LocationConfig> = {}) {
   const cfg: LocationConfig = { ...DEFAULT_LOCATION_CONFIG, ...config }
@@ -114,20 +117,27 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
     watchIdRef.current = navigator.geolocation.watchPosition(
       handleSuccess,
       (err) => {
-        // If high-accuracy timed out or signal unavailable,
-        // fall back to low-accuracy rather than giving up entirely.
-        if (
-          highAccuracy &&
-          (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)
-        ) {
+        if (err.code === err.PERMISSION_DENIED) {
+          setState((prev) => ({ ...prev, status: 'denied', errorMessage: err.message }))
+          return
+        }
+
+        const haveFix = stateRef.current.timestamp !== null
+
+        // Never got a fix in high-accuracy mode: fall back to low accuracy
+        // (wifi / cell) rather than giving up entirely.
+        if (!haveFix && highAccuracy) {
           startWatch(false)
           return
         }
 
-        let status: LocationStatus = 'error'
-        if (err.code === err.PERMISSION_DENIED) status = 'denied'
+        // A watch that already delivered a fix reports TIMEOUT whenever the
+        // device sits still for longer than `timeout` (iOS only pushes updates
+        // on movement). That's not an error — the stale timer below handles
+        // ageing — and the watch keeps running, so just ignore it.
+        if (haveFix && err.code === err.TIMEOUT) return
 
-        setState((prev) => ({ ...prev, status, errorMessage: err.message }))
+        setState((prev) => ({ ...prev, status: 'error', errorMessage: err.message }))
       },
       { enableHighAccuracy: highAccuracy, timeout, maximumAge: 0 }
     )
@@ -183,6 +193,21 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
 
       if (cancelled) return
       startWatch(true)
+
+      // Quick first fix, in parallel with the high-accuracy watch. A GPS lock
+      // can take 10–30s outdoors (and never arrives on a desktop), while a
+      // wifi/cell fix — or the one the browser already has cached — comes back
+      // in about a second. Use it only if the watch hasn't beaten it, so the
+      // pill turns green fast and the watch refines from there.
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return
+          if (stateRef.current.timestamp !== null) return
+          handleSuccess(pos)
+        },
+        () => { /* the watch reports errors; nothing to do here */ },
+        { enableHighAccuracy: false, maximumAge: QUICK_FIX_MAX_AGE_MS, timeout: QUICK_FIX_TIMEOUT_MS }
+      )
     }
 
     setup()
@@ -194,7 +219,7 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
         watchIdRef.current = null
       }
     }
-  }, [startWatch])
+  }, [startWatch, handleSuccess])
 
   // Mark the fix stale if no updates come in for a while
   useEffect(() => {
@@ -213,9 +238,11 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
     return () => clearInterval(interval)
   }, [cfg.max_age_seconds])
 
-  // refresh() — force a fresh fix on demand. Use this at submission time
-  // so the GPS we record is from the moment of submit, not from 90s ago
-  // when the user opened the modal.
+  // refresh() — get a fresh fix on demand. Use this at submission time so
+  // the GPS we record is from the moment of submit, not from 90s ago when
+  // the user opened the modal. A fix the watch delivered in the last few
+  // seconds counts as fresh (maximumAge), which is what makes Submit start
+  // instantly instead of waiting on a brand-new GPS round trip.
   const refresh = useCallback((): Promise<LocationState> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
@@ -223,6 +250,17 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
         setState(s)
         resolve(s)
         return
+      }
+
+      // If the fresh request fails or times out but the watch has a usable
+      // fix that is still within the game's max age, submit with that rather
+      // than blocking the player on a flaky GPS chip.
+      const recentWatchFix = (): LocationState | null => {
+        const cur = stateRef.current
+        if (cur.timestamp === null) return null
+        if (!isLocationSubmittable(cur)) return null
+        if ((Date.now() - cur.timestamp) / 1000 > cfg.max_age_seconds) return null
+        return cur
       }
 
       navigator.geolocation.getCurrentPosition(
@@ -239,6 +277,10 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
           resolve(s)
         },
         (err) => {
+          if (err.code !== err.PERMISSION_DENIED) {
+            const fallback = recentWatchFix()
+            if (fallback) { resolve(fallback); return }
+          }
           let status: LocationStatus = 'error'
           if (err.code === err.PERMISSION_DENIED) status = 'denied'
           const s: LocationState = {
@@ -252,14 +294,17 @@ export function useLocation(config: Partial<LocationConfig> = {}) {
         {
           enableHighAccuracy: !usingLowAccuracyRef.current,
           timeout: cfg.high_accuracy_timeout_ms,
-          maximumAge: 0,
+          maximumAge: REFRESH_MAX_AGE_MS,
         }
       )
     })
-  }, [cfg.high_accuracy_timeout_ms, statusForAccuracy])
+  }, [cfg.high_accuracy_timeout_ms, cfg.max_age_seconds, statusForAccuracy])
 
   return { ...state, refresh, config: cfg }
 }
+
+/** What useLocation() returns — pass this down instead of calling the hook twice. */
+export type UseLocationResult = ReturnType<typeof useLocation>
 
 // Convenience: is the current state OK to submit with?
 // Submissions are blocked unless GPS is good or merely low-accuracy.
