@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   collection, addDoc, onSnapshot, query, where, serverTimestamp,
 } from 'firebase/firestore'
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { compressImage } from '../lib/imageCompress'
 import { db, storage } from '../lib/firebase'
 import type { SideQuest } from '../types/game'
@@ -37,7 +37,41 @@ interface QuestTally {
 
 // Storage path for one submission (module scope: Date.now stays out of render).
 function uploadPath(gameId: string, teamId: string, questId: string, ext: string): string {
-  return `side_quests/${gameId}/${teamId}/${questId}_${Date.now()}.${ext}`
+  // Lives under submissions/ (same prefix as challenge proof) so the Storage
+  // rules that already allow player uploads there cover side quests too — a
+  // separate side_quests/ prefix needed its own rule and was rejected.
+  return `submissions/${gameId}/${teamId}/sidequest_${questId}_${Date.now()}.${ext}`
+}
+
+/**
+ * Upload a file and return its download URL. Small files go up in a single
+ * request (uploadBytes) — the resumable protocol costs an extra session
+ * handshake plus one round trip per 256 KB chunk, which is most of the
+ * "stuck at 0%" wait on a weak signal. Larger files keep resumable uploads
+ * so a dropped connection can pick up where it left off, with progress.
+ */
+export const SINGLE_REQUEST_MAX_BYTES = 2 * 1024 * 1024
+
+export async function uploadWithProgress(
+  storageRef: ReturnType<typeof ref>,
+  file: Blob,
+  onProgress: (pct: number) => void,
+): Promise<string> {
+  if (file.size <= SINGLE_REQUEST_MAX_BYTES) {
+    const snap = await uploadBytes(storageRef, file)
+    onProgress(100)
+    return getDownloadURL(snap.ref)
+  }
+  const task = uploadBytesResumable(storageRef, file)
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snap) => onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+      reject,
+      () => resolve(),
+    )
+  })
+  return getDownloadURL(task.snapshot.ref)
 }
 
 export default function SideQuestPanel({
@@ -79,18 +113,14 @@ export default function SideQuestPanel({
     setUploadingQuest(quest.id)
     setUploadProgress(0)
     setError('')
+    let step = 'preparing the photo'
     try {
       const upload = await compressImage(file)
       const ext = upload.name.split('.').pop() || 'jpg'
-      const task = uploadBytesResumable(ref(storage, uploadPath(gameId, teamId, quest.id, ext)), upload)
-      const url: string = await new Promise((resolve, reject) => {
-        task.on(
-          'state_changed',
-          (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-          reject,
-          async () => resolve(await getDownloadURL(task.snapshot.ref)),
-        )
-      })
+      const storageRef = ref(storage, uploadPath(gameId, teamId, quest.id, ext))
+      step = 'uploading the photo'
+      const url = await uploadWithProgress(storageRef, upload, setUploadProgress)
+      step = 'saving the submission'
       await addDoc(collection(db, 'side_quest_submissions'), {
         game_id: gameId,
         quest_id: quest.id,
@@ -107,7 +137,8 @@ export default function SideQuestPanel({
         submitted_at: serverTimestamp(),
       })
     } catch (err) {
-      setError('Upload failed: ' + (err as Error).message)
+      console.error('Side quest submission failed while ' + step + ':', err)
+      setError(`Couldn't submit — failed while ${step}. ${(err as Error).message}`)
     }
     setUploadingQuest(null)
   }
@@ -154,7 +185,7 @@ export default function SideQuestPanel({
                     {tally.approved} approved
                   </span>
                   {tally.pending > 0 && (
-                    <span style={{ color: 'var(--marigold)' }}> · {tally.pending} pending</span>
+                    <span style={{ color: 'var(--marigold-deep)' }}> · {tally.pending} pending</span>
                   )}
                   <span style={{ color: 'var(--ink-faint)' }}> · +{quest.bonus_points}pt bonus for most</span>
                 </p>
@@ -188,7 +219,7 @@ export default function SideQuestPanel({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {uploading ? `${uploadProgress}%…` : '📸 Submit'}
+                  {uploading ? (uploadProgress > 0 ? `${uploadProgress}%…` : 'Uploading…') : '📸 Submit'}
                 </button>
               </div>
             </div>

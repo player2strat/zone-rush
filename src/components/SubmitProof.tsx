@@ -17,7 +17,8 @@
 // =============================================================================
 
 import { useState, useRef, useEffect } from 'react'
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { ref } from 'firebase/storage'
+import { uploadWithProgress } from './SideQuestPanel'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, storage, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
@@ -74,6 +75,7 @@ export default function SubmitProof({
   const [attemptTier2, setAttemptTier2] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadStage, setUploadStage] = useState<'locating' | 'uploading' | 'saving'>('locating')
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [zones, setZones] = useState<any[]>([])
@@ -146,6 +148,8 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
 
     setError(null)
     setUploading(true)
+    setUploadProgress(0)
+    setUploadStage('locating')
 
     try {
       // Re-acquire a FRESH fix at the moment of submit. This is the key fix
@@ -172,21 +176,9 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
       const ext = upload.name.split('.').pop() || 'jpg'
       const storagePath = `submissions/${gameId}/${teamId}/${challenge.id}_${timestamp}.${ext}`
       const storageRef = ref(storage, storagePath)
-      const uploadTask = uploadBytesResumable(storageRef, upload)
-
-      const downloadURL: string = await new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            setUploadProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
-          },
-          (err) => reject(err),
-          async () => {
-            const url = await getDownloadURL(uploadTask.snapshot.ref)
-            resolve(url)
-          }
-        )
-      })
+      setUploadStage('uploading')
+      const downloadURL = await uploadWithProgress(storageRef, upload, setUploadProgress)
+      setUploadStage('saving')
 
       const submitZoneId = detectZone(fresh.lat, fresh.lng, zones)
       const submitZone = zones.find((z) => z.id === submitZoneId) ?? null
@@ -344,7 +336,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
                 style={{
                   background: 'rgba(var(--marigold-rgb), 0.12)',
                   border: '1px solid rgba(var(--marigold-rgb), 0.3)',
-                  color: 'var(--marigold)',
+                  color: 'var(--marigold-deep)',
                   padding: '8px 14px',
                   borderRadius: 8,
                   fontSize: '0.78rem',
@@ -385,7 +377,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
               }}
             >
               <span style={{ fontSize: '1.8rem', display: 'block', marginBottom: 8 }}>📷</span>
-              <span style={{ color: 'var(--marigold)', fontWeight: 600, fontSize: '0.9rem' }}>Take Photo / Video</span>
+              <span style={{ color: 'var(--marigold-deep)', fontWeight: 600, fontSize: '0.9rem' }}>Take Photo / Video</span>
               <span style={{ color: 'var(--ink-faint)', fontSize: '0.78rem', display: 'block', marginTop: 4 }}>Opens your camera</span>
             </button>
 
@@ -468,7 +460,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
           }}>
             <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
             <div>
-              <p style={{ color: 'var(--marigold)', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
+              <p style={{ color: 'var(--marigold-deep)', fontWeight: 700, fontSize: '0.82rem', marginBottom: 3 }}>
                 You appear to be outside an active zone
               </p>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', lineHeight: 1.5 }}>
@@ -527,14 +519,22 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         {uploading && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
+              {/* Indeterminate sweep until bytes are actually moving, then a real bar. */}
               <div style={{
-                height: '100%', width: `${uploadProgress}%`,
+                height: '100%',
+                width: uploadProgress > 0 ? `${uploadProgress}%` : '40%',
                 background: 'linear-gradient(90deg, var(--green), var(--blue))',
                 borderRadius: 3, transition: 'width 0.2s',
+                animation: uploadProgress > 0 ? 'none' : 'uploadSweep 1.1s ease-in-out infinite',
               }} />
             </div>
+            <style>{`@keyframes uploadSweep { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }`}</style>
             <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', textAlign: 'center', marginTop: 6 }}>
-              Uploading... {uploadProgress}%
+              {uploadStage === 'locating'
+                ? 'Checking your location…'
+                : uploadStage === 'saving'
+                ? 'Almost done…'
+                : uploadProgress > 0 ? `Uploading… ${uploadProgress}%` : 'Uploading…'}
             </p>
           </div>
         )}
