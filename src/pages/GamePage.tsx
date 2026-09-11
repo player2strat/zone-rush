@@ -216,6 +216,17 @@ export default function GamePage() {
   const [outcomeNotices, setOutcomeNotices] = useState<OutcomeNotice[]>([])
   const prevSubStatusRef = useRef<Map<string, string> | null>(null)
 
+  // Steal notices: raised from the zone_scores listener when a zone this
+  // team held flips to another team. Everyone already gets the generic
+  // "X was stolen" broadcast; this is the personal one for the victim, with
+  // a "Take it back" button that opens the map. Refs keep the listener free
+  // of stale closures without re-subscribing.
+  interface StealNotice { id: string; zoneId: string; thief: string; at: number }
+  const [stealNotices, setStealNotices] = useState<StealNotice[]>([])
+  const myTeamIdRef = useRef<string | null>(null)
+  const teamNamesRef = useRef<Map<string, string>>(new Map())
+  const prevZoneOwnersRef = useRef<Map<string, string> | null>(null)
+
   // One banner queue: outcome notices + unread GM broadcasts, newest first.
   interface BannerItem {
     key: string
@@ -223,7 +234,8 @@ export default function GamePage() {
     text: string
     at: number
     tone: 'good' | 'bad' | 'info'
-    viewTab: 'hand' | 'chat'
+    viewTab: 'hand' | 'chat' | 'map'
+    cta?: string                  // button label; defaults to "View"
     dismiss: () => void
   }
   const bannerItems = useMemo<BannerItem[]>(() => {
@@ -236,6 +248,19 @@ export default function GamePage() {
       viewTab: 'hand',
       dismiss: () => setOutcomeNotices(prev => prev.filter(x => x.id !== n.id)),
     }))
+    for (const n of stealNotices) {
+      const zoneName = localZones.find((z: { id: string }) => z.id === n.zoneId)?.name ?? 'your zone'
+      items.push({
+        key: `steal:${n.id}`,
+        icon: '🔁',
+        text: `${n.thief} just stole ${zoneName} from you!`,
+        at: n.at,
+        tone: 'bad',
+        viewTab: 'map',
+        cta: 'Take it back',
+        dismiss: () => setStealNotices(prev => prev.filter(x => x.id !== n.id)),
+      })
+    }
     for (const m of unreadBroadcasts) {
       items.push({
         key: `broadcast:${m.id}`,
@@ -255,7 +280,7 @@ export default function GamePage() {
       })
     }
     return items.sort((a, b) => b.at - a.at)
-  }, [outcomeNotices, unreadBroadcasts, gameId, user])
+  }, [outcomeNotices, stealNotices, localZones, unreadBroadcasts, gameId, user])
   const topBanner = bannerItems[0] ?? null
 
   // The player's display name for THIS game comes from their team's
@@ -419,10 +444,45 @@ export default function GamePage() {
         const scores: ZoneScoreData[] = []
         snap.forEach((d) => scores.push(d.data() as ZoneScoreData))
         setZoneScores(scores)
+
+        // Who owns each zone now (claimed or locked, highest points wins).
+        const owners = new Map<string, string>()
+        const best = new Map<string, number>()
+        for (const zs of scores) {
+          if (zs.status !== 'claimed' && zs.status !== 'locked') continue
+          if ((best.get(zs.zone_id) ?? -1) < zs.points) {
+            best.set(zs.zone_id, zs.points)
+            owners.set(zs.zone_id, zs.team_id)
+          }
+        }
+        const prev = prevZoneOwnersRef.current
+        prevZoneOwnersRef.current = owners
+        const mine = myTeamIdRef.current
+        if (!prev || !mine) return   // first snapshot: nothing to compare against
+        const now = Date.now()
+        const stolen: StealNotice[] = []
+        prev.forEach((prevOwner, zoneId) => {
+          const cur = owners.get(zoneId)
+          if (prevOwner === mine && cur && cur !== mine) {
+            stolen.push({
+              id: `${zoneId}:${now}`,
+              zoneId,
+              thief: teamNamesRef.current.get(cur) ?? 'Another team',
+              at: now,
+            })
+          }
+        })
+        if (stolen.length > 0) setStealNotices((p) => [...stolen, ...p])
       }
     )
     return () => unsub()
   }, [gameId])
+
+  // Keep the steal detector's refs current without re-subscribing.
+  useEffect(() => {
+    myTeamIdRef.current = myTeam?.id ?? null
+    teamNamesRef.current = new Map(allTeams.map((t) => [t.id, t.name]))
+  }, [myTeam?.id, allTeams])
 
   // Listen to submissions for this team
   useEffect(() => {
@@ -798,14 +858,15 @@ export default function GamePage() {
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
-              onClick={() => setActiveTab(topBanner.viewTab)}
+              onClick={() => { setActiveTab(topBanner.viewTab); if (topBanner.cta) topBanner.dismiss() }}
               style={{
                 background: `rgba(${rgb}, 0.15)`, border: `1px solid rgba(${rgb}, 0.3)`,
                 color: ink, padding: '4px 10px', borderRadius: 6,
                 fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
               }}
             >
-              View
+              {topBanner.cta ?? 'View'}
             </button>
             <button
               onClick={topBanner.dismiss}
