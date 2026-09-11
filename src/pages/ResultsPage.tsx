@@ -21,7 +21,7 @@
 // bonus point attribution, and final zone map state.
 // =============================================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, collection, query, where, getDocs, getDoc } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
@@ -33,6 +33,8 @@ import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { subscribeToPlayerMessages } from '../lib/chat'
 import EndGameReveal from '../components/EndGameReveal'
 import { revealTotalSteps, revealedPoints, finalPoints } from '../lib/reveal'
+import { ReactionBar, ReactionOverlay } from '../components/Reactions'
+import { shareRecapCard } from '../lib/recapCard'
 import type { EndGameAward } from '../types/game'
 
 // --------------- Types ---------------
@@ -44,6 +46,7 @@ interface GameData {
   zones: string[]
   started_at: any
   ends_at: any
+  ended_at?: any
   closed_zones?: string[]
   end_game_bonuses?: Record<string, number>
   bonuses_applied?: boolean
@@ -95,11 +98,11 @@ interface ConfettiPiece {
   shape: 'rect' | 'circle' | 'strip'
 }
 
-function generateConfetti(count: number): ConfettiPiece[] {
+function generateConfetti(count: number, colors: string[]): ConfettiPiece[] {
   return Array.from({ length: count }, (_, i) => ({
     id: i,
     x: Math.random() * 100,
-    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    color: colors[Math.floor(Math.random() * colors.length)],
     size: 6 + Math.random() * 8,
     duration: 2.5 + Math.random() * 2,
     delay: Math.random() * 1.2,
@@ -108,8 +111,8 @@ function generateConfetti(count: number): ConfettiPiece[] {
   }))
 }
 
-function ConfettiOverlay({ onDone }: { onDone: () => void }) {
-  const pieces = useMemo(() => generateConfetti(120), [])
+function ConfettiOverlay({ onDone, colors = CONFETTI_COLORS }: { onDone: () => void; colors?: string[] }) {
+  const pieces = useMemo(() => generateConfetti(120, colors), [colors])
 
   useEffect(() => {
     const timer = setTimeout(onDone, 4000)
@@ -196,10 +199,19 @@ export default function ResultsPage() {
   // Latest GM broadcast (player view only) — meetup message after game end.
   const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
 
-  // Confetti — GM view fires it on load; players get it at the champion
-  // reveal. Derived from a "trigger key" so we never set state in an effect:
+  // Confetti — GM view fires it on load; players get it when the champion
+  // drumroll finishes (EndGameReveal calls onChampionShown), in the winner's
+  // color. Derived from a "trigger key" so we never set state in an effect:
   // the overlay shows while the current trigger hasn't been dismissed.
   const [confettiDismissed, setConfettiDismissed] = useState<string | null>(null)
+  const [championShown, setChampionShown] = useState<{ key: string; color: string } | null>(null)
+  const onChampionShown = useCallback((team: { color: string }) => {
+    setChampionShown({ key: `champion-${Date.now()}`, color: team.color })
+  }, [])
+
+  // Recap card share state (player view)
+  const [sharingRecap, setSharingRecap] = useState(false)
+  const [recapNote, setRecapNote] = useState<string | null>(null)
 
   // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
@@ -356,9 +368,15 @@ export default function ResultsPage() {
   const revealStarted = revealStep > 0
   const revealDone = revealStarted && teams.length > 0 && revealStep >= revealTotal
 
-  const confettiKey = isGM ? 'gm' : myTeam && revealDone ? 'champion' : null
+  const confettiKey = isGM ? 'gm' : myTeam && championShown ? championShown.key : null
   const showConfetti = confettiKey !== null && confettiDismissed !== confettiKey
   const dismissConfetti = () => setConfettiDismissed(confettiKey)
+  const confettiColors = useMemo(
+    () => (!isGM && championShown
+      ? [championShown.color, championShown.color, championShown.color, 'var(--marigold)', '#FFFFFF']
+      : CONFETTI_COLORS),
+    [isGM, championShown],
+  )
 
   // ---------- Computed ----------
 
@@ -483,9 +501,9 @@ export default function ResultsPage() {
           .results-section { animation: slideUp 0.5s ease both; }
         `}</style>
 
-        {/* Confetti overlay */}
+        {/* Confetti overlay — in the champion's color once the drumroll ends */}
         {showConfetti && (
-          <ConfettiOverlay onDone={dismissConfetti} />
+          <ConfettiOverlay onDone={dismissConfetti} colors={confettiColors} />
         )}
 
         {/* Header */}
@@ -568,6 +586,7 @@ export default function ResultsPage() {
                 step={revealStep}
                 totalsApplied={totalsApplied}
                 myTeamId={myTeam.id}
+                onChampionShown={onChampionShown}
               />
             </div>
           )}
@@ -723,6 +742,62 @@ export default function ResultsPage() {
                 : '🏁 Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.'}
           </div>
 
+          {/* ====== RECAP CARD (after the champion is revealed) ====== */}
+          {revealDone && (
+            <div className="results-section" style={{ animationDelay: '0.25s', marginBottom: 14 }}>
+              <button
+                onClick={async () => {
+                  if (sharingRecap) return
+                  setSharingRecap(true)
+                  setRecapNote(null)
+                  try {
+                    const finals = teams.map((t) => ({ id: t.id, pts: finalPoints(t, revealAwards, totalsApplied) }))
+                    const myFinal = finals.find((f) => f.id === myTeam.id)?.pts ?? myTeam.total_points
+                    const mine = zoneScores.filter((zs) => zs.team_id === myTeam.id)
+                    const when = game.ended_at?.toDate?.() ?? game.ends_at?.toDate?.() ?? new Date()
+                    const result = await shareRecapCard({
+                      gameName: game.name,
+                      dateLabel: when.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
+                      teamName: myTeam.name,
+                      teamColor: myTeam.color,
+                      place: 1 + finals.filter((f) => f.pts > myFinal).length,
+                      tiedPlace: finals.filter((f) => f.pts === myFinal).length > 1,
+                      teamCount: teams.length,
+                      points: myFinal,
+                      zonesClaimed: mine.filter((zs) => zs.status === 'claimed' || zs.status === 'locked').length,
+                      challenges: mine.reduce((sum, zs) => sum + (zs.challenges_completed?.length ?? 0), 0),
+                      members: myTeam.member_names ?? [],
+                    })
+                    if (result === 'downloaded') setRecapNote('Saved to your downloads.')
+                  } catch (err) {
+                    setRecapNote('Could not make the card: ' + (err as Error).message)
+                  } finally {
+                    setSharingRecap(false)
+                  }
+                }}
+                disabled={sharingRecap}
+                style={{
+                  width: '100%',
+                  background: myTeam.color,
+                  border: 'none',
+                  color: '#fff',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                  padding: '15px 24px', borderRadius: 12,
+                  fontSize: '0.95rem', fontWeight: 800,
+                  cursor: sharingRecap ? 'wait' : 'pointer', fontFamily: 'inherit',
+                  opacity: sharingRecap ? 0.7 : 1,
+                }}
+              >
+                {sharingRecap ? 'Making your card…' : '📤 Share your team recap'}
+              </button>
+              {recapNote && (
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', textAlign: 'center', margin: '8px 0 0' }}>
+                  {recapNote}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* ====== FOOTER ACTIONS ====== */}
           <div className="results-section" style={{ animationDelay: '0.3s' }}>
             <button
@@ -740,6 +815,15 @@ export default function ResultsPage() {
               Back to Home
             </button>
           </div>
+
+          {/* ====== LIVE REACTIONS (while the reveal is running) ====== */}
+          {revealStarted && user && gameId && (
+            <>
+              <div style={{ height: 84 }} />
+              <ReactionOverlay gameId={gameId} />
+              <ReactionBar gameId={gameId} team={myTeam} uid={user.uid} />
+            </>
+          )}
 
         </div>
       </div>

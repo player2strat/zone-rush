@@ -14,7 +14,7 @@
 //   place      → countdown from last place up to the champion
 // =============================================================================
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EndGameAward } from '../types/game'
 import {
   revealStageAt, revealTotalSteps, revealedAwardCount, revealedPoints, finalPoints, ordinal,
@@ -35,6 +35,38 @@ interface EndGameRevealProps {
   totalsApplied: boolean       // game.bonus_totals_applied (see lib/reveal.ts)
   myTeamId?: string | null
   compact?: boolean            // GM dashboard preview: tighter spacing
+  /** Fires once the 3-2-1 drumroll finishes and the champion card is on screen. */
+  onChampionShown?: (champion: RevealTeam, step: number) => void
+}
+
+const DRUMROLL_FROM = 3
+const DRUMROLL_TICK_MS = 900
+
+// 3 … 2 … 1 … then the champion. Mounted fresh (keyed by step) every time the
+// reveal lands on the final stage, so Back → Next replays it. Timer-driven so
+// no state is set synchronously inside an effect.
+function ChampionDrumroll({ pending, done, onDone }: {
+  pending: (count: number) => ReactNode
+  done: ReactNode
+  onDone?: () => void
+}) {
+  const [count, setCount] = useState(DRUMROLL_FROM)
+  const onDoneRef = useRef(onDone)
+  useEffect(() => { onDoneRef.current = onDone })
+  useEffect(() => {
+    if (count <= 0) return
+    const t = setTimeout(() => {
+      setCount((c) => c - 1)
+      if (count === 1) {
+        // Android buzz on the big moment; iOS has no vibration API, so it's
+        // visual-first everywhere.
+        try { navigator.vibrate?.([80, 60, 80, 60, 260]) } catch { /* unsupported */ }
+        onDoneRef.current?.()
+      }
+    }, DRUMROLL_TICK_MS)
+    return () => clearTimeout(t)
+  }, [count])
+  return <>{count > 0 ? pending(count) : done}</>
 }
 
 const MONO = "'Martian Mono', monospace"
@@ -49,7 +81,7 @@ function medalFor(place: number): string {
 }
 
 export default function EndGameReveal({
-  awards, teams, step, totalsApplied, myTeamId = null, compact = false,
+  awards, teams, step, totalsApplied, myTeamId = null, compact = false, onChampionShown,
 }: EndGameRevealProps) {
   const totalSteps = revealTotalSteps(awards.length, teams.length)
   const stage = revealStageAt(step, awards, teams.length)
@@ -98,6 +130,11 @@ export default function EndGameReveal({
       @keyframes revealSlide {
         from { opacity: 0; transform: translateY(16px); }
         to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes drumPulse {
+        0%   { transform: scale(0.5); opacity: 0; }
+        30%  { transform: scale(1.15); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
       }
     `}</style>
   )
@@ -243,88 +280,136 @@ export default function EndGameReveal({
 
   // ---------------------------------------------------------------------------
   // Countdown: last place first, up to the champion.
-  const revealedFromIdx = stage.place - 1     // rows at index ≥ this are revealed
   const champion = stage.place === 1 ? finalOrder[0] : null
-  return (
-    <div key={`stage-${step}`} className="reveal-stage" style={{ padding: pad }}>
-      {keyframes}
-      {progress}
-      {sectionLabel(stage.place === 1 ? 'Final standings' : `Revealing ${placeLabel(stage.place, false)} place`)}
 
-      {champion && (
-        <div style={{
-          textAlign: 'center', borderRadius: 16, padding: compact ? '18px 14px' : '30px 20px', marginBottom: 16,
-          background: `linear-gradient(135deg, ${champion.color}26 0%, ${champion.color}0a 100%)`,
-          border: `1px solid ${champion.color}70`,
-          animation: 'revealPop 0.7s ease both',
-        }}>
-          <div style={{ fontSize: compact ? '1.8rem' : '2.8rem', lineHeight: 1, marginBottom: 8 }}>🏆</div>
-          <p style={{ fontSize: '0.7rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700, margin: '0 0 8px' }}>
-            {finalTied(0) ? 'Tied champions' : 'Champions'}
-          </p>
-          <p style={{ fontWeight: 800, fontSize: compact ? '1.2rem' : '1.7rem', color: champion.color, margin: 0 }}>
-            {finalTied(0)
-              ? finalOrder.filter((t) => t.total_points === champion.total_points).map((t) => t.name).join(' & ')
-              : champion.name}
-          </p>
-          <p style={{ fontFamily: MONO, fontSize: compact ? '1.4rem' : '2.2rem', fontWeight: 800, color: champion.color, margin: '8px 0 0', lineHeight: 1 }}>
-            {champion.total_points}
-          </p>
-          {champion.id === myTeamId && (
-            <p style={{ color: 'var(--green)', fontWeight: 700, fontSize: '0.9rem', margin: '12px 0 0' }}>
-              You won! 🎉
-            </p>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {finalOrder.map((t, idx) => {
-          const revealed = idx >= revealedFromIdx
-          const place = finalRank(idx)
-          const mine = t.id === myTeamId
-          if (!revealed) {
-            return (
-              <div key={t.id} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: compact ? '7px 10px' : '10px 12px', borderRadius: 10,
-                background: 'rgba(var(--ink-rgb), 0.02)', border: '1px dashed var(--line)',
-              }}>
-                <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--ink-ghost)', width: 44 }}>
-                  {placeLabel(idx + 1, false)}
-                </span>
-                <span style={{ color: 'var(--ink-ghost)', fontSize: compact ? '0.8rem' : '0.9rem', letterSpacing: 2 }}>? ? ?</span>
-              </div>
-            )
-          }
-          const justRevealed = idx === revealedFromIdx
+  // Rows at index ≥ revealedFromIdx are revealed; the rest show "? ? ?".
+  const placeList = (revealedFromIdx: number) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {finalOrder.map((t, idx) => {
+        const revealed = idx >= revealedFromIdx
+        const place = finalRank(idx)
+        const mine = t.id === myTeamId
+        if (!revealed) {
           return (
             <div key={t.id} style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: compact ? '7px 10px' : '10px 12px', borderRadius: 10,
-              background: mine ? `${t.color}18` : 'rgba(var(--ink-rgb), 0.02)',
-              border: `1px solid ${mine ? t.color + '60' : 'var(--line)'}`,
-              animation: justRevealed ? 'revealSlide 0.5s ease both' : undefined,
+              background: 'rgba(var(--ink-rgb), 0.02)', border: '1px dashed var(--line)',
             }}>
-              <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--ink-muted)', width: 44, fontWeight: 700 }}>
-                {placeLabel(place, finalTied(idx))}
+              <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--ink-ghost)', width: 44 }}>
+                {placeLabel(idx + 1, false)}
               </span>
-              <span style={{ fontSize: '0.9rem', width: 18 }}>{medalFor(place)}</span>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color, flexShrink: 0 }} />
-              <span style={{
-                fontWeight: mine ? 800 : 600, fontSize: compact ? '0.8rem' : '0.9rem', color: 'var(--ink)',
-                flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
-                {t.name}{mine ? ' (you)' : ''}
-              </span>
-              <span style={{ fontFamily: MONO, fontSize: compact ? '0.9rem' : '1.05rem', fontWeight: 800, color: t.color }}>
-                {t.total_points}
-              </span>
+              <span style={{ color: 'var(--ink-ghost)', fontSize: compact ? '0.8rem' : '0.9rem', letterSpacing: 2 }}>? ? ?</span>
             </div>
           )
-        })}
-      </div>
+        }
+        const justRevealed = idx === revealedFromIdx
+        return (
+          <div key={t.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: compact ? '7px 10px' : '10px 12px', borderRadius: 10,
+            background: mine ? `${t.color}18` : 'rgba(var(--ink-rgb), 0.02)',
+            border: `1px solid ${mine ? t.color + '60' : 'var(--line)'}`,
+            animation: justRevealed ? 'revealSlide 0.5s ease both' : undefined,
+          }}>
+            <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--ink-muted)', width: 44, fontWeight: 700 }}>
+              {placeLabel(place, finalTied(idx))}
+            </span>
+            <span style={{ fontSize: '0.9rem', width: 18 }}>{medalFor(place)}</span>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color, flexShrink: 0 }} />
+            <span style={{
+              fontWeight: mine ? 800 : 600, fontSize: compact ? '0.8rem' : '0.9rem', color: 'var(--ink)',
+              flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {t.name}{mine ? ' (you)' : ''}
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: compact ? '0.9rem' : '1.05rem', fontWeight: 800, color: t.color }}>
+              {t.total_points}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 
+  if (champion) {
+    const tiedTop = finalTied(0)
+    const championCard = (
+      <div style={{
+        textAlign: 'center', borderRadius: 16, padding: compact ? '18px 14px' : '30px 20px', marginBottom: 16,
+        background: `linear-gradient(135deg, ${champion.color}26 0%, ${champion.color}0a 100%)`,
+        border: `1px solid ${champion.color}70`,
+        animation: 'revealPop 0.7s ease both',
+      }}>
+        <div style={{ fontSize: compact ? '1.8rem' : '2.8rem', lineHeight: 1, marginBottom: 8 }}>🏆</div>
+        <p style={{ fontSize: '0.7rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700, margin: '0 0 8px' }}>
+          {tiedTop ? 'Tied champions' : 'Champions'}
+        </p>
+        <p style={{ fontWeight: 800, fontSize: compact ? '1.2rem' : '1.7rem', color: champion.color, margin: 0 }}>
+          {tiedTop
+            ? finalOrder.filter((t) => t.total_points === champion.total_points).map((t) => t.name).join(' & ')
+            : champion.name}
+        </p>
+        <p style={{ fontFamily: MONO, fontSize: compact ? '1.4rem' : '2.2rem', fontWeight: 800, color: champion.color, margin: '8px 0 0', lineHeight: 1 }}>
+          {champion.total_points}
+        </p>
+        {champion.id === myTeamId && (
+          <p style={{ color: 'var(--green)', fontWeight: 700, fontSize: '0.9rem', margin: '12px 0 0' }}>
+            You won! 🎉
+          </p>
+        )}
+      </div>
+    )
+
+    const drumrollCard = (count: number) => (
+      <div style={{
+        textAlign: 'center', borderRadius: 16, padding: compact ? '18px 14px' : '30px 20px', marginBottom: 16,
+        background: 'rgba(var(--marigold-rgb), 0.10)', border: '1px solid rgba(var(--marigold-rgb), 0.4)',
+      }}>
+        <p style={{ fontSize: '0.7rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700, margin: '0 0 10px' }}>
+          And the champion is…
+        </p>
+        <p key={count} style={{
+          fontFamily: MONO, fontSize: compact ? '3rem' : '4.5rem', fontWeight: 800, lineHeight: 1,
+          color: 'var(--marigold-deep)', margin: 0, animation: 'drumPulse 0.6s ease both',
+        }}>
+          {count}
+        </p>
+      </div>
+    )
+
+    return (
+      <ChampionDrumroll
+        key={`champion-${step}`}
+        onDone={() => onChampionShown?.(champion, step)}
+        pending={(count) => (
+          <div className="reveal-stage" style={{ padding: pad }}>
+            {keyframes}
+            {progress}
+            {sectionLabel('Final standings')}
+            {drumrollCard(count)}
+            {placeList(1)}
+          </div>
+        )}
+        done={
+          <div className="reveal-stage" style={{ padding: pad }}>
+            {keyframes}
+            {progress}
+            {sectionLabel('Final standings')}
+            {championCard}
+            {placeList(0)}
+          </div>
+        }
+      />
+    )
+  }
+
+  return (
+    <div key={`stage-${step}`} className="reveal-stage" style={{ padding: pad }}>
+      {keyframes}
+      {progress}
+      {sectionLabel(`Revealing ${placeLabel(stage.place, false)} place`)}
+      {placeList(stage.place - 1)}
     </div>
   )
 }

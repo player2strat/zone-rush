@@ -36,6 +36,7 @@ import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
 import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
 import EndGameReveal from '../components/EndGameReveal'
+import { ReactionOverlay } from '../components/Reactions'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
 import { createTestSubmissions, type TestSubmissionZone } from '../lib/testMode'
@@ -1337,6 +1338,9 @@ export default function GMDashboard() {
                       </button>
                     )}
                   </div>
+
+                  {/* Players' live reactions float up the right edge of this screen too */}
+                  {gameId && step > 0 && <ReactionOverlay gameId={gameId} />}
 
                   {/* What players are seeing right now */}
                   <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12 }}>

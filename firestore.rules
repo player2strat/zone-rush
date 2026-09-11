@@ -159,6 +159,15 @@ service cloud.firestore {
       match /join_requests/{requestId} {
         allow read, write: if signedIn();
       }
+
+      // Live emoji reactions during the results reveal. Any signed-in user
+      // can read them and post their own (uid must match); only the GM can
+      // edit or remove one.
+      match /reactions/{reactionId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if isAdminOrGm();
+      }
     }
 
     // Proof submissions. Players create their own (always pending, no
