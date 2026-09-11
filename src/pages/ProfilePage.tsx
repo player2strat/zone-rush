@@ -100,7 +100,7 @@ export default function ProfilePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 24 }}>
               {[
                 { v: stats.placementPoints, l: 'Season pts' },
-                { v: stats.games, l: 'Games' },
+                { v: stats.games, l: 'Games played' },
                 { v: stats.wins, l: 'Wins' },
                 { v: stats.podiums, l: 'Podiums' },
               ].map((s) => (
@@ -139,7 +139,7 @@ export default function ProfilePage() {
 
             {/* Recent games */}
             <p style={{ fontSize: '0.72rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: '0 0 12px' }}>
-              Games
+              Games played
             </p>
             {results.length === 0 ? (
               <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', textAlign: 'center', padding: '12px 0' }}>

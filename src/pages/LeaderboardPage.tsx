@@ -171,7 +171,7 @@ export default function LeaderboardPage() {
                     {r.name}{mine ? ' (you)' : ''}
                   </span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
-                    {r.games} {r.games === 1 ? 'game' : 'games'} · {r.wins} {r.wins === 1 ? 'win' : 'wins'}
+                    {r.games} played · {r.wins} {r.wins === 1 ? 'win' : 'wins'}
                   </span>
                   <span style={{ fontFamily: MONO, fontSize: '1rem', fontWeight: 800, color: 'var(--marigold-deep)', minWidth: 36, textAlign: 'right' }}>
                     {r.placementPoints}
