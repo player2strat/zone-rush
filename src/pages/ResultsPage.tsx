@@ -814,6 +814,17 @@ export default function ResultsPage() {
                 Share your Foray
               </p>
               <RecapCarousel cards={shareCards} accentColor={myTeam.color} shareTitle={`${myTeam.name} — Foray`} />
+              <button
+                onClick={() => navigate('/profile')}
+                style={{
+                  width: '100%', marginTop: 16,
+                  background: 'rgba(var(--marigold-rgb), 0.14)', border: '1px solid rgba(var(--marigold-rgb), 0.5)',
+                  color: 'var(--marigold-deep)', padding: '13px 20px', borderRadius: 12,
+                  fontSize: '0.9rem', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                🎖️ See your profile and new badges
+              </button>
             </div>
           )}
 
