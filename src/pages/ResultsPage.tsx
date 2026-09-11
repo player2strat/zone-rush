@@ -35,6 +35,7 @@ import EndGameReveal from '../components/EndGameReveal'
 import { revealTotalSteps, revealedPoints, finalPoints } from '../lib/reveal'
 import { ReactionBar, ReactionOverlay } from '../components/Reactions'
 import { shareRecapCard } from '../lib/recapCard'
+import { teamDistanceMeters, formatDistance } from '../lib/distance'
 import type { EndGameAward } from '../types/game'
 
 // --------------- Types ---------------
@@ -70,6 +71,7 @@ interface TeamData {
   member_names: string[]
   // members is needed to resolve which team the current viewer belongs to.
   members: string[]
+  member_distances?: Record<string, number>
 }
 
 interface ZoneScoreData {
@@ -630,6 +632,12 @@ export default function ResultsPage() {
               Points before bonuses
             </p>
 
+            {teamDistanceMeters(myTeam.member_distances) > 0 && (
+              <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', fontWeight: 700, marginTop: 14 }}>
+                🚶 {formatDistance(teamDistanceMeters(myTeam.member_distances))} covered
+              </p>
+            )}
+
             {myTeam.member_names?.length > 0 && (
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', marginTop: 16 }}>
                 {myTeam.member_names.join(' · ')}
@@ -766,6 +774,7 @@ export default function ResultsPage() {
                       points: myFinal,
                       zonesClaimed: mine.filter((zs) => zs.status === 'claimed' || zs.status === 'locked').length,
                       challenges: mine.reduce((sum, zs) => sum + (zs.challenges_completed?.length ?? 0), 0),
+                      distanceMeters: teamDistanceMeters(myTeam.member_distances),
                       members: myTeam.member_names ?? [],
                     })
                     if (result === 'downloaded') setRecapNote('Saved to your downloads.')

@@ -209,6 +209,10 @@ export interface Team {
   discard_used: number            // How many discards have been used (max: settings.discard_limit)
   discarded_challenges?: string[] // Challenge IDs this team has discarded (never recycled back)
   color: string                   // Hex color for map display (e.g. "#FF4443")
+  // Running meters walked per member (uid → meters), computed on each phone
+  // from consecutive GPS fixes. Only the total is stored — never a trail.
+  // Team distance = the highest member total (see lib/distance.ts).
+  member_distances?: Record<string, number>
 }
 
 // ─── ZoneScore (sub-collection of Game) ──────────────────────────────────────

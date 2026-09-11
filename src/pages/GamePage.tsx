@@ -35,6 +35,7 @@ import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
 import SideQuestPanel from '../components/SideQuestPanel'
+import { advanceFix, type Fix } from '../lib/distance'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
@@ -87,6 +88,7 @@ interface TeamData {
   member_locations?: Record<string, {
     lat: number; lng: number; name?: string; updated_at?: number
   }>
+  member_distances?: Record<string, number>
 }
 
 interface Challenge {
@@ -290,6 +292,14 @@ export default function GamePage() {
   // required; defaults apply when the field is absent).
   const location = useLocation(game?.settings.gps ?? {})
 
+  // Distance covered: a running total of meters, advanced on EVERY GPS fix
+  // (not just the throttled writes) while the game is active. Only the total
+  // is stored on the team doc — no trail. Seeded from Firestore once so a
+  // page reload doesn't reset it.
+  const distanceRef = useRef<{ total: number; anchor: Fix | null; seeded: boolean }>({ total: 0, anchor: null, seeded: false })
+  const savedDistance = myTeam?.member_distances?.[user?.uid ?? '']
+  const gameActiveForDistance = game?.status === 'active'
+
   // Write player location to Firestore for the GM map.
   // Driven by hook state changes, throttled to 1 write per 15s.
   const lastLocationWriteRef = useRef(0)
@@ -297,6 +307,19 @@ export default function GamePage() {
     if (!gameId || !user || !myTeam) return
     if (location.lat == null || location.lng == null) return
     const now = Date.now()
+
+    const dist = distanceRef.current
+    if (!dist.seeded && savedDistance != null) {
+      dist.total = Math.max(dist.total, savedDistance)
+      dist.seeded = true
+    }
+    if (gameActiveForDistance) {
+      const next: Fix = { lat: location.lat, lng: location.lng, accuracy: location.accuracy ?? null, timestamp: location.timestamp ?? now }
+      const r = advanceFix(dist.total, dist.anchor, next)
+      dist.total = r.totalMeters
+      dist.anchor = r.anchor
+    }
+
     if (now - lastLocationWriteRef.current < 15000) return
     lastLocationWriteRef.current = now
 
@@ -309,10 +332,11 @@ export default function GamePage() {
         name: myDisplayName.split(' ')[0] || 'Player',
         updated_at: now,
       },
+      [`member_distances.${user.uid}`]: Math.round(dist.total),
     }).catch(() => {
       // Silent fail — location write is non-critical
     })
-  }, [gameId, user?.uid, myTeam?.id, location.lat, location.lng, location.accuracy, myDisplayName])
+  }, [gameId, user?.uid, myTeam?.id, location.lat, location.lng, location.accuracy, location.timestamp, myDisplayName, savedDistance, gameActiveForDistance])
 
   // Listen to game document
   useEffect(() => {

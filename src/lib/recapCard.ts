@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { BRAND } from './brand'
+import { formatDistanceParts } from './distance'
 
 export interface RecapCardData {
   gameName: string
@@ -21,6 +22,7 @@ export interface RecapCardData {
   points: number
   zonesClaimed: number
   challenges: number
+  distanceMeters: number   // 0 = not tracked; the tile is still drawn as 0 ft
   members: string[]
 }
 
@@ -147,17 +149,19 @@ export async function renderRecapCard(data: RecapCardData): Promise<Blob> {
   ctx.globalAlpha = 1
 
   // ---- stat tiles
-  const tiles: { label: string; value: number }[] = [
-    { label: 'POINTS', value: data.points },
-    { label: 'ZONES', value: data.zonesClaimed },
-    { label: 'CHALLENGES', value: data.challenges },
+  const dist = formatDistanceParts(data.distanceMeters)
+  const tiles: { label: string; value: string }[] = [
+    { label: 'POINTS', value: String(data.points) },
+    { label: 'ZONES', value: String(data.zonesClaimed) },
+    { label: 'CHALLENGES', value: String(data.challenges) },
+    { label: dist.unit === 'mi' ? 'MILES' : 'FEET', value: dist.value },
   ]
   const tileY = panelY + panelH + 70
-  const gap = 28
-  const tileW = (W - 120 - gap * 2) / 3
-  const tileH = 250
+  const gap = 20
+  const tileW = (W - 100 - gap * 3) / 4
+  const tileH = 230
   tiles.forEach((t, i) => {
-    const x = 60 + i * (tileW + gap)
+    const x = 50 + i * (tileW + gap)
     ctx.fillStyle = BRAND.surface
     roundRect(ctx, x, tileY, tileW, tileH, 28)
     ctx.fill()
@@ -165,11 +169,11 @@ export async function renderRecapCard(data: RecapCardData): Promise<Blob> {
     ctx.lineWidth = 3
     ctx.stroke()
     ctx.fillStyle = data.teamColor === BRAND.paper ? BRAND.ink : data.teamColor
-    ctx.font = `800 96px ${HEAD}`
-    ctx.fillText(String(t.value), x + tileW / 2, tileY + 140)
+    ctx.font = `800 ${t.value.length > 3 ? 64 : 80}px ${HEAD}`
+    ctx.fillText(t.value, x + tileW / 2, tileY + 128)
     ctx.fillStyle = BRAND.inkFaint
-    ctx.font = `600 24px ${HEAD}`
-    ctx.fillText(t.label, x + tileW / 2, tileY + 200)
+    ctx.font = `600 22px ${HEAD}`
+    ctx.fillText(t.label, x + tileW / 2, tileY + 186)
   })
 
   // ---- members
