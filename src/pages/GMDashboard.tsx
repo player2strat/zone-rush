@@ -34,7 +34,8 @@ import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
-import type { SideQuest, SideQuestSubmission } from '../types/game'
+import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
+import EndGameReveal from '../components/EndGameReveal'
 import GameMap from '../components/GameMap'
 import { drawReplacementCard } from '../lib/dealChallenges'
 import { createTestSubmissions, type TestSubmissionZone } from '../lib/testMode'
@@ -54,6 +55,8 @@ import {
   applyEndGameBonuses,
   type BonusAwards,
   type TeamBonusSummary,
+  revealTotalSteps,
+  revealNextLabel,
 } from '../lib/endGame'
 import {
   logEvent,
@@ -86,6 +89,8 @@ interface GameData {
   }
     closed_zones?: string[]
     bonuses_applied?: boolean
+    end_game_awards?: EndGameAward[]
+    reveal_step?: number
     milestone_broadcasts_sent?: string[]
 }
 
@@ -818,6 +823,24 @@ export default function GMDashboard() {
     finally { setApplyingBonuses(false) }
   }
 
+  // Reveal cursor. Clamped to [0, total] so a double-tap can't run past the
+  // end; every player's results page follows this field live.
+  const [revealBusy, setRevealBusy] = useState(false)
+  const setRevealStep = async (next: number) => {
+    if (!gameId || !game || revealBusy) return
+    const awards = game.end_game_awards ?? []
+    const total = revealTotalSteps(awards.length, teams.length)
+    const clamped = Math.max(0, Math.min(next, total))
+    setRevealBusy(true)
+    try {
+      await updateDoc(doc(db, 'games', gameId), { reveal_step: clamped })
+    } catch (err) {
+      toast.error('Could not advance the reveal: ' + (err as Error).message, { retry: () => setRevealStep(next) })
+    } finally {
+      setRevealBusy(false)
+    }
+  }
+
   const getReviewState = (subId: string) =>
     reviewState.get(subId) || { tier2Approved: false, phoneFreeBonus: 0, notes: '' }
 
@@ -1244,20 +1267,68 @@ export default function GMDashboard() {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: bonusesApplied ? 'rgba(var(--green-rgb), 0.03)' : 'rgba(var(--marigold-rgb), 0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
-              {bonusesApplied ? '✅ Side Quests Applied' : '🏁 Award Side Quest Points'}
+              {bonusesApplied ? '🎬 Results Reveal' : '🏁 Award Side Quest Points'}
             </p>
             {!bonusesApplied && (
               <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -8, marginBottom: 16 }}>
-                The game is over, but side quest points haven't been added to team totals yet.
-                Winners are pre-selected from the tallies below. Change any pick if you need to, then apply.
+                The game is over, but bonus points haven't been added to team totals yet.
+                Winners are pre-selected from the tallies below. Change any pick if you need to, then lock them in.
+                Players won't see any of this until you run the reveal.
               </p>
             )}
 
-            {bonusesApplied ? (
-              <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
-                Side Quest points have been added to team totals. Check results to see final scores.
-              </p>
-            ) : (
+            {bonusesApplied ? (() => {
+              const awards = game.end_game_awards ?? []
+              const step = game.reveal_step ?? 0
+              const total = revealTotalSteps(awards.length, teams.length)
+              const nextLabel = revealNextLabel(step, awards, teams.length)
+              const done = step >= total
+              return (
+                <div>
+                  <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -2, marginBottom: 14 }}>
+                    Bonus points are locked in. Every player's results screen — in the room or remote — follows
+                    these taps live: standings before bonuses, then each bonus one at a time, then a countdown
+                    from last place to the champion.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+                    <button
+                      onClick={() => setRevealStep(step - 1)}
+                      disabled={revealBusy || step === 0}
+                      style={{ background: 'rgba(var(--ink-rgb), 0.03)', border: '1px solid var(--line)', color: step === 0 ? 'var(--ink-ghost)' : 'var(--ink-muted)', padding: '10px 14px', borderRadius: 10, fontSize: '0.85rem', fontWeight: 700, cursor: revealBusy || step === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      onClick={() => setRevealStep(step + 1)}
+                      disabled={revealBusy || done}
+                      style={{ background: done ? 'rgba(var(--green-rgb), 0.12)' : 'var(--marigold)', border: `1px solid ${done ? 'rgba(var(--green-rgb), 0.35)' : 'var(--marigold-deep)'}`, color: done ? 'var(--green)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: revealBusy || done ? 'default' : 'pointer', fontFamily: 'inherit', flex: '1 1 auto', minWidth: 200 }}
+                    >
+                      {done ? '✅ Reveal complete' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : `Next → ${nextLabel}`}
+                    </button>
+                    <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: 'var(--ink-faint)' }}>
+                      {step} / {total}
+                    </span>
+                    {step > 0 && (
+                      <button
+                        onClick={() => { if (window.confirm('Restart the reveal from the beginning? Players will go back to seeing only their own score.')) setRevealStep(0) }}
+                        disabled={revealBusy}
+                        style={{ background: 'none', border: 'none', color: 'var(--ink-ghost)', fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}
+                      >
+                        Restart
+                      </button>
+                    )}
+                  </div>
+
+                  {/* What players are seeing right now */}
+                  <div style={{ background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 12 }}>
+                    <p style={{ fontSize: '0.66rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0, padding: '10px 14px 0' }}>
+                      On players' screens now
+                    </p>
+                    <EndGameReveal awards={awards} teams={teams} step={step} compact />
+                  </div>
+                </div>
+              )
+            })() : (
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, marginBottom: 16 }}>
 
@@ -1363,11 +1434,11 @@ export default function GMDashboard() {
                         disabled={busy}
                         style={{ background: busy ? 'var(--line)' : 'var(--marigold)', border: '1px solid var(--marigold-deep)', color: busy ? 'var(--ink-ghost)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                       >
-                        {applyingBonuses ? 'Applying...' : waitingForTally ? 'Tallying side quests…' : 'Apply Side Quest Points'}
+                        {applyingBonuses ? 'Locking in...' : waitingForTally ? 'Tallying side quests…' : 'Lock In Bonus Points'}
                       </button>
                     )
                   })()}
-                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)' }}>One-time. Points are permanent.</p>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--ink-faint)' }}>One-time. Points are permanent. The reveal comes next.</p>
                 </div>
               </div>
             )}

@@ -845,6 +845,7 @@ export default function GamePage() {
                 uid={user.uid}
                 submitterName={myDisplayName}
                 quests={game!.settings.side_quests!}
+                teams={allTeams}
                 gameActive={game?.status === 'active'}
                 location={{ lat: location.lat, lng: location.lng }}
               />

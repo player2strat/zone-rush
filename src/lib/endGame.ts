@@ -8,6 +8,17 @@
 // Bonuses stored on the game doc:
 //   end_game_bonuses: { [teamId]: number }
 //   bonuses_applied: boolean
+//   end_game_awards: EndGameAward[]   — every bonus in REVEAL order
+//   reveal_step: number               — GM-driven reveal cursor (see below)
+//
+// The reveal: after the GM locks in bonuses, points are final but players
+// don't see them yet. The GM taps "Next" on the dashboard, which increments
+// reveal_step on the game doc; every player's results page follows it live.
+// Step layout (A = number of awards, N = number of teams):
+//   0             not started — players see only their own pre-bonus total
+//   1             standings before bonuses (all teams)
+//   2 … 1+A       one bonus card per tap, in end_game_awards order
+//   2+A … 1+A+N   countdown: last place first, then up to the champion
 // =============================================================================
 
 import {
@@ -18,6 +29,7 @@ import {
   getDocs,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import type { EndGameAward } from '../types/game'
 
 export interface BonusAwards {
   mostZonesClaimed: string | null        // team with most claimed zones
@@ -146,21 +158,40 @@ export async function applyEndGameBonuses(
   const mostZonesClaimedBonus = settings.most_zones_claimed_bonus ?? 8
   const mostZonesWithChallengesBonus = settings.most_zones_with_challenges_bonus ?? 8
 
-  const bonusMap = new Map<string, number>()
-
-  const addBonus = (teamId: string | null, pts: number) => {
-    if (!teamId) return
-    bonusMap.set(teamId, (bonusMap.get(teamId) ?? 0) + pts)
+  // Build the award list in REVEAL order: photo side quests first (smaller,
+  // more playful), then Most Zones Explored, then Most Zones Claimed as the
+  // headline bonus. Ties / no pick are kept as entries with team_id null so
+  // the reveal can say "nobody won this one".
+  const sideQuestDefs: { id: string; title?: string; bonus_points?: number }[] = settings.side_quests ?? []
+  const awardList: EndGameAward[] = []
+  for (const quest of sideQuestDefs) {
+    awardList.push({
+      key: `sq_${quest.id}`,
+      label: quest.title ?? quest.id,
+      emoji: '🧩',
+      team_id: awards.sideQuests?.[quest.id] ?? null,
+      points: quest.bonus_points ?? 0,
+    })
   }
+  awardList.push({
+    key: 'most_zones_with_challenges',
+    label: 'Most Zones Explored',
+    emoji: '🏆',
+    team_id: awards.mostZonesWithChallenges,
+    points: mostZonesWithChallengesBonus,
+  })
+  awardList.push({
+    key: 'most_zones_claimed',
+    label: 'Most Zones Claimed',
+    emoji: '🗺️',
+    team_id: awards.mostZonesClaimed,
+    points: mostZonesClaimedBonus,
+  })
 
-  addBonus(awards.mostZonesClaimed, mostZonesClaimedBonus)
-  addBonus(awards.mostZonesWithChallenges, mostZonesWithChallengesBonus)
-
-  // Photo side quests — each quest's bonus_points go to the team the GM picked.
-  const sideQuestDefs: { id: string; bonus_points?: number }[] = settings.side_quests ?? []
-  for (const [questId, teamId] of Object.entries(awards.sideQuests ?? {})) {
-    const quest = sideQuestDefs.find((q) => q.id === questId)
-    addBonus(teamId, quest?.bonus_points ?? 0)
+  const bonusMap = new Map<string, number>()
+  for (const a of awardList) {
+    if (!a.team_id) continue
+    bonusMap.set(a.team_id, (bonusMap.get(a.team_id) ?? 0) + a.points)
   }
 
   const bonusRecord: Record<string, number> = {}
@@ -171,6 +202,8 @@ export async function applyEndGameBonuses(
   await updateDoc(doc(db, 'games', gameId), {
     end_game_bonuses: bonusRecord,
     bonuses_applied: true,
+    end_game_awards: awardList,
+    reveal_step: 0,
   })
 
   for (const [teamId, pts] of bonusMap) {
@@ -182,3 +215,6 @@ export async function applyEndGameBonuses(
     }
   }
 }
+// Reveal step math lives in ./reveal (pure, no Firebase) so it can be unit
+// tested; re-exported here for convenience.
+export * from './reveal'

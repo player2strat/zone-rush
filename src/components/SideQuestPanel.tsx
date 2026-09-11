@@ -2,10 +2,13 @@
 // Foray — Side Quest panel (player view)
 //
 // Shown on the game home tab when the game has side quests. Each quest shows
-// the team's running tally of APPROVED submissions (plus pending count) and a
-// photo submit button. Submissions are unlimited, reviewed by the GM like
-// challenge proof, and worth 0 points — the payoff is the post-game bonus for
-// the team with the most approvals.
+// the team's running tally of APPROVED submissions (plus pending count), a
+// live leaderboard of every team's approved count (side quests are the one
+// place teams can see each other's progress mid-game), and a photo submit
+// button. Submissions are unlimited, reviewed by the GM like challenge proof,
+// and worth 0 points — the payoff is the post-game bonus for the team with
+// the most approvals. Other teams' PENDING counts stay private: they're
+// unverified, and showing them would just invite spam.
 //
 // Docs go to the top-level `side_quest_submissions` collection (separate from
 // challenge submissions) so photo/submitter/GPS can be exported for partners.
@@ -26,14 +29,18 @@ interface SideQuestPanelProps {
   uid: string
   submitterName: string
   quests: SideQuest[]
+  teams: { id: string; name: string; color: string }[]   // every team, for the leaderboard
   gameActive: boolean            // submissions allowed only while the game runs
   location: { lat: number | null; lng: number | null }
 }
 
 interface QuestTally {
-  approved: number
-  pending: number
+  approved: number               // this team's approved count
+  pending: number                // this team's pending count
+  approvedByTeam: Map<string, number>   // every team's approved count
 }
+
+const emptyTally = (): QuestTally => ({ approved: 0, pending: 0, approvedByTeam: new Map() })
 
 // Storage path for one submission (module scope: Date.now stays out of render).
 function uploadPath(gameId: string, teamId: string, questId: string, ext: string): string {
@@ -75,7 +82,7 @@ export async function uploadWithProgress(
 }
 
 export default function SideQuestPanel({
-  gameId, teamId, uid, submitterName, quests, gameActive, location,
+  gameId, teamId, uid, submitterName, quests, teams, gameActive, location,
 }: SideQuestPanelProps) {
   const [tallies, setTallies] = useState<Map<string, QuestTally>>(new Map())
   const [uploadingQuest, setUploadingQuest] = useState<string | null>(null)
@@ -83,20 +90,24 @@ export default function SideQuestPanel({
   const [error, setError] = useState('')
   const fileInputs = useRef<Map<string, HTMLInputElement | null>>(new Map())
 
-  // Live tally of this team's submissions per quest.
+  // Live tally of the whole game's submissions per quest. Approved counts are
+  // kept for every team (leaderboard); pending only for our own team.
   useEffect(() => {
     const q = query(
       collection(db, 'side_quest_submissions'),
       where('game_id', '==', gameId),
-      where('team_id', '==', teamId),
     )
     const unsub = onSnapshot(q, (snap) => {
       const next = new Map<string, QuestTally>()
       snap.forEach((d) => {
         const data = d.data()
-        const t = next.get(data.quest_id) ?? { approved: 0, pending: 0 }
-        if (data.status === 'approved') t.approved++
-        else if (data.status === 'pending') t.pending++
+        const t = next.get(data.quest_id) ?? emptyTally()
+        if (data.status === 'approved') {
+          t.approvedByTeam.set(data.team_id, (t.approvedByTeam.get(data.team_id) ?? 0) + 1)
+          if (data.team_id === teamId) t.approved++
+        } else if (data.status === 'pending' && data.team_id === teamId) {
+          t.pending++
+        }
         next.set(data.quest_id, t)
       })
       setTallies(next)
@@ -165,8 +176,14 @@ export default function SideQuestPanel({
       </p>
 
       {quests.map((quest) => {
-        const tally = tallies.get(quest.id) ?? { approved: 0, pending: 0 }
+        const tally = tallies.get(quest.id) ?? emptyTally()
         const uploading = uploadingQuest === quest.id
+        // Leaderboard: every team, most approved first, ties by name. The
+        // leader(s) get a crown; our own row is highlighted.
+        const board = teams
+          .map((t) => ({ ...t, approved: tally.approvedByTeam.get(t.id) ?? 0 }))
+          .sort((a, b) => b.approved - a.approved || a.name.localeCompare(b.name))
+        const topCount = board[0]?.approved ?? 0
         return (
           <div key={quest.id} style={{
             borderTop: '1px solid rgba(var(--pink-rgb), 0.15)',
@@ -223,6 +240,34 @@ export default function SideQuestPanel({
                 </button>
               </div>
             </div>
+
+            {/* All-team leaderboard — approved counts only */}
+            {board.length > 1 && (
+              <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {board.map((t) => {
+                  const mine = t.id === teamId
+                  const leading = topCount > 0 && t.approved === topCount
+                  return (
+                    <div key={t.id} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '4px 9px', borderRadius: 999,
+                      background: mine ? `${t.color}20` : 'rgba(var(--ink-rgb), 0.03)',
+                      border: `1px solid ${mine ? t.color + '70' : 'var(--line)'}`,
+                      fontSize: '0.74rem',
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                      <span style={{ color: 'var(--ink-soft)', fontWeight: mine ? 800 : 600, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.name}
+                      </span>
+                      <span style={{ fontFamily: "'Martian Mono', monospace", fontWeight: 800, color: t.color }}>
+                        {t.approved}
+                      </span>
+                      {leading && <span style={{ fontSize: '0.7rem' }}>👑</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )
       })}

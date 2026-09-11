@@ -165,7 +165,27 @@ export interface Game {
   started_at: any                 // Firestore Timestamp
   ends_at: any                    // Firestore Timestamp
   created_at?: any                // Firestore Timestamp
+  ended_at?: any                  // Firestore Timestamp (set when the GM ends the game)
   settings: GameSettings
+
+  // ── End-game bonuses + reveal (all GM-written; see lib/endGame.ts) ──
+  end_game_bonuses?: Record<string, number>  // team id → total bonus points added
+  bonuses_applied?: boolean                  // guards applyEndGameBonuses (one-time)
+  end_game_awards?: EndGameAward[]           // one entry per bonus, in REVEAL order
+  reveal_step?: number                       // 0 / absent = reveal not started.
+                                             // The GM taps "Next" to increment; every
+                                             // player screen follows it live.
+}
+
+// One post-game bonus as the GM locked it in. Stored on the game doc so the
+// reveal can replay "which bonus went to which team" exactly, and so old
+// games keep their history even if settings change later.
+export interface EndGameAward {
+  key: string                     // 'most_zones_claimed' | 'most_zones_with_challenges' | 'sq_<questId>'
+  label: string                   // "Most Zones Claimed", quest title, ...
+  emoji: string
+  team_id: string | null          // null = tie / nobody qualified → no points
+  points: number
 }
 
 // ─── Team (sub-collection of Game) ───────────────────────────────────────────

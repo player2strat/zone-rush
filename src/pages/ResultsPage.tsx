@@ -6,9 +6,12 @@
 // - Identity-aware: resolves the viewer's auth uid and finds their team
 //   (mirrors GamePage's pattern — the team whose `members` includes uid).
 //   A viewer in NO team is treated as the GM/spectator.
-// - PLAYER view: stripped down to ONLY the player's own team total — no
-//   standings, no other teams, no map, no bonus breakdown. Winners and
-//   bonus points are announced IN PERSON, not on screen.
+// - PLAYER view: before the reveal, ONLY the player's own pre-bonus team
+//   total — no standings, no other teams, no bonus breakdown. Once the GM
+//   starts the reveal (game.reveal_step > 0) the page follows it live:
+//   pre-bonus standings, then one bonus at a time, then a last-to-first
+//   countdown to the champion (see components/EndGameReveal). This is what
+//   lets remote players share the moment with the in-person group.
 // - PLAYER view also surfaces the latest GM broadcast (e.g. "Meet at the
 //   corner of X and Y") as a prominent banner, reusing the existing
 //   subscribeToPlayerMessages plumbing. Banner is player-only.
@@ -28,6 +31,9 @@ import GameMap from '../components/GameMap'
 import type { ZoneOwner } from '../components/GameMap'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { subscribeToPlayerMessages } from '../lib/chat'
+import EndGameReveal from '../components/EndGameReveal'
+import { revealTotalSteps, revealedPoints } from '../lib/reveal'
+import type { EndGameAward } from '../types/game'
 
 // --------------- Types ---------------
 
@@ -41,6 +47,8 @@ interface GameData {
   closed_zones?: string[]
   end_game_bonuses?: Record<string, number>
   bonuses_applied?: boolean
+  end_game_awards?: EndGameAward[]
+  reveal_step?: number
   created_by?: string             // UID of the GM who created this game
   settings: {
     claim_threshold: number
@@ -187,8 +195,10 @@ export default function ResultsPage() {
   // Latest GM broadcast (player view only) — meetup message after game end.
   const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
 
-  // Confetti
-  const [showConfetti, setShowConfetti] = useState(true)
+  // Confetti — GM view fires it on load; players get it at the champion
+  // reveal. Derived from a "trigger key" so we never set state in an effect:
+  // the overlay shows while the current trigger hasn't been dismissed.
+  const [confettiDismissed, setConfettiDismissed] = useState<string | null>(null)
 
   // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
@@ -335,6 +345,18 @@ export default function ResultsPage() {
     return () => unsub()
   }, [gameId, myTeam?.id])
 
+  // ---------- Reveal state (player view) ----------
+
+  const revealStep = game?.reveal_step ?? 0
+  const revealAwards = useMemo(() => game?.end_game_awards ?? [], [game?.end_game_awards])
+  const revealTotal = revealTotalSteps(revealAwards.length, teams.length)
+  const revealStarted = revealStep > 0
+  const revealDone = revealStarted && teams.length > 0 && revealStep >= revealTotal
+
+  const confettiKey = isGM ? 'gm' : myTeam && revealDone ? 'champion' : null
+  const showConfetti = confettiKey !== null && confettiDismissed !== confettiKey
+  const dismissConfetti = () => setConfettiDismissed(confettiKey)
+
   // ---------- Computed ----------
 
   // Final scoreboard — sort by total_points descending (GM view)
@@ -457,7 +479,7 @@ export default function ResultsPage() {
 
         {/* Confetti overlay */}
         {showConfetti && (
-          <ConfettiOverlay onDone={() => setShowConfetti(false)} />
+          <ConfettiOverlay onDone={dismissConfetti} />
         )}
 
         {/* Header */}
@@ -522,7 +544,29 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* ====== YOUR TEAM TOTAL ====== */}
+          {/* ====== THE REVEAL (once the GM starts it) ====== */}
+          {revealStarted && (
+            <div
+              className="results-section"
+              style={{
+                animationDelay: '0.1s',
+                marginBottom: 28,
+                background: 'rgba(var(--ink-rgb), 0.015)',
+                border: '1px solid var(--line)',
+                borderRadius: 16,
+              }}
+            >
+              <EndGameReveal
+                awards={revealAwards}
+                teams={teams}
+                step={revealStep}
+                myTeamId={myTeam.id}
+              />
+            </div>
+          )}
+
+          {/* ====== YOUR TEAM TOTAL (pre-reveal only; bonuses stay hidden) ====== */}
+          {!revealStarted && (
           <div
             className="results-section"
             style={{
@@ -551,13 +595,13 @@ export default function ResultsPage() {
               fontSize: '4rem', fontWeight: 800,
               color: myTeam.color, lineHeight: 1, marginBottom: 8,
             }}>
-              {myTeam.total_points}
+              {revealedPoints(myTeam, revealAwards, revealStep)}
             </p>
             <p style={{
               fontSize: '0.72rem', color: 'var(--ink-muted)',
               textTransform: 'uppercase', letterSpacing: 2, fontWeight: 600,
             }}>
-              Total Points
+              Points before bonuses
             </p>
 
             {myTeam.member_names?.length > 0 && (
@@ -566,6 +610,7 @@ export default function ResultsPage() {
               </p>
             )}
           </div>
+          )}
 
           {/* ====== FINAL MAP ====== */}
           {activeZones.length > 0 && (
@@ -653,7 +698,7 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {/* Gentle note: final results announced in person */}
+          {/* Reveal status note — keeps remote players in the loop */}
           <div
             className="results-section"
             style={{
@@ -664,8 +709,11 @@ export default function ResultsPage() {
               padding: '0 12px',
             }}
           >
-            🏁 Great game! Final standings and bonus points will be announced
-            in person — head back and meet up with the group.
+            {revealDone
+              ? "🏆 That's a wrap — thanks for playing!"
+              : revealStarted
+                ? '👀 The GM is revealing the results live. Keep this screen open.'
+                : '🏁 Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.'}
           </div>
 
           {/* ====== FOOTER ACTIONS ====== */}
@@ -772,7 +820,7 @@ export default function ResultsPage() {
 
       {/* Confetti overlay */}
       {showConfetti && (
-        <ConfettiOverlay onDone={() => setShowConfetti(false)} />
+        <ConfettiOverlay onDone={dismissConfetti} />
       )}
 
       {/* Header */}
