@@ -32,7 +32,7 @@ describe('badges', () => {
   })
 
   it('single-game feats: marathoner, zone baron, challenge machine', () => {
-    const r = mk({ distance_m: 9000, zones_claimed: 5, challenges: 25, member_uids: ['me'] })
+    const r = mk({ distance_m: 26.2 * 1609.344 + 1, zones_claimed: 5, challenges: 25, member_uids: ['me'] })
     expect(earned([r])).toEqual(expect.arrayContaining(['marathoner', 'zone_baron', 'challenge_machine']))
   })
 

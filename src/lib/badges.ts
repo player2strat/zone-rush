@@ -24,7 +24,8 @@ export interface BadgeStatus extends BadgeDef {
   progress: string       // e.g. "2 / 3 games" — shown on unearned badges
 }
 
-export const MARATHONER_METERS = 5 * METERS_PER_MILE
+export const MARATHONER_MILES = 26.2
+export const MARATHONER_METERS = MARATHONER_MILES * METERS_PER_MILE
 export const ZONE_BARON_ZONES = 5
 export const CHALLENGE_MACHINE = 25
 export const DYNASTY_GAMES = 10
@@ -38,7 +39,7 @@ export const BADGES: BadgeDef[] = [
   { key: 'podium',        label: 'Podium',           emoji: '🥉', description: 'Finished in the top three' },
   { key: 'champion',      label: 'Champion',         emoji: '🏆', description: 'Won a game' },
   { key: 'serial_winner', label: 'Serial Winner',    emoji: '👑', description: 'Won three games' },
-  { key: 'marathoner',    label: 'Marathoner',       emoji: '🏃', description: 'Covered five miles in one game' },
+  { key: 'marathoner',    label: 'Marathoner',       emoji: '🏃', description: `Covered ${MARATHONER_MILES} miles in one game` },
   { key: 'zone_baron',    label: 'Block Boss',       emoji: '🏴', description: `Claimed ${ZONE_BARON_ZONES} zones in one game` },
   { key: 'challenge_machine', label: 'Challenge Machine', emoji: '⚡', description: `${CHALLENGE_MACHINE} challenges in one game` },
   { key: 'reunited',      label: 'Reunited',         emoji: '🤝', description: 'Played a second game with the same crew' },
@@ -107,7 +108,7 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
     podium:        { earned: podiums >= 1, progress: podiums > 0 ? `${podiums} podiums` : 'No top-three finish yet' },
     champion:      { earned: wins >= 1,   progress: wins > 0 ? `${wins} wins` : 'No wins yet' },
     serial_winner: { earned: wins >= 3,   progress: `${Math.min(wins, 3)} / 3 wins` },
-    marathoner:    { earned: bestDistance >= MARATHONER_METERS, progress: `Best ${miles(bestDistance)} / 5.0 mi` },
+    marathoner:    { earned: bestDistance >= MARATHONER_METERS, progress: `Best ${miles(bestDistance)} / ${MARATHONER_MILES} mi` },
     zone_baron:    { earned: bestZones >= ZONE_BARON_ZONES, progress: `Best ${bestZones} / ${ZONE_BARON_ZONES} zones` },
     challenge_machine: { earned: bestChallenges >= CHALLENGE_MACHINE, progress: `Best ${bestChallenges} / ${CHALLENGE_MACHINE}` },
     reunited:      { earned: crew.games >= 2, progress: `${Math.min(crew.games, 2)} / 2 games with one crew` },
