@@ -4,8 +4,7 @@
 // Draws a 1080×1920 (9:16) PNG on a canvas in the browser: team name and
 // color, final place, points, zones, challenges, members, game name and date.
 // Stats only — no photos — so it can never fail on image permissions.
-// Shared through the phone's share sheet when available, otherwise saved as
-// a download.
+// Sharing/saving is handled by lib/shareImage.ts via the RecapCarousel.
 // =============================================================================
 
 import { BRAND } from './brand'
@@ -196,38 +195,4 @@ export async function renderRecapCard(data: RecapCardData): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not render image'))), 'image/png')
   })
-}
-
-/**
- * Renders the card and hands it to the phone's share sheet. Falls back to a
- * download on desktop browsers without file sharing. Resolves with which
- * path was taken, or 'cancelled' if the user dismissed the share sheet.
- */
-export async function shareRecapCard(
-  data: RecapCardData,
-): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const blob = await renderRecapCard(data)
-  const safeName = data.teamName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'team'
-  const file = new File([blob], `foray-${safeName}-recap.png`, { type: 'image/png' })
-
-  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
-  if (nav.share && nav.canShare?.({ files: [file] })) {
-    try {
-      await nav.share({ files: [file], title: `${data.teamName} — Foray recap` })
-      return 'shared'
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return 'cancelled'
-      // Some browsers advertise file sharing then refuse — fall through to download.
-    }
-  }
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = file.name
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  return 'downloaded'
 }

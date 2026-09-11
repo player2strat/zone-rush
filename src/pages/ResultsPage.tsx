@@ -34,7 +34,9 @@ import { subscribeToPlayerMessages } from '../lib/chat'
 import EndGameReveal from '../components/EndGameReveal'
 import { revealTotalSteps, revealedPoints, finalPoints } from '../lib/reveal'
 import { ReactionBar, ReactionOverlay } from '../components/Reactions'
-import { shareRecapCard } from '../lib/recapCard'
+import { renderRecapCard } from '../lib/recapCard'
+import { renderZoneMapCard, type ZoneMapCardOwner } from '../lib/zoneMapCard'
+import RecapCarousel, { type RecapCardSpec } from '../components/RecapCarousel'
 import { teamDistanceMeters, formatDistance } from '../lib/distance'
 import type { EndGameAward } from '../types/game'
 
@@ -210,10 +212,6 @@ export default function ResultsPage() {
   const onChampionShown = useCallback((team: { color: string }) => {
     setChampionShown({ key: `champion-${Date.now()}`, color: team.color })
   }, [])
-
-  // Recap card share state (player view)
-  const [sharingRecap, setSharingRecap] = useState(false)
-  const [recapNote, setRecapNote] = useState<string | null>(null)
 
   // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
@@ -444,14 +442,69 @@ export default function ResultsPage() {
   // without re-running the awards, so we show total bonuses per team.
   const bonusMap = game?.end_game_bonuses ?? {}
 
-  // Game duration
-  const duration = useMemo(() => {
+  // Game duration (cheap enough to compute on every render)
+  const duration = (() => {
     if (!game?.started_at || !game?.ends_at) return null
     const start = game.started_at.toDate?.() ?? new Date(game.started_at)
     const end = game.ends_at.toDate?.() ?? new Date(game.ends_at)
     const diff = Math.floor((end.getTime() - start.getTime()) / 60000)
     return `${Math.floor(diff / 60)}h ${diff % 60}m`
-  }, [game?.started_at, game?.ends_at])
+  })()
+
+  // Share cards (player view, after the champion is revealed). Built here,
+  // outside the render branch, so the React Compiler can memoize the page.
+  const shareCards = useMemo<RecapCardSpec[]>(() => {
+    if (!game || !myTeam || !revealDone) return []
+    const finals = teams.map((t) => ({ id: t.id, pts: finalPoints(t, revealAwards, totalsApplied) }))
+    const myFinal = finals.find((f) => f.id === myTeam.id)?.pts ?? myTeam.total_points
+    const mine = zoneScores.filter((zs) => zs.team_id === myTeam.id)
+    const when = game.ended_at?.toDate?.() ?? game.ends_at?.toDate?.() ?? new Date()
+    const dateLabel = when.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+    const claimedCount = (teamId: string) =>
+      zoneScores.filter((zs) => zs.team_id === teamId && (zs.status === 'claimed' || zs.status === 'locked')).length
+    const slug = myTeam.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'team'
+    const ownership = new Map<string, ZoneMapCardOwner>()
+    zoneOwnership.forEach((o, zoneId) => {
+      const team = teams.find((t) => t.color === o.teamColor && t.name === o.teamName)
+      if (team) ownership.set(zoneId, { teamId: team.id, teamColor: team.color, locked: o.locked })
+    })
+    return [
+      {
+        key: 'recap',
+        title: 'Team recap',
+        filename: `foray-${slug}-recap.png`,
+        render: () => renderRecapCard({
+          gameName: game.name,
+          dateLabel,
+          teamName: myTeam.name,
+          teamColor: myTeam.color,
+          place: 1 + finals.filter((f) => f.pts > myFinal).length,
+          tiedPlace: finals.filter((f) => f.pts === myFinal).length > 1,
+          teamCount: teams.length,
+          points: myFinal,
+          zonesClaimed: claimedCount(myTeam.id),
+          challenges: mine.reduce((sum, zs) => sum + (zs.challenges_completed?.length ?? 0), 0),
+          distanceMeters: teamDistanceMeters(myTeam.member_distances),
+          members: myTeam.member_names ?? [],
+        }),
+      },
+      {
+        key: 'zonemap',
+        title: 'Zone map',
+        filename: `foray-${slug}-zones.png`,
+        render: () => renderZoneMapCard({
+          gameName: game.name,
+          dateLabel,
+          myTeamId: myTeam.id,
+          myTeamName: myTeam.name,
+          myTeamColor: myTeam.color,
+          zones: activeZones.map((z) => ({ id: z.id, name: z.name, boundary: z.boundary ?? null })),
+          ownership,
+          teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color, zonesClaimed: claimedCount(t.id) })),
+        }),
+      },
+    ]
+  }, [game, myTeam, revealDone, teams, zoneScores, activeZones, zoneOwnership, revealAwards, totalsApplied])
 
   // ---------- Render: loading ----------
 
@@ -750,60 +803,17 @@ export default function ResultsPage() {
                 : '🏁 Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.'}
           </div>
 
-          {/* ====== RECAP CARD (after the champion is revealed) ====== */}
-          {revealDone && (
-            <div className="results-section" style={{ animationDelay: '0.25s', marginBottom: 14 }}>
-              <button
-                onClick={async () => {
-                  if (sharingRecap) return
-                  setSharingRecap(true)
-                  setRecapNote(null)
-                  try {
-                    const finals = teams.map((t) => ({ id: t.id, pts: finalPoints(t, revealAwards, totalsApplied) }))
-                    const myFinal = finals.find((f) => f.id === myTeam.id)?.pts ?? myTeam.total_points
-                    const mine = zoneScores.filter((zs) => zs.team_id === myTeam.id)
-                    const when = game.ended_at?.toDate?.() ?? game.ends_at?.toDate?.() ?? new Date()
-                    const result = await shareRecapCard({
-                      gameName: game.name,
-                      dateLabel: when.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }),
-                      teamName: myTeam.name,
-                      teamColor: myTeam.color,
-                      place: 1 + finals.filter((f) => f.pts > myFinal).length,
-                      tiedPlace: finals.filter((f) => f.pts === myFinal).length > 1,
-                      teamCount: teams.length,
-                      points: myFinal,
-                      zonesClaimed: mine.filter((zs) => zs.status === 'claimed' || zs.status === 'locked').length,
-                      challenges: mine.reduce((sum, zs) => sum + (zs.challenges_completed?.length ?? 0), 0),
-                      distanceMeters: teamDistanceMeters(myTeam.member_distances),
-                      members: myTeam.member_names ?? [],
-                    })
-                    if (result === 'downloaded') setRecapNote('Saved to your downloads.')
-                  } catch (err) {
-                    setRecapNote('Could not make the card: ' + (err as Error).message)
-                  } finally {
-                    setSharingRecap(false)
-                  }
-                }}
-                disabled={sharingRecap}
-                style={{
-                  width: '100%',
-                  background: myTeam.color,
-                  border: 'none',
-                  color: '#fff',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.25)',
-                  padding: '15px 24px', borderRadius: 12,
-                  fontSize: '0.95rem', fontWeight: 800,
-                  cursor: sharingRecap ? 'wait' : 'pointer', fontFamily: 'inherit',
-                  opacity: sharingRecap ? 0.7 : 1,
-                }}
-              >
-                {sharingRecap ? 'Making your card…' : '📤 Share your team recap'}
-              </button>
-              {recapNote && (
-                <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', textAlign: 'center', margin: '8px 0 0' }}>
-                  {recapNote}
-                </p>
-              )}
+          {/* ====== SHARE CARDS (after the champion is revealed) ====== */}
+          {revealDone && shareCards.length > 0 && (
+            <div className="results-section" style={{ animationDelay: '0.25s', marginBottom: 28 }}>
+              <p style={{
+                fontSize: '0.72rem', color: 'var(--marigold-deep)',
+                textTransform: 'uppercase', letterSpacing: 1.5,
+                fontWeight: 700, marginBottom: 14,
+              }}>
+                Share your Foray
+              </p>
+              <RecapCarousel cards={shareCards} accentColor={myTeam.color} shareTitle={`${myTeam.name} — Foray`} />
             </div>
           )}
 
