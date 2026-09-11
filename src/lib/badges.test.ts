@@ -50,6 +50,19 @@ describe('badges', () => {
     expect(crewStreak([crew(), crew()]).games).toBe(2)
   })
 
+  it('crew wins and podiums need the same roster, not just the same player', () => {
+    const crewWin = () => mk({ place: 1, member_uids: ['me', 'a'], member_names: ['Me', 'Ann'] })
+    const otherWin = () => mk({ place: 1, member_uids: ['me', 'c'], member_names: ['Me', 'Cy'] })
+    expect(earned([crewWin(), otherWin()])).not.toContain('crew_wins')
+    expect(earned([crewWin(), crewWin()])).toContain('crew_wins')
+    const crewThird = () => mk({ place: 3, member_uids: ['me', 'a'], member_names: ['Me', 'Ann'] })
+    expect(earned([crewThird(), crewThird()])).not.toContain('crew_podiums')
+    expect(earned([crewThird(), crewWin(), crewThird()])).toContain('crew_podiums')
+    // a 4th-place game with the crew counts toward Dynasty but not podiums
+    const crewFourth = () => mk({ place: 4, member_uids: ['me', 'a'], member_names: ['Me', 'Ann'] })
+    expect(earned([crewFourth(), crewFourth(), crewFourth()])).not.toContain('crew_podiums')
+  })
+
   it('unearned badges show progress', () => {
     const b = computeBadges([mk({})]).find((x) => x.key === 'regular')!
     expect(b.earned).toBe(false)

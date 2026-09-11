@@ -28,6 +28,8 @@ export const MARATHONER_METERS = 5 * METERS_PER_MILE
 export const ZONE_BARON_ZONES = 5
 export const CHALLENGE_MACHINE = 25
 export const DYNASTY_GAMES = 10
+export const CREW_WINS = 2          // Repeat Offenders
+export const CREW_PODIUMS = 3       // Podium Crew
 
 export const BADGES: BadgeDef[] = [
   { key: 'first_foray',   label: 'First Foray',      emoji: '🧭', description: 'Played your first game' },
@@ -41,6 +43,8 @@ export const BADGES: BadgeDef[] = [
   { key: 'challenge_machine', label: 'Challenge Machine', emoji: '⚡', description: `${CHALLENGE_MACHINE} challenges in one game` },
   { key: 'reunited',      label: 'Reunited',         emoji: '🤝', description: 'Played a second game with the same crew' },
   { key: 'dynasty',       label: 'Dynasty',          emoji: '🏛️', description: 'Ten games with the same crew' },
+  { key: 'crew_wins',     label: 'Repeat Offenders', emoji: '🔁', description: 'Won two games with the same crew' },
+  { key: 'crew_podiums',  label: 'Podium Crew',      emoji: '🎪', description: 'Three top-three finishes with the same crew' },
 ]
 
 /** Roster key: sorted member uids, only for teams of two or more. */
@@ -54,18 +58,35 @@ export interface CrewStreak {
   names: string[]        // that roster's names (from the latest result)
 }
 
-export function crewStreak(results: GameResult[]): CrewStreak {
-  const counts = new Map<string, { games: number; names: string[] }>()
+interface CrewTally { games: number; wins: number; podiums: number; names: string[] }
+
+function crewTallies(results: GameResult[]): CrewTally[] {
+  const counts = new Map<string, CrewTally>()
   for (const r of results) {
     const key = rosterKey(r)
     if (!key) continue
-    const cur = counts.get(key) ?? { games: 0, names: r.member_names }
+    const cur = counts.get(key) ?? { games: 0, wins: 0, podiums: 0, names: r.member_names }
     cur.games += 1
+    if (r.place === 1) cur.wins += 1
+    if (r.place <= 3) cur.podiums += 1
     counts.set(key, cur)
   }
+  return [...counts.values()]
+}
+
+export function crewStreak(results: GameResult[]): CrewStreak {
   let best: CrewStreak = { games: 0, names: [] }
-  for (const v of counts.values()) if (v.games > best.games) best = v
+  for (const v of crewTallies(results)) if (v.games > best.games) best = v
   return best
+}
+
+/** Best single-roster win and podium counts (may come from different crews). */
+export function crewBests(results: GameResult[]): { wins: number; podiums: number } {
+  const t = crewTallies(results)
+  return {
+    wins: Math.max(0, ...t.map((c) => c.wins)),
+    podiums: Math.max(0, ...t.map((c) => c.podiums)),
+  }
 }
 
 export function computeBadges(results: GameResult[]): BadgeStatus[] {
@@ -76,6 +97,7 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
   const bestZones = Math.max(0, ...results.map((r) => r.zones_claimed ?? 0))
   const bestChallenges = Math.max(0, ...results.map((r) => r.challenges ?? 0))
   const crew = crewStreak(results)
+  const crewBest = crewBests(results)
 
   const miles = (m: number) => (m / METERS_PER_MILE).toFixed(1)
   const status: Record<string, { earned: boolean; progress: string }> = {
@@ -90,6 +112,8 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
     challenge_machine: { earned: bestChallenges >= CHALLENGE_MACHINE, progress: `Best ${bestChallenges} / ${CHALLENGE_MACHINE}` },
     reunited:      { earned: crew.games >= 2, progress: `${Math.min(crew.games, 2)} / 2 games with one crew` },
     dynasty:       { earned: crew.games >= DYNASTY_GAMES, progress: `${Math.min(crew.games, DYNASTY_GAMES)} / ${DYNASTY_GAMES} games with one crew` },
+    crew_wins:     { earned: crewBest.wins >= CREW_WINS, progress: `${Math.min(crewBest.wins, CREW_WINS)} / ${CREW_WINS} wins with one crew` },
+    crew_podiums:  { earned: crewBest.podiums >= CREW_PODIUMS, progress: `${Math.min(crewBest.podiums, CREW_PODIUMS)} / ${CREW_PODIUMS} podiums with one crew` },
   }
 
   return BADGES.map((b) => ({ ...b, ...status[b.key] }))
