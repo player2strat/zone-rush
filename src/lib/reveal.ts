@@ -59,20 +59,48 @@ export function revealedAwardCount(step: number, awardCount: number): number {
   return Math.max(0, Math.min(step - 1, awardCount))
 }
 
+function bonusSum(teamId: string, awards: EndGameAward[], upTo: number): number {
+  let sum = 0
+  for (let i = 0; i < Math.min(upTo, awards.length); i++) {
+    if (awards[i].team_id === teamId) sum += awards[i].points
+  }
+  return sum
+}
+
 /**
- * A team's score as the audience has seen it so far: their final total minus
- * every bonus that hasn't been revealed yet. At step 0 this is the pre-bonus
- * score; once all awards are out it equals total_points.
+ * A team's score with NO bonuses. Bonus points are added to teams'
+ * total_points only when the reveal reaches the champion (so no client,
+ * however stale, can show them early); `totalsApplied` says whether that
+ * has happened yet for this game.
+ */
+export function preBonusPoints(
+  team: { id: string; total_points: number },
+  awards: EndGameAward[],
+  totalsApplied: boolean,
+): number {
+  return totalsApplied ? team.total_points - bonusSum(team.id, awards, awards.length) : team.total_points
+}
+
+/** A team's true final score, every bonus included. */
+export function finalPoints(
+  team: { id: string; total_points: number },
+  awards: EndGameAward[],
+  totalsApplied: boolean,
+): number {
+  return preBonusPoints(team, awards, totalsApplied) + bonusSum(team.id, awards, awards.length)
+}
+
+/**
+ * A team's score as the audience has seen it so far: pre-bonus score plus
+ * every bonus whose card has been shown. At step 0 this is the pre-bonus
+ * score; once all awards are out it equals the final score.
  */
 export function revealedPoints(
   team: { id: string; total_points: number },
   awards: EndGameAward[],
   step: number,
+  totalsApplied: boolean,
 ): number {
   const shown = revealedAwardCount(step, awards.length)
-  let hidden = 0
-  for (let i = shown; i < awards.length; i++) {
-    if (awards[i].team_id === team.id) hidden += awards[i].points
-  }
-  return team.total_points - hidden
+  return preBonusPoints(team, awards, totalsApplied) + bonusSum(team.id, awards, shown)
 }

@@ -171,8 +171,8 @@ export default function SideQuestPanel({
         🧩 Side Quests
       </p>
       <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', margin: '0 0 14px', lineHeight: 1.5 }}>
-        Submit as many as you spot — the team with the most approved wins bonus
-        points at the end. No points during the game.
+        Submit as many as you spot — the team with the most approved wins a
+        bonus at the end. How much? That's revealed after the game.
       </p>
 
       {quests.map((quest) => {
@@ -204,7 +204,6 @@ export default function SideQuestPanel({
                   {tally.pending > 0 && (
                     <span style={{ color: 'var(--marigold-deep)' }}> · {tally.pending} pending</span>
                   )}
-                  <span style={{ color: 'var(--ink-faint)' }}> · +{quest.bonus_points}pt bonus for most</span>
                 </p>
               </div>
 

@@ -57,6 +57,7 @@ import {
   type TeamBonusSummary,
   revealTotalSteps,
   revealNextLabel,
+  applyBonusTotals,
 } from '../lib/endGame'
 import {
   logEvent,
@@ -91,6 +92,7 @@ interface GameData {
     bonuses_applied?: boolean
     end_game_awards?: EndGameAward[]
     reveal_step?: number
+    bonus_totals_applied?: boolean
     milestone_broadcasts_sent?: string[]
 }
 
@@ -834,6 +836,11 @@ export default function GMDashboard() {
     setRevealBusy(true)
     try {
       await updateDoc(doc(db, 'games', gameId), { reveal_step: clamped })
+      // Champion revealed → bonus points finally go into team totals. Until
+      // now no screen, however stale, could have shown a post-bonus score.
+      if (clamped === total && game.bonus_totals_applied === false) {
+        await applyBonusTotals(gameId)
+      }
     } catch (err) {
       toast.error('Could not advance the reveal: ' + (err as Error).message, { retry: () => setRevealStep(next) })
     } finally {
@@ -1286,7 +1293,8 @@ export default function GMDashboard() {
               return (
                 <div>
                   <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -2, marginBottom: 14 }}>
-                    Bonus points are locked in. Every player's results screen — in the room or remote — follows
+                    Bonus points are locked in but not yet added to team totals — that happens on the final tap,
+                    so nobody can see them early. Every player's results screen — in the room or remote — follows
                     these taps live: standings before bonuses, then each bonus one at a time, then a countdown
                     from last place to the champion.
                   </p>
@@ -1303,7 +1311,7 @@ export default function GMDashboard() {
                       disabled={revealBusy || done}
                       style={{ background: done ? 'rgba(var(--green-rgb), 0.12)' : 'var(--marigold)', border: `1px solid ${done ? 'rgba(var(--green-rgb), 0.35)' : 'var(--marigold-deep)'}`, color: done ? 'var(--green)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: revealBusy || done ? 'default' : 'pointer', fontFamily: 'inherit', flex: '1 1 auto', minWidth: 200 }}
                     >
-                      {done ? '✅ Reveal complete' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : `Next → ${nextLabel}`}
+                      {done ? '✅ Reveal complete · bonus points added to totals' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : `Next → ${nextLabel}`}
                     </button>
                     <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: 'var(--ink-faint)' }}>
                       {step} / {total}
@@ -1324,7 +1332,7 @@ export default function GMDashboard() {
                     <p style={{ fontSize: '0.66rem', color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0, padding: '10px 14px 0' }}>
                       On players' screens now
                     </p>
-                    <EndGameReveal awards={awards} teams={teams} step={step} compact />
+                    <EndGameReveal awards={awards} teams={teams} step={step} totalsApplied={game.bonus_totals_applied ?? true} compact />
                   </div>
                 </div>
               )

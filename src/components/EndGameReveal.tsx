@@ -17,7 +17,7 @@
 import { useMemo } from 'react'
 import type { EndGameAward } from '../types/game'
 import {
-  revealStageAt, revealTotalSteps, revealedAwardCount, revealedPoints, ordinal,
+  revealStageAt, revealTotalSteps, revealedAwardCount, revealedPoints, finalPoints, ordinal,
 } from '../lib/reveal'
 
 export interface RevealTeam {
@@ -32,6 +32,7 @@ interface EndGameRevealProps {
   awards: EndGameAward[]
   teams: RevealTeam[]
   step: number
+  totalsApplied: boolean       // game.bonus_totals_applied (see lib/reveal.ts)
   myTeamId?: string | null
   compact?: boolean            // GM dashboard preview: tighter spacing
 }
@@ -48,7 +49,7 @@ function medalFor(place: number): string {
 }
 
 export default function EndGameReveal({
-  awards, teams, step, myTeamId = null, compact = false,
+  awards, teams, step, totalsApplied, myTeamId = null, compact = false,
 }: EndGameRevealProps) {
   const totalSteps = revealTotalSteps(awards.length, teams.length)
   const stage = revealStageAt(step, awards, teams.length)
@@ -58,14 +59,18 @@ export default function EndGameReveal({
   // a time). Ties broken by name so the order is stable between renders.
   const standings = useMemo(() => {
     return teams
-      .map((t) => ({ ...t, shown: revealedPoints(t, awards, step) }))
+      .map((t) => ({ ...t, shown: revealedPoints(t, awards, step, totalsApplied) }))
       .sort((a, b) => b.shown - a.shown || a.name.localeCompare(b.name))
-  }, [teams, awards, step])
+  }, [teams, awards, step, totalsApplied])
 
-  // Final order (every bonus counted) — used by the countdown.
+  // Final order (every bonus counted) — used by the countdown. total_points
+  // is rewritten to the true final score so the rest of this file can read
+  // it directly, whether or not the bonus has hit Firestore yet.
   const finalOrder = useMemo(() => {
-    return [...teams].sort((a, b) => b.total_points - a.total_points || a.name.localeCompare(b.name))
-  }, [teams])
+    return teams
+      .map((t) => ({ ...t, total_points: finalPoints(t, awards, totalsApplied) }))
+      .sort((a, b) => b.total_points - a.total_points || a.name.localeCompare(b.name))
+  }, [teams, awards, totalsApplied])
   const finalRank = (idx: number) =>
     1 + finalOrder.filter((t) => t.total_points > finalOrder[idx].total_points).length
   const finalTied = (idx: number) =>

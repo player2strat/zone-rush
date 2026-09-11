@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
   revealTotalSteps, revealStageAt, revealedAwardCount, revealedPoints,
-  revealNextLabel, ordinal,
+  preBonusPoints, finalPoints, revealNextLabel, ordinal,
 } from './reveal'
 import type { EndGameAward } from '../types/game'
 
 // Three teams, two bonuses: A wins the side quest (+3), C wins most zones (+8),
-// the "most explored" bonus is a tie (nobody). Final totals already include
-// the bonuses, exactly as Firestore holds them after applyEndGameBonuses.
+// the "most explored" bonus is a tie (nobody). These team objects hold totals
+// WITH bonuses (totalsApplied = true, i.e. after the champion reveal); the
+// "pending" set below holds pre-bonus totals (totalsApplied = false).
 const awards: EndGameAward[] = [
   { key: 'sq_potholes', label: 'Pothole Reporting', emoji: '🧩', team_id: 'A', points: 3 },
   { key: 'most_zones_with_challenges', label: 'Most Zones Explored', emoji: '🏆', team_id: null, points: 8 },
@@ -17,6 +18,9 @@ const A = { id: 'A', total_points: 20 + 3 }
 const B = { id: 'B', total_points: 22 }
 const C = { id: 'C', total_points: 15 + 8 }
 const N = 3
+// Same teams as Firestore holds them BEFORE the champion reveal.
+const A0 = { id: 'A', total_points: 20 }
+const C0 = { id: 'C', total_points: 15 }
 
 describe('reveal step layout', () => {
   it('has 1 standings + one per award + one per team', () => {
@@ -55,17 +59,32 @@ describe('revealed points hide bonuses until their card is shown', () => {
   })
 
   it('shows pre-bonus totals before the reveal and at the standings stage', () => {
-    expect(revealedPoints(A, awards, 0)).toBe(20)
-    expect(revealedPoints(C, awards, 1)).toBe(15)
-    expect(revealedPoints(B, awards, 0)).toBe(22)
+    expect(revealedPoints(A, awards, 0, true)).toBe(20)
+    expect(revealedPoints(C, awards, 1, true)).toBe(15)
+    expect(revealedPoints(B, awards, 0, true)).toBe(22)
   })
 
   it('folds each bonus in only once its card is up', () => {
-    expect(revealedPoints(A, awards, 2)).toBe(23)   // side quest revealed
-    expect(revealedPoints(C, awards, 2)).toBe(15)   // most zones not yet
-    expect(revealedPoints(C, awards, 3)).toBe(15)   // tie card, still not
-    expect(revealedPoints(C, awards, 4)).toBe(23)
-    expect(revealedPoints(C, awards, 7)).toBe(23)
+    expect(revealedPoints(A, awards, 2, true)).toBe(23)   // side quest revealed
+    expect(revealedPoints(C, awards, 2, true)).toBe(15)   // most zones not yet
+    expect(revealedPoints(C, awards, 3, true)).toBe(15)   // tie card, still not
+    expect(revealedPoints(C, awards, 4, true)).toBe(23)
+    expect(revealedPoints(C, awards, 7, true)).toBe(23)
+  })
+
+  it('gives the same answers when totals have not hit Firestore yet', () => {
+    expect(revealedPoints(A0, awards, 0, false)).toBe(20)
+    expect(revealedPoints(A0, awards, 2, false)).toBe(23)
+    expect(revealedPoints(C0, awards, 3, false)).toBe(15)
+    expect(revealedPoints(C0, awards, 4, false)).toBe(23)
+  })
+
+  it('pre-bonus and final scores agree across both storage states', () => {
+    expect(preBonusPoints(A, awards, true)).toBe(20)
+    expect(preBonusPoints(A0, awards, false)).toBe(20)
+    expect(finalPoints(C, awards, true)).toBe(23)
+    expect(finalPoints(C0, awards, false)).toBe(23)
+    expect(finalPoints(B, awards, false)).toBe(22)       // no bonus either way
   })
 })
 

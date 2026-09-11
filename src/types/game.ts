@@ -172,6 +172,11 @@ export interface Game {
   end_game_bonuses?: Record<string, number>  // team id → total bonus points added
   bonuses_applied?: boolean                  // guards applyEndGameBonuses (one-time)
   end_game_awards?: EndGameAward[]           // one entry per bonus, in REVEAL order
+  bonus_totals_applied?: boolean             // false = bonus points are NOT yet in
+                                             // teams' total_points (added when the
+                                             // reveal reaches the champion). Absent
+                                             // on games scored before this existed
+                                             // → treat as true.
   reveal_step?: number                       // 0 / absent = reveal not started.
                                              // The GM taps "Next" to increment; every
                                              // player screen follows it live.

@@ -32,7 +32,7 @@ import type { ZoneOwner } from '../components/GameMap'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { subscribeToPlayerMessages } from '../lib/chat'
 import EndGameReveal from '../components/EndGameReveal'
-import { revealTotalSteps, revealedPoints } from '../lib/reveal'
+import { revealTotalSteps, revealedPoints, finalPoints } from '../lib/reveal'
 import type { EndGameAward } from '../types/game'
 
 // --------------- Types ---------------
@@ -49,6 +49,7 @@ interface GameData {
   bonuses_applied?: boolean
   end_game_awards?: EndGameAward[]
   reveal_step?: number
+  bonus_totals_applied?: boolean
   created_by?: string             // UID of the GM who created this game
   settings: {
     claim_threshold: number
@@ -349,6 +350,8 @@ export default function ResultsPage() {
 
   const revealStep = game?.reveal_step ?? 0
   const revealAwards = useMemo(() => game?.end_game_awards ?? [], [game?.end_game_awards])
+  // Absent on games scored before the reveal existed → bonuses already in totals.
+  const totalsApplied = game?.bonus_totals_applied ?? true
   const revealTotal = revealTotalSteps(revealAwards.length, teams.length)
   const revealStarted = revealStep > 0
   const revealDone = revealStarted && teams.length > 0 && revealStep >= revealTotal
@@ -359,7 +362,9 @@ export default function ResultsPage() {
 
   // ---------- Computed ----------
 
-  // Final scoreboard — sort by total_points descending (GM view)
+  // Final scoreboard — sort by final points descending (GM view). total_points
+  // is rewritten to the true final score, bonuses included, even before the
+  // reveal has pushed them into Firestore.
   const scoreboard = useMemo(() => {
     return teams
       .map((t) => {
@@ -367,6 +372,7 @@ export default function ResultsPage() {
         const bonusPoints = game?.end_game_bonuses?.[t.id] ?? 0
         return {
           ...t,
+          total_points: finalPoints(t, revealAwards, totalsApplied),
           zoneBreakdown: teamZoneScores,
           bonusPoints,
           challengesCompleted: teamZoneScores.reduce(
@@ -375,7 +381,7 @@ export default function ResultsPage() {
         }
       })
       .sort((a, b) => b.total_points - a.total_points)
-  }, [teams, zoneScores, game?.end_game_bonuses])
+  }, [teams, zoneScores, game?.end_game_bonuses, revealAwards, totalsApplied])
 
   // Who won — tied if top two have same points
   const winner = scoreboard[0] ?? null
@@ -560,6 +566,7 @@ export default function ResultsPage() {
                 awards={revealAwards}
                 teams={teams}
                 step={revealStep}
+                totalsApplied={totalsApplied}
                 myTeamId={myTeam.id}
               />
             </div>
@@ -595,7 +602,7 @@ export default function ResultsPage() {
               fontSize: '4rem', fontWeight: 800,
               color: myTeam.color, lineHeight: 1, marginBottom: 8,
             }}>
-              {revealedPoints(myTeam, revealAwards, revealStep)}
+              {revealedPoints(myTeam, revealAwards, revealStep, totalsApplied)}
             </p>
             <p style={{
               fontSize: '0.72rem', color: 'var(--ink-muted)',

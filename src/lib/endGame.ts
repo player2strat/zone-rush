@@ -137,9 +137,12 @@ export function autoSelectMostZonesWithChallenges(
 }
 
 // ---------------------------------------------------------------------------
-// applyEndGameBonuses
-// Writes Side Quest points to the game doc and updates each team's total_points.
-// Reads point values from game.settings — never hardcoded.
+// applyEndGameBonuses ("Lock In")
+// Records the bonus awards on the game doc. Deliberately does NOT touch any
+// team's total_points: every player screen (including stale, cached builds)
+// reads total_points, so adding the bonus here would leak the result before
+// the reveal. Totals are updated by applyBonusTotals when the reveal reaches
+// the champion. Reads point values from game.settings — never hardcoded.
 // Safe to call once — guarded by bonuses_applied flag.
 // ---------------------------------------------------------------------------
 export async function applyEndGameBonuses(
@@ -204,9 +207,29 @@ export async function applyEndGameBonuses(
     bonuses_applied: true,
     end_game_awards: awardList,
     reveal_step: 0,
+    bonus_totals_applied: false,
   })
+}
 
-  for (const [teamId, pts] of bonusMap) {
+// ---------------------------------------------------------------------------
+// applyBonusTotals
+// Adds the locked-in bonus points to each team's total_points. Called by the
+// GM dashboard the moment the reveal reaches the champion — the first time
+// any player screen is allowed to show a post-bonus number. One-time,
+// guarded by bonus_totals_applied.
+// ---------------------------------------------------------------------------
+export async function applyBonusTotals(gameId: string): Promise<void> {
+  const gameRef = doc(db, 'games', gameId)
+  const gameSnap = await getDoc(gameRef)
+  if (!gameSnap.exists()) throw new Error('Game not found')
+  const data = gameSnap.data()
+  if (!data.bonuses_applied) throw new Error('Bonuses have not been locked in yet')
+  // Absent flag = game scored before this existed; totals already include bonuses.
+  if (data.bonus_totals_applied !== false) return
+
+  const bonuses: Record<string, number> = data.end_game_bonuses ?? {}
+  for (const [teamId, pts] of Object.entries(bonuses)) {
+    if (!pts) continue
     const teamRef = doc(db, 'games', gameId, 'teams', teamId)
     const teamSnap = await getDoc(teamRef)
     if (teamSnap.exists()) {
@@ -214,6 +237,7 @@ export async function applyEndGameBonuses(
       await updateDoc(teamRef, { total_points: current + pts })
     }
   }
+  await updateDoc(gameRef, { bonus_totals_applied: true })
 }
 // Reveal step math lives in ./reveal (pure, no Firebase) so it can be unit
 // tested; re-exported here for convenience.

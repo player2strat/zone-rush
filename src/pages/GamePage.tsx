@@ -882,13 +882,13 @@ export default function GamePage() {
                   const lockAt = st.lock_threshold ?? 10
                   const claimBonus = st.zone_bonus_points ?? 3
                   const discardLimit = st.discard_limit ?? 1
-                  const mostZonesBonus = st.most_zones_claimed_bonus ?? 8
-                  const mostChallengeZonesBonus = st.most_zones_with_challenges_bonus ?? 8
-                  const photoQuests: { title: string; bonus_points: number }[] = st.side_quests ?? []
+                  // Bonus point VALUES are deliberately not shown to players —
+                  // they're part of the post-game reveal.
+                  const photoQuests: { title: string }[] = st.side_quests ?? []
                   const sideQuestParts = [
-                    `most zones claimed (+${mostZonesBonus} pts)`,
-                    `most zones with a challenge completed (+${mostChallengeZonesBonus} pts)`,
-                    ...photoQuests.map(q => `${q.title} (+${q.bonus_points} pts)`),
+                    'most zones claimed',
+                    'most zones with a challenge completed',
+                    ...photoQuests.map(q => q.title),
                   ]
                   return [
                   {
@@ -917,7 +917,7 @@ export default function GamePage() {
                   },
                   {
                     icon: '🏆',
-                    text: `Side Quests: At the end of the game, bonus points are awarded for ${sideQuestParts.join(', ')}.`,
+                    text: `Side Quests: At the end of the game, bonus points are awarded for ${sideQuestParts.join(', ')}. How much each is worth is revealed after the game.`,
                   },
                   ]
                 })().map((rule, i) => (
