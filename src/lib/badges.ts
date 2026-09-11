@@ -6,7 +6,7 @@
 //
 // "Crew" badges reward playing with the same people again. A crew is a team
 // roster of two or more players; Reunited = the exact same roster played a
-// second game, Dynasty = a third.
+// second game, Dynasty = the tenth.
 // =============================================================================
 
 import type { GameResult } from '../types/game'
@@ -26,20 +26,21 @@ export interface BadgeStatus extends BadgeDef {
 
 export const MARATHONER_METERS = 5 * METERS_PER_MILE
 export const ZONE_BARON_ZONES = 5
-export const CHALLENGE_MACHINE = 10
+export const CHALLENGE_MACHINE = 25
+export const DYNASTY_GAMES = 10
 
 export const BADGES: BadgeDef[] = [
   { key: 'first_foray',   label: 'First Foray',      emoji: '🧭', description: 'Played your first game' },
   { key: 'regular',       label: 'Regular',          emoji: '🗓️', description: 'Played three games' },
-  { key: 'veteran',       label: 'Veteran',          emoji: '🎖️', description: 'Played ten games' },
+  { key: 'veteran',       label: 'Local',            emoji: '🗽', description: 'Played ten games — you know the city now' },
   { key: 'podium',        label: 'Podium',           emoji: '🥉', description: 'Finished in the top three' },
   { key: 'champion',      label: 'Champion',         emoji: '🏆', description: 'Won a game' },
   { key: 'serial_winner', label: 'Serial Winner',    emoji: '👑', description: 'Won three games' },
   { key: 'marathoner',    label: 'Marathoner',       emoji: '🏃', description: 'Covered five miles in one game' },
-  { key: 'zone_baron',    label: 'Zone Baron',       emoji: '🏴', description: `Claimed ${ZONE_BARON_ZONES} zones in one game` },
+  { key: 'zone_baron',    label: 'Block Boss',       emoji: '🏴', description: `Claimed ${ZONE_BARON_ZONES} zones in one game` },
   { key: 'challenge_machine', label: 'Challenge Machine', emoji: '⚡', description: `${CHALLENGE_MACHINE} challenges in one game` },
   { key: 'reunited',      label: 'Reunited',         emoji: '🤝', description: 'Played a second game with the same crew' },
-  { key: 'dynasty',       label: 'Dynasty',          emoji: '🏛️', description: 'Three games with the same crew' },
+  { key: 'dynasty',       label: 'Dynasty',          emoji: '🏛️', description: 'Ten games with the same crew' },
 ]
 
 /** Roster key: sorted member uids, only for teams of two or more. */
@@ -88,7 +89,7 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
     zone_baron:    { earned: bestZones >= ZONE_BARON_ZONES, progress: `Best ${bestZones} / ${ZONE_BARON_ZONES} zones` },
     challenge_machine: { earned: bestChallenges >= CHALLENGE_MACHINE, progress: `Best ${bestChallenges} / ${CHALLENGE_MACHINE}` },
     reunited:      { earned: crew.games >= 2, progress: `${Math.min(crew.games, 2)} / 2 games with one crew` },
-    dynasty:       { earned: crew.games >= 3, progress: `${Math.min(crew.games, 3)} / 3 games with one crew` },
+    dynasty:       { earned: crew.games >= DYNASTY_GAMES, progress: `${Math.min(crew.games, DYNASTY_GAMES)} / ${DYNASTY_GAMES} games with one crew` },
   }
 
   return BADGES.map((b) => ({ ...b, ...status[b.key] }))

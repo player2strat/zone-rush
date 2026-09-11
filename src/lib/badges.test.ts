@@ -32,7 +32,7 @@ describe('badges', () => {
   })
 
   it('single-game feats: marathoner, zone baron, challenge machine', () => {
-    const r = mk({ distance_m: 9000, zones_claimed: 5, challenges: 10, member_uids: ['me'] })
+    const r = mk({ distance_m: 9000, zones_claimed: 5, challenges: 25, member_uids: ['me'] })
     expect(earned([r])).toEqual(expect.arrayContaining(['marathoner', 'zone_baron', 'challenge_machine']))
   })
 
@@ -42,7 +42,8 @@ describe('badges', () => {
     expect(earned([crew(), other])).not.toContain('reunited')
     expect(earned([crew(), crew()])).toContain('reunited')
     expect(earned([crew(), crew()])).not.toContain('dynasty')
-    expect(earned([crew(), other, crew(), crew()])).toContain('dynasty')
+    expect(earned([...Array(9).fill(0).map(crew), other])).not.toContain('dynasty')
+    expect(earned([...Array(10).fill(0).map(crew), other])).toContain('dynasty')
     // solo games never count as a crew
     const solo = () => mk({ member_uids: ['me'], member_names: ['Me'] })
     expect(earned([solo(), solo(), solo()])).not.toContain('reunited')
