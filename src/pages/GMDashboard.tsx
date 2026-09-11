@@ -1290,8 +1290,19 @@ export default function GMDashboard() {
               const total = revealTotalSteps(awards.length, teams.length)
               const nextLabel = revealNextLabel(step, awards, teams.length)
               const done = step >= total
+              // Locked in on a build that predates the reveal: totals already
+              // include the bonuses and there's no record of who won what, so
+              // the reveal can only do standings → countdown.
+              const legacyLockIn = !game.end_game_awards
               return (
                 <div>
+                  {legacyLockIn && (
+                    <p style={{ color: 'var(--red)', fontSize: '0.82rem', lineHeight: 1.5, background: 'rgba(var(--red-rgb), 0.08)', border: '1px solid rgba(var(--red-rgb), 0.3)', borderRadius: 10, padding: '10px 12px', marginTop: -2, marginBottom: 14 }}>
+                      ⚠️ This game's bonuses were locked in on an older version of the app, so there's no record
+                      of which team won each bonus. The reveal will skip the bonus cards and go straight from
+                      standings to the countdown. Start a new game to see the full reveal.
+                    </p>
+                  )}
                   <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -2, marginBottom: 14 }}>
                     Bonus points are locked in but not yet added to team totals — that happens on the final tap,
                     so nobody can see them early. Every player's results screen — in the room or remote — follows
