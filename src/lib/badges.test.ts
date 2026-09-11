@@ -31,9 +31,20 @@ describe('badges', () => {
     expect(earned([w(), w(), w()])).toContain('serial_winner')
   })
 
-  it('single-game feats: marathoner, zone baron, challenge machine', () => {
-    const r = mk({ distance_m: 26.2 * 1609.344 + 1, zones_claimed: 5, challenges: 25, member_uids: ['me'] })
-    expect(earned([r])).toEqual(expect.arrayContaining(['marathoner', 'zone_baron', 'challenge_machine']))
+  it('single-game feats: marathoner, zone ladder, challenge machine', () => {
+    const r = mk({ distance_m: 26.2 * 1609.344 + 1, zones_claimed: 8, zones_locked: 3, challenges: 25, member_uids: ['me'] })
+    expect(earned([r])).toEqual(expect.arrayContaining(['marathoner', 'zone_baron', 'lockdown', 'challenge_machine']))
+    expect(earned([r])).not.toContain('landlord')
+    expect(earned([r])).not.toContain('fortress')
+    const big = mk({ zones_claimed: 12, zones_locked: 6, member_uids: ['me'] })
+    expect(earned([big])).toEqual(expect.arrayContaining(['zone_baron', 'landlord', 'lockdown', 'fortress']))
+  })
+
+  it('mogul adds zones across games; old records without zones_locked still work', () => {
+    const rs = Array(10).fill(0).map(() => mk({ zones_claimed: 5, member_uids: ['me'] }))
+    expect(earned(rs)).toContain('mogul')
+    expect(earned(rs.slice(0, 9))).not.toContain('mogul')
+    expect(earned(rs)).not.toContain('lockdown')
   })
 
   it('crew badges need the same roster of two or more', () => {

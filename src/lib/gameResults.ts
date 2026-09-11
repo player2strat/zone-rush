@@ -50,11 +50,15 @@ export async function recordGameResults(gameId: string): Promise<{ recorded: num
   ])
 
   const zonesByTeam = new Map<string, number>()
+  const lockedByTeam = new Map<string, number>()
   const challengesByTeam = new Map<string, number>()
   zoneScoresSnap.forEach((d) => {
     const zs = d.data()
     if (zs.status === 'claimed' || zs.status === 'locked') {
       zonesByTeam.set(zs.team_id, (zonesByTeam.get(zs.team_id) ?? 0) + 1)
+    }
+    if (zs.status === 'locked') {
+      lockedByTeam.set(zs.team_id, (lockedByTeam.get(zs.team_id) ?? 0) + 1)
     }
     const n = (zs.challenges_completed as string[] | undefined)?.length ?? 0
     challengesByTeam.set(zs.team_id, (challengesByTeam.get(zs.team_id) ?? 0) + n)
@@ -86,6 +90,7 @@ export async function recordGameResults(gameId: string): Promise<{ recorded: num
       points,
       placement_points: placementPoints(place),
       zones_claimed: zonesByTeam.get(t.id) ?? 0,
+      zones_locked: lockedByTeam.get(t.id) ?? 0,
       challenges: challengesByTeam.get(t.id) ?? 0,
       distance_m: Math.round(teamDistanceMeters(t.member_distances as Record<string, number> | undefined)),
       member_uids: members,

@@ -200,7 +200,8 @@ export interface GameResult {
   team_count: number
   points: number                  // final score, bonuses included
   placement_points: number        // 10 / 7 / 5 / 3 — leaderboard currency
-  zones_claimed: number
+  zones_claimed: number           // claimed OR locked (a locked zone is still owned)
+  zones_locked?: number           // subset of the above that reached lock (absent on early records)
   challenges: number
   distance_m: number
   member_uids: string[]

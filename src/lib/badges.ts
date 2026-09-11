@@ -26,7 +26,12 @@ export interface BadgeStatus extends BadgeDef {
 
 export const MARATHONER_MILES = 26.2
 export const MARATHONER_METERS = MARATHONER_MILES * METERS_PER_MILE
-export const ZONE_BARON_ZONES = 5
+// Zone ladder — tune freely; badges recompute on every profile load.
+export const BLOCK_BOSS_ZONES = 8        // claimed in one game
+export const LANDLORD_ZONES = 12         // claimed in one game
+export const LOCKDOWN_LOCKS = 3          // locked in one game
+export const FORTRESS_LOCKS = 6          // locked in one game
+export const MOGUL_ZONES = 50            // claimed across all games
 export const CHALLENGE_MACHINE = 25
 export const DYNASTY_GAMES = 10
 export const CREW_WINS = 2          // Repeat Offenders
@@ -40,7 +45,11 @@ export const BADGES: BadgeDef[] = [
   { key: 'champion',      label: 'Champion',         emoji: '🏆', description: 'Won a game' },
   { key: 'serial_winner', label: 'Serial Winner',    emoji: '👑', description: 'Won three games' },
   { key: 'marathoner',    label: 'Marathoner',       emoji: '🏃', description: `Covered ${MARATHONER_MILES} miles in one game` },
-  { key: 'zone_baron',    label: 'Block Boss',       emoji: '🏴', description: `Claimed ${ZONE_BARON_ZONES} zones in one game` },
+  { key: 'zone_baron',    label: 'Block Boss',       emoji: '🏴', description: `Claimed ${BLOCK_BOSS_ZONES} zones in one game` },
+  { key: 'landlord',      label: 'Landlord',         emoji: '🏢', description: `Claimed ${LANDLORD_ZONES} zones in one game` },
+  { key: 'lockdown',      label: 'Lockdown',         emoji: '🔒', description: `Locked ${LOCKDOWN_LOCKS} zones in one game` },
+  { key: 'fortress',      label: 'Fortress',         emoji: '🏰', description: `Locked ${FORTRESS_LOCKS} zones in one game` },
+  { key: 'mogul',         label: 'Real Estate Mogul', emoji: '🗺️', description: `${MOGUL_ZONES} zones claimed across all games` },
   { key: 'challenge_machine', label: 'Challenge Machine', emoji: '⚡', description: `${CHALLENGE_MACHINE} challenges in one game` },
   { key: 'reunited',      label: 'Reunited',         emoji: '🤝', description: 'Played a second game with the same crew' },
   { key: 'dynasty',       label: 'Dynasty',          emoji: '🏛️', description: 'Ten games with the same crew' },
@@ -96,6 +105,8 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
   const podiums = results.filter((r) => r.place <= 3).length
   const bestDistance = Math.max(0, ...results.map((r) => r.distance_m ?? 0))
   const bestZones = Math.max(0, ...results.map((r) => r.zones_claimed ?? 0))
+  const bestLocks = Math.max(0, ...results.map((r) => r.zones_locked ?? 0))
+  const totalZones = results.reduce((s, r) => s + (r.zones_claimed ?? 0), 0)
   const bestChallenges = Math.max(0, ...results.map((r) => r.challenges ?? 0))
   const crew = crewStreak(results)
   const crewBest = crewBests(results)
@@ -109,7 +120,11 @@ export function computeBadges(results: GameResult[]): BadgeStatus[] {
     champion:      { earned: wins >= 1,   progress: wins > 0 ? `${wins} wins` : 'No wins yet' },
     serial_winner: { earned: wins >= 3,   progress: `${Math.min(wins, 3)} / 3 wins` },
     marathoner:    { earned: bestDistance >= MARATHONER_METERS, progress: `Best ${miles(bestDistance)} / ${MARATHONER_MILES} mi` },
-    zone_baron:    { earned: bestZones >= ZONE_BARON_ZONES, progress: `Best ${bestZones} / ${ZONE_BARON_ZONES} zones` },
+    zone_baron:    { earned: bestZones >= BLOCK_BOSS_ZONES, progress: `Best ${bestZones} / ${BLOCK_BOSS_ZONES} zones` },
+    landlord:      { earned: bestZones >= LANDLORD_ZONES, progress: `Best ${bestZones} / ${LANDLORD_ZONES} zones` },
+    lockdown:      { earned: bestLocks >= LOCKDOWN_LOCKS, progress: `Best ${bestLocks} / ${LOCKDOWN_LOCKS} locked` },
+    fortress:      { earned: bestLocks >= FORTRESS_LOCKS, progress: `Best ${bestLocks} / ${FORTRESS_LOCKS} locked` },
+    mogul:         { earned: totalZones >= MOGUL_ZONES, progress: `${Math.min(totalZones, MOGUL_ZONES)} / ${MOGUL_ZONES} zones` },
     challenge_machine: { earned: bestChallenges >= CHALLENGE_MACHINE, progress: `Best ${bestChallenges} / ${CHALLENGE_MACHINE}` },
     reunited:      { earned: crew.games >= 2, progress: `${Math.min(crew.games, 2)} / 2 games with one crew` },
     dynasty:       { earned: crew.games >= DYNASTY_GAMES, progress: `${Math.min(crew.games, DYNASTY_GAMES)} / ${DYNASTY_GAMES} games with one crew` },
