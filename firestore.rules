@@ -203,6 +203,13 @@ service cloud.firestore {
       allow update, delete: if isAdminOrGm();
     }
 
+    // Permanent per-team game outcomes behind profiles, badges and the
+    // leaderboard. Written by the GM dashboard when the champion is revealed.
+    match /game_results/{resultId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrGm();
+    }
+
     // Collection-group read for teams (cross-game team lookups).
     match /{path=**}/teams/{teamId} {
       allow read: if signedIn();

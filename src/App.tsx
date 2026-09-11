@@ -21,6 +21,8 @@ import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
 import SeedMaps from './pages/SeedMaps'
 import SideQuestExplorer from './pages/SideQuestExplorer'
+import ProfilePage from './pages/ProfilePage'
+import LeaderboardPage from './pages/LeaderboardPage'
 
 // ---------------------------------------------------------------------------
 // Checks Firestore for an active game this user is part of (player or GM).
@@ -137,6 +139,9 @@ export default function App() {
         {/* Player asking to join a game that already started; GM approves from the dashboard. */}
         <Route path="/late-join/:gameId" element={<LateJoinPage />} />
         <Route path="/forays" element={<PastForaysPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/:uid" element={<ProfilePage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
 <Route
           path="/lobby/:gameId"
           element={

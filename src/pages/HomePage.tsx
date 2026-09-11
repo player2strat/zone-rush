@@ -221,10 +221,23 @@ export default function HomePage() {
       <div style={{
         marginTop: 32,
         display: 'flex',
+        flexWrap: 'wrap',
         gap: 12,
         width: '100%',
         maxWidth: 320,
       }}>
+        <button
+          onClick={() => navigate('/profile')}
+          style={secondaryButtonStyle}
+        >
+          My Profile
+        </button>
+        <button
+          onClick={() => navigate('/leaderboard')}
+          style={secondaryButtonStyle}
+        >
+          Leaderboard
+        </button>
         <button
           onClick={() => navigate('/forays')}
           style={secondaryButtonStyle}
@@ -242,7 +255,7 @@ export default function HomePage() {
   )
 }
 const secondaryButtonStyle: React.CSSProperties = {
-  flex: 1,
+  flex: '1 1 140px',
   background: 'none',
   border: 'none',
   color: 'var(--ink-muted)',

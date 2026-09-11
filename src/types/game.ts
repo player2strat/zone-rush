@@ -180,6 +180,31 @@ export interface Game {
   reveal_step?: number                       // 0 / absent = reveal not started.
                                              // The GM taps "Next" to increment; every
                                              // player screen follows it live.
+  results_recorded?: boolean                 // game_results docs written (see lib/gameResults.ts)
+}
+
+// One team's outcome in one game — top-level `game_results` collection, doc id
+// `${gameId}_${teamId}`. Written once by the GM dashboard when the champion is
+// revealed. Profiles, badges and the leaderboard are derived from these.
+export interface GameResult {
+  id: string
+  game_id: string
+  game_name: string
+  city: string
+  played_at: unknown              // Firestore Timestamp
+  team_id: string
+  team_name: string
+  team_color: string
+  place: number                   // 1 = champion (competition ranking; ties share)
+  tied: boolean
+  team_count: number
+  points: number                  // final score, bonuses included
+  placement_points: number        // 10 / 7 / 5 / 3 — leaderboard currency
+  zones_claimed: number
+  challenges: number
+  distance_m: number
+  member_uids: string[]
+  member_names: string[]          // parallel to member_uids
 }
 
 // One post-game bonus as the GM locked it in. Stored on the game doc so the

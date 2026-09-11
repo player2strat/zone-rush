@@ -60,6 +60,7 @@ import {
   revealNextLabel,
   applyBonusTotals,
 } from '../lib/endGame'
+import { recordGameResults } from '../lib/gameResults'
 import {
   logEvent,
   getActivityLog,
@@ -94,6 +95,7 @@ interface GameData {
     end_game_awards?: EndGameAward[]
     reveal_step?: number
     bonus_totals_applied?: boolean
+    results_recorded?: boolean
     milestone_broadcasts_sent?: string[]
 }
 
@@ -842,10 +844,36 @@ export default function GMDashboard() {
       if (clamped === total && game.bonus_totals_applied === false) {
         await applyBonusTotals(gameId)
       }
+      // Champion revealed → write the permanent record behind profiles and
+      // the leaderboard. Separate try so a hiccup here never blocks the reveal;
+      // the panel offers a Record button to retry.
+      if (clamped === total && !game.results_recorded) {
+        try {
+          await recordGameResults(gameId)
+        } catch (err) {
+          toast.error('Reveal done, but results were not recorded: ' + (err as Error).message)
+        }
+      }
     } catch (err) {
       toast.error('Could not advance the reveal: ' + (err as Error).message, { retry: () => setRevealStep(next) })
     } finally {
       setRevealBusy(false)
+    }
+  }
+
+  // Manual/backfill: record results for a game that ended before this
+  // existed, or whose automatic recording failed.
+  const [recordingResults, setRecordingResults] = useState(false)
+  const handleRecordResults = async () => {
+    if (!gameId || recordingResults) return
+    setRecordingResults(true)
+    try {
+      const r = await recordGameResults(gameId)
+      toast.success(r.skipped ? 'Results were already recorded.' : `Recorded results for ${r.recorded} teams.`)
+    } catch (err) {
+      toast.error('Could not record results: ' + (err as Error).message, { retry: handleRecordResults })
+    } finally {
+      setRecordingResults(false)
     }
   }
 
@@ -1338,6 +1366,26 @@ export default function GMDashboard() {
                       </button>
                     )}
                   </div>
+
+                  {/* Permanent record → profiles, badges, leaderboard */}
+                  {(game.bonus_totals_applied ?? true) && (
+                    <p style={{ fontSize: '0.78rem', color: game.results_recorded ? 'var(--green)' : 'var(--ink-muted)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      {game.results_recorded
+                        ? '✅ Results recorded — player profiles and the leaderboard are updated.'
+                        : (
+                          <>
+                            <span>Results not yet recorded for profiles and the leaderboard.</span>
+                            <button
+                              onClick={handleRecordResults}
+                              disabled={recordingResults}
+                              style={{ background: 'rgba(var(--ink-rgb), 0.04)', border: '1px solid var(--line-strong)', color: 'var(--ink-soft)', padding: '6px 12px', borderRadius: 8, fontSize: '0.76rem', fontWeight: 700, cursor: recordingResults ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                            >
+                              {recordingResults ? 'Recording…' : 'Record results now'}
+                            </button>
+                          </>
+                        )}
+                    </p>
+                  )}
 
                   {/* Players' live reactions float up the right edge of this screen too */}
                   {gameId && step > 0 && <ReactionOverlay gameId={gameId} />}
