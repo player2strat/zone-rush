@@ -47,7 +47,8 @@ export const MAX_HIGHLIGHTS = 12
 const BRAND = { paper: '#FDFFF1', ink: '#202122', marigold: '#FFD626', marigoldDeep: '#7A6400' }
 const HEAD = 'Martian Mono'
 const BODY = 'Inter'
-const LOGO_PATH = '/brand/logo-wide.png'   // served from the app itself
+const LOGO_PATH = '/brand/logo-wide.png'          // static wordmark (watermark, outro)
+const LOGO_ANIM_PATH = '/brand/logo-animated.gif' // letters pop in one by one (intro)
 
 interface SubmissionLike {
   status?: string
@@ -123,6 +124,7 @@ export function buildReelSource(
 ) {
   const elements: Record<string, unknown>[] = []
   const logoUrl = `${assetBase}${LOGO_PATH}`
+  const logoAnimUrl = `${assetBase}${LOGO_ANIM_PATH}`
   let t = 0
 
   // Intro card: team color, logo, team name, game name
@@ -130,10 +132,11 @@ export function buildReelSource(
     type: 'shape', time: t, duration: INTRO_SECONDS, width: '100%', height: '100%',
     x: '50%', y: '50%', fill_color: team.color, path: 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
   })
+  // The animated wordmark (GIF, transparent) plays as a video layer; when it
+  // ends it holds its last frame for the rest of the card.
   elements.push({
-    type: 'image', source: logoUrl, time: t, duration: INTRO_SECONDS, fit: 'contain',
+    type: 'video', source: logoAnimUrl, time: t, duration: INTRO_SECONDS, fit: 'contain', loop: false,
     x: '50%', y: '30%', width: '64%', height: '10%',
-    animations: [{ type: 'fade', duration: 0.5 }],
   })
   elements.push({
     type: 'text', text: team.name.toUpperCase(), time: t, duration: INTRO_SECONDS,
