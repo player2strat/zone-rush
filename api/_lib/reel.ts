@@ -93,9 +93,10 @@ function captionElement(text: string, time: number, duration: number) {
     font_size: '3.6 vmin',
     fill_color: '#FFFFFF',
     background_color: 'rgba(32, 33, 34, 0.72)',
-    background_x_padding: '4 vmin',
-    background_y_padding: '2 vmin',
-    background_border_radius: '2.5 vmin',
+    // Creatomate wants these as percentages (of the font size), not screen units.
+    background_x_padding: '40%',
+    background_y_padding: '25%',
+    background_border_radius: '30%',
     animations: [{ type: 'fade', duration: 0.4, transition: true }],
   }
 }
