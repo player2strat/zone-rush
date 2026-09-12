@@ -42,6 +42,7 @@ export async function recordGameResults(gameId: string): Promise<{ recorded: num
   if (!gameSnap.exists()) throw new Error('Game not found')
   const game = gameSnap.data()
   if (game.results_recorded) return { recorded: 0, skipped: true }
+  if (game.practice) return { recorded: 0, skipped: true }   // rehearsals never count
   if (game.status !== 'ended') throw new Error('Game has not ended')
 
   const [teamsSnap, zoneScoresSnap] = await Promise.all([
@@ -111,6 +112,32 @@ export async function recordGameResults(gameId: string): Promise<{ recorded: num
   batch.update(gameRef, { results_recorded: true })
   await batch.commit()
   return { recorded, skipped: false }
+}
+
+/**
+ * Reverse of recordGameResults: deletes the game's result docs, takes the
+ * game back out of every member's games_played / games_won, and clears the
+ * recorded flag. Used when a test game slipped onto the leaderboard.
+ */
+export async function unrecordGameResults(gameId: string): Promise<{ removed: number }> {
+  const snap = await getDocs(query(collection(db, 'game_results'), where('game_id', '==', gameId)))
+  const batch = writeBatch(db)
+  let removed = 0
+  snap.forEach((d) => {
+    const r = d.data() as GameResult
+    for (const uid of r.member_uids ?? []) {
+      batch.set(
+        doc(db, 'users', uid),
+        { games_played: increment(-1), games_won: increment(r.place === 1 ? -1 : 0) },
+        { merge: true },
+      )
+    }
+    batch.delete(d.ref)
+    removed++
+  })
+  batch.update(doc(db, 'games', gameId), { results_recorded: false })
+  await batch.commit()
+  return { removed }
 }
 
 /** Every result a player was part of, newest first. */

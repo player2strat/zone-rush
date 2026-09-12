@@ -181,6 +181,8 @@ export interface Game {
                                              // The GM taps "Next" to increment; every
                                              // player screen follows it live.
   results_recorded?: boolean                 // game_results docs written (see lib/gameResults.ts)
+  practice?: boolean                         // test/rehearsal game: never recorded for
+                                             // profiles or the leaderboard (GM can flip it)
 }
 
 // One team's outcome in one game — top-level `game_results` collection, doc id

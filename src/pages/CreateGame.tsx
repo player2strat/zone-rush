@@ -111,6 +111,7 @@ export default function CreateGame() {
   // Step 1: Basics
   const [gameName, setGameName] = useState('')
   const [maxTeams, setMaxTeams] = useState(3)
+  const [practice, setPractice] = useState(false)   // rehearsal: never hits profiles/leaderboard
   const [teamSize, setTeamSize] = useState(3)
   const [durationMinutes, setDurationMinutes] = useState(180)
 
@@ -342,6 +343,7 @@ export default function CreateGame() {
         created_by: user.uid,
         join_code: joinCode,
         max_teams: maxTeams,
+        practice,
         zones: selectedZones,
         // Zones with a scheduled opening start the game closed; the opening
         // check releases them once their time arrives.
@@ -495,6 +497,29 @@ export default function CreateGame() {
                 autoFocus
               />
             </div>
+
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 20,
+              background: practice ? 'rgba(var(--marigold-rgb), 0.12)' : 'rgba(var(--ink-rgb), 0.02)',
+              border: `1px solid ${practice ? 'rgba(var(--marigold-rgb), 0.5)' : 'var(--line)'}`,
+              borderRadius: 12, padding: '12px 14px', cursor: 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={practice}
+                onChange={(e) => setPractice(e.target.checked)}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <span style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', color: 'var(--ink)' }}>
+                  🧪 Practice game
+                </span>
+                <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--ink-muted)', lineHeight: 1.45, marginTop: 2 }}>
+                  For testing and rehearsals. Everything works as normal, but nothing from this game
+                  counts toward player profiles, badges, or the leaderboard.
+                </span>
+              </span>
+            </label>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
               <SettingInput label="Teams" value={maxTeams} onChange={setMaxTeams} min={1} max={8} />

@@ -60,7 +60,7 @@ import {
   revealNextLabel,
   applyBonusTotals,
 } from '../lib/endGame'
-import { recordGameResults } from '../lib/gameResults'
+import { recordGameResults, unrecordGameResults } from '../lib/gameResults'
 import { requestReelRender, type ReelFields } from '../lib/reels'
 import {
   logEvent,
@@ -97,6 +97,7 @@ interface GameData {
     reveal_step?: number
     bonus_totals_applied?: boolean
     results_recorded?: boolean
+    practice?: boolean
     milestone_broadcasts_sent?: string[]
 }
 
@@ -904,6 +905,28 @@ export default function GMDashboard() {
     }
   }
 
+  // Practice flag: flip a game in or out of the permanent record.
+  const [togglingPractice, setTogglingPractice] = useState(false)
+  const handleSetPractice = async (practice: boolean) => {
+    if (!gameId || !game || togglingPractice) return
+    if (practice && game.results_recorded) {
+      if (!window.confirm('Remove this game from every player\'s profile and the leaderboard?')) return
+    }
+    setTogglingPractice(true)
+    try {
+      if (practice && game.results_recorded) {
+        const r = await unrecordGameResults(gameId)
+        toast.success(`Removed ${r.removed} team results from profiles and the leaderboard.`)
+      }
+      await updateDoc(doc(db, 'games', gameId), { practice })
+      if (!practice) toast.info('This game now counts. Use "Record results now" to add it to profiles and the leaderboard.')
+    } catch (err) {
+      toast.error('Could not update the practice flag: ' + (err as Error).message)
+    } finally {
+      setTogglingPractice(false)
+    }
+  }
+
   const getReviewState = (subId: string) =>
     reviewState.get(subId) || { tier2Approved: false, phoneFreeBonus: 0, notes: '' }
 
@@ -1259,7 +1282,14 @@ export default function GMDashboard() {
               {game.status.toUpperCase()}
             </span>
           </div>
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>{game.name}</h1>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
+            {game.name}
+            {game.practice && (
+              <span style={{ marginLeft: 8, fontSize: '0.62rem', fontWeight: 800, letterSpacing: 1, color: 'var(--marigold-deep)', background: 'rgba(var(--marigold-rgb), 0.18)', padding: '3px 8px', borderRadius: 999, verticalAlign: 'middle' }}>
+                PRACTICE
+              </span>
+            )}
+          </h1>
           <p style={{ fontSize: '0.75rem', color: 'var(--ink-faint)', marginTop: 2 }}>
             Code: <span style={{ color: 'var(--ink-muted)', fontFamily: "'Martian Mono', monospace" }}>{game.join_code}</span>
             {' · '}{teams.length} team{teams.length !== 1 ? 's' : ''}
@@ -1397,8 +1427,30 @@ export default function GMDashboard() {
                   {/* Permanent record → profiles, badges, leaderboard */}
                   {(game.bonus_totals_applied ?? true) && (
                     <p style={{ fontSize: '0.78rem', color: game.results_recorded ? 'var(--green)' : 'var(--ink-muted)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      {game.results_recorded
-                        ? '✅ Results recorded — player profiles and the leaderboard are updated.'
+                      {game.practice ? (
+                        <>
+                          <span style={{ color: 'var(--marigold-deep)' }}>🧪 Practice game — not recorded for profiles or the leaderboard.</span>
+                          <button
+                            onClick={() => handleSetPractice(false)}
+                            disabled={togglingPractice}
+                            style={{ background: 'none', border: 'none', color: 'var(--ink-ghost)', fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}
+                          >
+                            Make it count
+                          </button>
+                        </>
+                      ) : game.results_recorded
+                        ? (
+                          <>
+                            <span>✅ Results recorded — player profiles and the leaderboard are updated.</span>
+                            <button
+                              onClick={() => handleSetPractice(true)}
+                              disabled={togglingPractice}
+                              style={{ background: 'none', border: 'none', color: 'var(--ink-ghost)', fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}
+                            >
+                              {togglingPractice ? 'Removing…' : 'This was a test — remove from leaderboard'}
+                            </button>
+                          </>
+                        )
                         : (
                           <>
                             <span>Results not yet recorded for profiles and the leaderboard.</span>
@@ -1408,6 +1460,13 @@ export default function GMDashboard() {
                               style={{ background: 'rgba(var(--ink-rgb), 0.04)', border: '1px solid var(--line-strong)', color: 'var(--ink-soft)', padding: '6px 12px', borderRadius: 8, fontSize: '0.76rem', fontWeight: 700, cursor: recordingResults ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                             >
                               {recordingResults ? 'Recording…' : 'Record results now'}
+                            </button>
+                            <button
+                              onClick={() => handleSetPractice(true)}
+                              disabled={togglingPractice}
+                              style={{ background: 'none', border: 'none', color: 'var(--ink-ghost)', fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}
+                            >
+                              Mark as practice
                             </button>
                           </>
                         )}
