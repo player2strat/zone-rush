@@ -1,8 +1,8 @@
 // =============================================================================
 // Foray — highlight reel building blocks (server only)
 //
-// Typeface: Martian Mono throughout (a Google Font, so Creatomate loads it by
-// name) — the same face the app uses for headings.
+// Typefaces mirror the app: Martian Mono (Google Font) for headings and
+// labels, Inter (Google Font, the usual Helvetica stand-in) for captions.
 //
 // pickHighlights   which of a team's submissions go in the reel
 // buildReelSource  a Creatomate composition (9:16, 30fps) built in code, so a
@@ -26,6 +26,9 @@ export interface ReelTeam {
   color: string
   place: number | null
   points: number
+  zonesClaimed: number
+  challenges: number
+  distanceM: number
   memberUids: string[]
 }
 
@@ -42,6 +45,9 @@ export const OUTRO_SECONDS = 3.5
 export const MAX_HIGHLIGHTS = 12
 
 const BRAND = { paper: '#FDFFF1', ink: '#202122', marigold: '#FFD626', marigoldDeep: '#7A6400' }
+const HEAD = 'Martian Mono'
+const BODY = 'Inter'
+const LOGO_PATH = '/brand/logo-wide.png'   // served from the app itself
 
 interface SubmissionLike {
   status?: string
@@ -91,7 +97,7 @@ function captionElement(text: string, time: number, duration: number) {
     width: '86%',
     x_alignment: '50%',
     y_alignment: '50%',
-    font_family: 'Martian Mono',
+    font_family: BODY,
     font_weight: '700',
     font_size: '3.6 vmin',
     fill_color: '#FFFFFF',
@@ -112,27 +118,37 @@ function captionElement(text: string, time: number, duration: number) {
  * element schema; if their API rejects a property the render fails with a
  * message that lands in the team's reel_error for tuning.
  */
-export function buildReelSource(game: ReelGame, team: ReelTeam, media: ReelMedia[], musicUrl?: string) {
+export function buildReelSource(
+  game: ReelGame, team: ReelTeam, media: ReelMedia[], musicUrl?: string, assetBase = 'https://foray-city.vercel.app',
+) {
   const elements: Record<string, unknown>[] = []
+  const logoUrl = `${assetBase}${LOGO_PATH}`
   let t = 0
 
-  // Intro card
+  // Intro card: team color, logo, team name, game name
   elements.push({
     type: 'shape', time: t, duration: INTRO_SECONDS, width: '100%', height: '100%',
     x: '50%', y: '50%', fill_color: team.color, path: 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
   })
   elements.push({
+    type: 'image', source: logoUrl, time: t, duration: INTRO_SECONDS, fit: 'contain',
+    x: '50%', y: '30%', width: '64%', height: '10%',
+    animations: [{ type: 'fade', duration: 0.5 }],
+  })
+  elements.push({
     type: 'text', text: team.name.toUpperCase(), time: t, duration: INTRO_SECONDS,
-    x: '50%', y: '46%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '800', font_size: '9 vmin', fill_color: '#FFFFFF',
+    x: '50%', y: '50%', width: '86%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '800', font_size: '7.5 vmin', fill_color: '#FFFFFF',
+    shadow_color: 'rgba(0,0,0,0.25)', shadow_blur: '1.5 vmin',
     animations: [{ type: 'scale', start_scale: '80%', end_scale: '100%', duration: 0.6, easing: 'quadratic-out' }],
   })
   elements.push({
-    type: 'text', text: `FORAY · ${game.name.toUpperCase()}`, time: t, duration: INTRO_SECONDS,
-    x: '50%', y: '58%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '600', font_size: '3.4 vmin', fill_color: 'rgba(255,255,255,0.85)',
+    type: 'text', text: game.name.toUpperCase(), time: t, duration: INTRO_SECONDS,
+    x: '50%', y: '61%', width: '86%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '600', font_size: '3.2 vmin', fill_color: 'rgba(255,255,255,0.85)',
   })
   t += INTRO_SECONDS
+  const highlightsStart = t
 
   // Highlights. Clip audio plays in full when there's no music bed, and is
   // ducked under the music when there is one.
@@ -159,31 +175,57 @@ export function buildReelSource(game: ReelGame, team: ReelTeam, media: ReelMedia
     t += dur
   }
 
-  // Outro card
-  const placeLine = team.place ? `${ordinal(team.place).toUpperCase()} PLACE · ${team.points} PTS` : `${team.points} PTS`
+  // Corner watermark across every highlight slide: the logo plus team name
+  if (t > highlightsStart) {
+    elements.push({
+      type: 'image', source: logoUrl, time: highlightsStart, duration: t - highlightsStart, fit: 'contain',
+      x: '17%', y: '5%', width: '28%', height: '4.5%',
+    })
+    elements.push({
+      type: 'text', text: team.name, time: highlightsStart, duration: t - highlightsStart,
+      x: '96%', y: '5%', width: '60%', x_anchor: '100%', y_anchor: '50%', x_alignment: '100%', y_alignment: '50%',
+      font_family: HEAD, font_weight: '700', font_size: '2.4 vmin', fill_color: '#FFFFFF',
+      shadow_color: 'rgba(0,0,0,0.5)', shadow_blur: '1 vmin',
+    })
+  }
+
+  // Outro card: paper, logo, team name, place, stats, date
+  const placeLine = team.place ? `${ordinal(team.place).toUpperCase()} PLACE` : 'FINAL'
+  const miles = team.distanceM / 1609.344
+  const stats = [
+    `${team.points} PTS`,
+    `${team.zonesClaimed} ZONE${team.zonesClaimed === 1 ? '' : 'S'}`,
+    `${team.challenges} CHALLENGE${team.challenges === 1 ? '' : 'S'}`,
+    ...(miles >= 0.1 ? [`${miles.toFixed(1)} MI`] : []),
+  ].join('  ·  ')
   elements.push({
     type: 'shape', time: t, duration: OUTRO_SECONDS, width: '100%', height: '100%',
     x: '50%', y: '50%', fill_color: BRAND.paper, path: 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
   })
   elements.push({
-    type: 'text', text: 'FORAY', time: t, duration: OUTRO_SECONDS,
-    x: '50%', y: '38%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '800', font_size: '10 vmin', fill_color: BRAND.ink,
+    type: 'image', source: logoUrl, time: t, duration: OUTRO_SECONDS, fit: 'contain',
+    x: '50%', y: '30%', width: '64%', height: '10%',
   })
   elements.push({
     type: 'text', text: team.name, time: t, duration: OUTRO_SECONDS,
-    x: '50%', y: '50%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '800', font_size: '6 vmin', fill_color: team.color,
+    x: '50%', y: '45%', width: '86%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '800', font_size: '6 vmin', fill_color: team.color,
+    animations: [{ type: 'scale', start_scale: '85%', end_scale: '100%', duration: 0.5, easing: 'quadratic-out' }],
   })
   elements.push({
     type: 'text', text: placeLine, time: t, duration: OUTRO_SECONDS,
-    x: '50%', y: '58%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '700', font_size: '3.6 vmin', fill_color: BRAND.marigoldDeep,
+    x: '50%', y: '54%', width: '86%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '800', font_size: '8 vmin', fill_color: BRAND.ink,
+  })
+  elements.push({
+    type: 'text', text: stats, time: t, duration: OUTRO_SECONDS,
+    x: '50%', y: '63%', width: '90%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '600', font_size: '2.6 vmin', fill_color: BRAND.marigoldDeep,
   })
   elements.push({
     type: 'text', text: `${game.dateLabel.toUpperCase()} · CLAIM THE CITY`, time: t, duration: OUTRO_SECONDS,
-    x: '50%', y: '70%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Martian Mono', font_weight: '600', font_size: '2.8 vmin', fill_color: 'rgba(32,33,34,0.6)',
+    x: '50%', y: '74%', width: '86%', x_alignment: '50%', y_alignment: '50%',
+    font_family: HEAD, font_weight: '600', font_size: '2.4 vmin', fill_color: 'rgba(32,33,34,0.6)',
   })
   t += OUTRO_SECONDS
 
@@ -209,6 +251,9 @@ export function buildTemplateModifications(game: ReelGame, team: ReelTeam, media
     'Date.text': game.dateLabel,
     'Place.text': team.place ? `${ordinal(team.place)} place` : '',
     'Points.text': `${team.points} pts`,
+    'Zones.text': `${team.zonesClaimed} zones`,
+    'Challenges.text': `${team.challenges} challenges`,
+    'Miles.text': team.distanceM >= 161 ? `${(team.distanceM / 1609.344).toFixed(1)} mi` : '',
   }
   media.forEach((m, i) => {
     mods[`Highlight${i + 1}.source`] = m.url

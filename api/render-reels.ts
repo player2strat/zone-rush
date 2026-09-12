@@ -48,8 +48,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db.collection('submissions').where('game_id', '==', gameId).get(),
       db.collection('game_results').where('game_id', '==', gameId).get(),
     ])
-    const placeByTeam = new Map<string, number>()
-    resultsSnap.forEach((d) => placeByTeam.set(d.data().team_id, d.data().place))
+    // Stats from the permanent record (present once results are recorded;
+    // practice games fall back to the team doc's totals and zero counts).
+    const statsByTeam = new Map<string, { place: number; zones: number; challenges: number; distance: number }>()
+    resultsSnap.forEach((d) => {
+      const r = d.data()
+      statsByTeam.set(r.team_id, {
+        place: r.place, zones: r.zones_claimed ?? 0, challenges: r.challenges ?? 0, distance: r.distance_m ?? 0,
+      })
+    })
 
     // Challenge titles + zone names for captions (small collections; two reads)
     const challengeIds = [...new Set(subsSnap.docs.map((d) => d.data().challenge_id as string).filter(Boolean))]
@@ -64,6 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mock = process.env.REEL_MOCK === '1' || !process.env.CREATOMATE_API_KEY
     const host = req.headers['x-forwarded-host'] ?? req.headers.host
     const proto = (req.headers['x-forwarded-proto'] as string) ?? 'https'
+    const assetBase = `${proto}://${host}`
     const secret = process.env.REEL_WEBHOOK_SECRET ?? ''
     const webhookUrl = `${proto}://${host}/api/reel-webhook?secret=${encodeURIComponent(secret)}`
 
@@ -88,12 +96,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         continue
       }
 
+      const st = statsByTeam.get(teamDoc.id)
       const reelTeam: ReelTeam = {
         id: teamDoc.id,
         name: (t.name as string) ?? 'Team',
         color: (t.color as string) ?? '#1EB2F2',
-        place: placeByTeam.get(teamDoc.id) ?? null,
+        place: st?.place ?? null,
         points: (t.total_points as number) ?? 0,
+        zonesClaimed: st?.zones ?? 0,
+        challenges: st?.challenges ?? 0,
+        distanceM: st?.distance ?? Math.max(0, ...Object.values((t.member_distances as Record<string, number>) ?? {})),
         memberUids: (t.members as string[]) ?? [],
       }
 
@@ -114,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const templateId = process.env.CREATOMATE_TEMPLATE_ID
         const body: Record<string, unknown> = templateId
           ? { template_id: templateId, modifications: buildTemplateModifications(reelGame, reelTeam, media) }
-          : { source: buildReelSource(reelGame, reelTeam, media, process.env.REEL_MUSIC_URL) }
+          : { source: buildReelSource(reelGame, reelTeam, media, process.env.REEL_MUSIC_URL, assetBase) }
         body.webhook_url = webhookUrl
         body.metadata = JSON.stringify({ gameId, teamId: teamDoc.id })
         const render = await createRender(body)
