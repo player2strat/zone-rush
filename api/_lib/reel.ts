@@ -1,6 +1,9 @@
 // =============================================================================
 // Foray — highlight reel building blocks (server only)
 //
+// Typeface: Martian Mono throughout (a Google Font, so Creatomate loads it by
+// name) — the same face the app uses for headings.
+//
 // pickHighlights   which of a team's submissions go in the reel
 // buildReelSource  a Creatomate composition (9:16, 30fps) built in code, so a
 //                  reel renders with no template designed up front. When
@@ -88,7 +91,7 @@ function captionElement(text: string, time: number, duration: number) {
     width: '86%',
     x_alignment: '50%',
     y_alignment: '50%',
-    font_family: 'Helvetica',
+    font_family: 'Martian Mono',
     font_weight: '700',
     font_size: '3.6 vmin',
     fill_color: '#FFFFFF',
@@ -97,6 +100,8 @@ function captionElement(text: string, time: number, duration: number) {
     background_x_padding: '40%',
     background_y_padding: '25%',
     background_border_radius: '30%',
+    shadow_color: 'rgba(0,0,0,0.35)',
+    shadow_blur: '2 vmin',
     animations: [{ type: 'fade', duration: 0.4, transition: true }],
   }
 }
@@ -119,13 +124,13 @@ export function buildReelSource(game: ReelGame, team: ReelTeam, media: ReelMedia
   elements.push({
     type: 'text', text: team.name.toUpperCase(), time: t, duration: INTRO_SECONDS,
     x: '50%', y: '46%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '800', font_size: '9 vmin', fill_color: '#FFFFFF',
+    font_family: 'Martian Mono', font_weight: '800', font_size: '9 vmin', fill_color: '#FFFFFF',
     animations: [{ type: 'scale', start_scale: '80%', end_scale: '100%', duration: 0.6, easing: 'quadratic-out' }],
   })
   elements.push({
     type: 'text', text: `FORAY · ${game.name.toUpperCase()}`, time: t, duration: INTRO_SECONDS,
     x: '50%', y: '58%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '600', font_size: '3.4 vmin', fill_color: 'rgba(255,255,255,0.85)',
+    font_family: 'Martian Mono', font_weight: '600', font_size: '3.4 vmin', fill_color: 'rgba(255,255,255,0.85)',
   })
   t += INTRO_SECONDS
 
@@ -163,22 +168,22 @@ export function buildReelSource(game: ReelGame, team: ReelTeam, media: ReelMedia
   elements.push({
     type: 'text', text: 'FORAY', time: t, duration: OUTRO_SECONDS,
     x: '50%', y: '38%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '800', font_size: '10 vmin', fill_color: BRAND.ink,
+    font_family: 'Martian Mono', font_weight: '800', font_size: '10 vmin', fill_color: BRAND.ink,
   })
   elements.push({
     type: 'text', text: team.name, time: t, duration: OUTRO_SECONDS,
     x: '50%', y: '50%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '800', font_size: '6 vmin', fill_color: team.color,
+    font_family: 'Martian Mono', font_weight: '800', font_size: '6 vmin', fill_color: team.color,
   })
   elements.push({
     type: 'text', text: placeLine, time: t, duration: OUTRO_SECONDS,
     x: '50%', y: '58%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '700', font_size: '3.6 vmin', fill_color: BRAND.marigoldDeep,
+    font_family: 'Martian Mono', font_weight: '700', font_size: '3.6 vmin', fill_color: BRAND.marigoldDeep,
   })
   elements.push({
     type: 'text', text: `${game.dateLabel.toUpperCase()} · CLAIM THE CITY`, time: t, duration: OUTRO_SECONDS,
     x: '50%', y: '70%', width: '86%', x_alignment: '50%', y_alignment: '50%',
-    font_family: 'Helvetica', font_weight: '600', font_size: '2.8 vmin', fill_color: 'rgba(32,33,34,0.6)',
+    font_family: 'Martian Mono', font_weight: '600', font_size: '2.8 vmin', fill_color: 'rgba(32,33,34,0.6)',
   })
   t += OUTRO_SECONDS
 
