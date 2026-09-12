@@ -129,12 +129,14 @@ export function buildReelSource(game: ReelGame, team: ReelTeam, media: ReelMedia
   })
   t += INTRO_SECONDS
 
-  // Highlights
+  // Highlights. Clip audio plays in full when there's no music bed, and is
+  // ducked under the music when there is one.
+  const clipVolume = musicUrl ? '25%' : '100%'
   for (const m of media) {
     const dur = m.type === 'video' ? VIDEO_MAX_SECONDS : PHOTO_SECONDS
     if (m.type === 'video') {
       elements.push({
-        type: 'video', source: m.url, time: t, duration: dur, fit: 'cover', trim_start: 0, volume: '0%',
+        type: 'video', source: m.url, time: t, duration: dur, fit: 'cover', trim_start: 0, volume: clipVolume,
         x: '50%', y: '50%', width: '100%', height: '100%',
         animations: [{ type: 'fade', duration: 0.5, transition: true }],
       })
