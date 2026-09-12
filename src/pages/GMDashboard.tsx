@@ -1473,8 +1473,8 @@ export default function GMDashboard() {
                     </p>
                   )}
 
-                  {/* Highlight reels — per-team render status */}
-                  {game.results_recorded && (
+                  {/* Highlight reels — per-team render status (any ended game with bonuses locked in) */}
+                  {(game.bonus_totals_applied ?? true) && (
                     <div style={{ background: 'rgba(var(--pink-rgb), 0.04)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: teams.length ? 8 : 0 }}>
                         <p style={{ fontSize: '0.7rem', color: 'var(--pink)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0 }}>
