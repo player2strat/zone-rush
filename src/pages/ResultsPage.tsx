@@ -38,6 +38,7 @@ import { renderRecapCard } from '../lib/recapCard'
 import { renderZoneMapCard, type ZoneMapCardOwner } from '../lib/zoneMapCard'
 import RecapCarousel, { type RecapCardSpec } from '../components/RecapCarousel'
 import { teamDistanceMeters, formatDistance } from '../lib/distance'
+import { shareReel, type ReelFields } from '../lib/reels'
 import type { EndGameAward } from '../types/game'
 
 // --------------- Types ---------------
@@ -64,7 +65,7 @@ interface GameData {
   }
 }
 
-interface TeamData {
+interface TeamData extends ReelFields {
   id: string
   name: string
   color: string
@@ -212,6 +213,10 @@ export default function ResultsPage() {
   const onChampionShown = useCallback((team: { color: string }) => {
     setChampionShown({ key: `champion-${Date.now()}`, color: team.color })
   }, [])
+
+  // Highlight reel share state (player view)
+  const [sharingReel, setSharingReel] = useState(false)
+  const [reelNote, setReelNote] = useState<string | null>(null)
 
   // Load this game's zone snapshot (falls back to the library for old games)
   useEffect(() => {
@@ -802,6 +807,71 @@ export default function ResultsPage() {
                 ? '👀 The GM is revealing the results live. Keep this screen open.'
                 : '🏁 Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.'}
           </div>
+
+          {/* ====== HIGHLIGHT REEL (arrives a few minutes after the reveal) ====== */}
+          {revealDone && myTeam.reel_status && myTeam.reel_status !== 'skipped' && (
+            <div className="results-section" style={{ animationDelay: '0.22s', marginBottom: 28 }}>
+              <p style={{
+                fontSize: '0.72rem', color: 'var(--pink)',
+                textTransform: 'uppercase', letterSpacing: 1.5,
+                fontWeight: 700, marginBottom: 14,
+              }}>
+                🎬 Your highlight reel
+              </p>
+              {myTeam.reel_status === 'ready' && myTeam.reel_url ? (
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+                  <video
+                    src={myTeam.reel_url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    style={{ width: '100%', display: 'block', background: '#000', aspectRatio: '9 / 16', maxHeight: 520, objectFit: 'contain' }}
+                  />
+                  <div style={{ padding: 12 }}>
+                    <button
+                      onClick={async () => {
+                        if (sharingReel) return
+                        setSharingReel(true); setReelNote(null)
+                        try {
+                          const r = await shareReel(myTeam.reel_url!, myTeam.name)
+                          if (r === 'opened') setReelNote('Opened in a new tab — use Save or Share there.')
+                        } catch (err) {
+                          setReelNote('Could not share: ' + (err as Error).message)
+                        } finally {
+                          setSharingReel(false)
+                        }
+                      }}
+                      disabled={sharingReel}
+                      style={{
+                        width: '100%', background: myTeam.color, border: 'none', color: '#fff',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.25)', padding: '13px 20px', borderRadius: 12,
+                        fontSize: '0.92rem', fontWeight: 800, cursor: sharingReel ? 'wait' : 'pointer', fontFamily: 'inherit',
+                        opacity: sharingReel ? 0.7 : 1,
+                      }}
+                    >
+                      {sharingReel ? 'Preparing…' : '📤 Share your reel'}
+                    </button>
+                    {myTeam.reel_mock && (
+                      <p style={{ color: 'var(--ink-faint)', fontSize: '0.72rem', textAlign: 'center', margin: '8px 0 0' }}>
+                        Sample video — the reel service isn't connected yet.
+                      </p>
+                    )}
+                    {reelNote && (
+                      <p style={{ color: 'var(--ink-muted)', fontSize: '0.76rem', textAlign: 'center', margin: '8px 0 0' }}>{reelNote}</p>
+                    )}
+                  </div>
+                </div>
+              ) : myTeam.reel_status === 'rendering' ? (
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--pink-rgb), 0.05)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 12 }}>
+                  ⏳ Your reel is rendering. It takes a few minutes — it'll appear here and we'll email you when it's ready.
+                </p>
+              ) : (
+                <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 12 }}>
+                  We couldn't build this reel. The GM can retry from the dashboard.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ====== SHARE CARDS (after the champion is revealed) ====== */}
           {revealDone && shareCards.length > 0 && (

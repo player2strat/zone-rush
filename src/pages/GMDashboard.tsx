@@ -61,6 +61,7 @@ import {
   applyBonusTotals,
 } from '../lib/endGame'
 import { recordGameResults } from '../lib/gameResults'
+import { requestReelRender, type ReelFields } from '../lib/reels'
 import {
   logEvent,
   getActivityLog,
@@ -99,7 +100,7 @@ interface GameData {
     milestone_broadcasts_sent?: string[]
 }
 
-interface TeamData {
+interface TeamData extends ReelFields {
   id: string
   name: string
   members: string[]
@@ -854,6 +855,14 @@ export default function GMDashboard() {
           toast.error('Reveal done, but results were not recorded: ' + (err as Error).message)
         }
       }
+      // …and kick off the highlight reels (server-side render, minutes).
+      if (clamped === total && !teams.some((t) => t.reel_status)) {
+        try {
+          await requestReelRender(gameId)
+        } catch (err) {
+          toast.error('Reveal done, but reels did not start: ' + (err as Error).message)
+        }
+      }
     } catch (err) {
       toast.error('Could not advance the reveal: ' + (err as Error).message, { retry: () => setRevealStep(next) })
     } finally {
@@ -874,6 +883,24 @@ export default function GMDashboard() {
       toast.error('Could not record results: ' + (err as Error).message, { retry: handleRecordResults })
     } finally {
       setRecordingResults(false)
+    }
+  }
+
+  // Highlight reels: manual kick-off / retry.
+  const [renderingReels, setRenderingReels] = useState(false)
+  const handleRenderReels = async () => {
+    if (!gameId || renderingReels) return
+    setRenderingReels(true)
+    try {
+      const r = await requestReelRender(gameId)
+      const n = Object.keys(r.outcomes).length
+      toast.success(r.mock
+        ? `Mock mode: ${n} reels marked ready with a sample video.`
+        : `Rendering started for ${n} teams — a few minutes each.`)
+    } catch (err) {
+      toast.error('Could not start the reels: ' + (err as Error).message, { retry: handleRenderReels })
+    } finally {
+      setRenderingReels(false)
     }
   }
 
@@ -1385,6 +1412,41 @@ export default function GMDashboard() {
                           </>
                         )}
                     </p>
+                  )}
+
+                  {/* Highlight reels — per-team render status */}
+                  {game.results_recorded && (
+                    <div style={{ background: 'rgba(var(--pink-rgb), 0.04)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: teams.length ? 8 : 0 }}>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--pink)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, margin: 0 }}>
+                          🎬 Highlight reels
+                        </p>
+                        <button
+                          onClick={handleRenderReels}
+                          disabled={renderingReels}
+                          style={{ background: 'rgba(var(--ink-rgb), 0.04)', border: '1px solid var(--line-strong)', color: 'var(--ink-soft)', padding: '6px 12px', borderRadius: 8, fontSize: '0.76rem', fontWeight: 700, cursor: renderingReels ? 'wait' : 'pointer', fontFamily: 'inherit' }}
+                        >
+                          {renderingReels ? 'Starting…' : teams.some((t) => t.reel_status) ? 'Re-render reels' : 'Render reels now'}
+                        </button>
+                      </div>
+                      {teams.map((t) => {
+                        const label = t.reel_status === 'ready' ? (t.reel_mock ? '✅ ready (sample video)' : '✅ ready')
+                          : t.reel_status === 'rendering' ? '⏳ rendering…'
+                          : t.reel_status === 'failed' ? `❌ failed — ${t.reel_error ?? 'unknown error'}`
+                          : t.reel_status === 'skipped' ? '— no media to build from'
+                          : 'not started'
+                        return (
+                          <p key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: 'var(--ink-muted)', margin: '4px 0' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                            <span style={{ color: 'var(--ink-soft)', fontWeight: 700 }}>{t.name}</span>
+                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+                            {t.reel_url && t.reel_status === 'ready' && (
+                              <a href={t.reel_url} target="_blank" rel="noreferrer" style={{ color: 'var(--pink)', fontWeight: 700, marginLeft: 'auto', whiteSpace: 'nowrap' }}>watch ↗</a>
+                            )}
+                          </p>
+                        )
+                      })}
+                    </div>
                   )}
 
                   {/* Players' live reactions float up the right edge of this screen too */}

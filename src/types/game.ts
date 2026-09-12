@@ -239,6 +239,11 @@ export interface Team {
   // from consecutive GPS fixes. Only the total is stored — never a trail.
   // Team distance = the highest member total (see lib/distance.ts).
   member_distances?: Record<string, number>
+  // Highlight reel (written by api/render-reels.ts + api/reel-webhook.ts)
+  reel_status?: 'rendering' | 'ready' | 'failed' | 'skipped'
+  reel_url?: string
+  reel_error?: string
+  reel_mock?: boolean             // true when REEL_MOCK produced a sample video
 }
 
 // ─── ZoneScore (sub-collection of Game) ──────────────────────────────────────

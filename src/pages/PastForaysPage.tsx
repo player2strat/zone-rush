@@ -18,6 +18,7 @@ interface PastForay {
   name: string
   teamName: string | null   // null when the user was the GM
   teamColor: string | null
+  reelUrl?: string | null
   created_at?: { seconds?: number }
 }
 
@@ -58,6 +59,7 @@ async function loadPastForays(uid: string): Promise<PastForay[]> {
           name: g.data().name || 'Untitled game',
           teamName: (rows[i].team.name as string) || 'Team',
           teamColor: (rows[i].team.color as string) || 'var(--ink-muted)',
+          reelUrl: rows[i].team.reel_status === 'ready' ? ((rows[i].team.reel_url as string) ?? null) : null,
           created_at: g.data().created_at,
         })
       }
@@ -155,6 +157,11 @@ export default function PastForaysPage() {
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {g.name}
+                    {g.reelUrl && (
+                      <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, color: 'var(--pink)', background: 'rgba(var(--pink-rgb), 0.12)', padding: '2px 8px', borderRadius: 999, verticalAlign: 'middle' }}>
+                        🎬 Reel ready
+                      </span>
+                    )}
                   </span>
                   {g.created_at?.seconds && (
                     <span style={{ color: 'var(--ink-faint)', fontSize: '0.75rem', flexShrink: 0 }}>

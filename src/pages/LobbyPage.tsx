@@ -904,8 +904,11 @@ export default function LobbyPage() {
         )}
 
         {/* ── Player count ── */}
-        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', marginBottom: 16 }}>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', marginBottom: 6 }}>
           {totalPlayers} player{totalPlayers !== 1 ? 's' : ''} joined · {teams.length}/{game.max_teams} teams
+        </p>
+        <p style={{ color: 'var(--ink-faint)', fontSize: '0.74rem', lineHeight: 1.5, marginBottom: 16 }}>
+          📸 Photos and videos your team submits may appear in your team's highlight reel and recap cards.
         </p>
 
         {/* ── Team cards ── */}
