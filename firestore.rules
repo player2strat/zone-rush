@@ -44,6 +44,15 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
+    // True when the signed-in user is on the given game's roster
+    // (games/{gameId}.player_uids — see src/lib/gameMembership.ts).
+    function inGame(gameId) {
+      return request.auth != null
+        && gameId != null
+        && exists(/databases/$(database)/documents/games/$(gameId))
+        && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.get('player_uids', []);
+    }
+
     // True when the signed-in user is on the given team of the given game.
     function isOnTeam(gameId, teamId) {
       return request.auth != null
@@ -112,7 +121,12 @@ service cloud.firestore {
       allow update: if isAdminOrGm()
         || (signedIn()
             && changedKeys().hasOnly(['status', 'closed_zones', 'zone_openings_applied'])
-            && (!('status' in changedKeys()) || request.resource.data.status == 'ended'));
+            && (!('status' in changedKeys()) || request.resource.data.status == 'ended'))
+        // A player may add THEMSELVES to the roster, and nothing else.
+        || (signedIn()
+            && changedKeys().hasOnly(['player_uids'])
+            && request.resource.data.player_uids.toSet().hasAll(resource.data.get('player_uids', []).toSet())
+            && request.resource.data.player_uids.toSet().difference(resource.data.get('player_uids', []).toSet()).hasOnly([request.auth.uid]));
 
       match /teams/{teamId} {
         allow read: if signedIn();
@@ -173,8 +187,13 @@ service cloud.firestore {
     // Proof submissions. Players create their own (always pending, no
     // verdict fields set) and may withdraw a still-pending submission from
     // their own team. Only the GM/admin can approve, reject or edit.
+    // READ is scoped to the game: anyone on that game's roster, or on the
+    // submitting team (older games with no roster), or a GM. Queries must
+    // filter by game_id (and team_id for the team path) — every app query does.
     match /submissions/{submissionId} {
-      allow read: if signedIn();
+      allow read: if isAdminOrGm()
+        || inGame(resource.data.game_id)
+        || isOnTeam(resource.data.game_id, resource.data.team_id);
       allow create: if isAdminOrGm()
         || (signedIn()
             && request.resource.data.submitted_by == request.auth.uid
@@ -194,7 +213,9 @@ service cloud.firestore {
     // a separate top-level collection so the data can be exported for partners.
     // Same shape as submissions: players create pending ones, GM reviews.
     match /side_quest_submissions/{submissionId} {
-      allow read: if signedIn();
+      allow read: if isAdminOrGm()
+        || inGame(resource.data.game_id)
+        || isOnTeam(resource.data.game_id, resource.data.team_id);
       allow create: if isAdminOrGm()
         || (signedIn()
             && request.resource.data.submitted_by == request.auth.uid

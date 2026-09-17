@@ -36,6 +36,7 @@ import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
 import SideQuestPanel from '../components/SideQuestPanel'
 import { advanceFix, type Fix } from '../lib/distance'
+import { registerInGame } from '../lib/gameMembership'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
@@ -60,6 +61,7 @@ interface GameData {
   status: string
   join_code: string
   zones: string[]
+  player_uids?: string[]
   started_at: any
   ends_at: any
   closed_zones?: string[]
@@ -324,6 +326,17 @@ export default function GamePage() {
   const distanceRef = useRef<{ total: number; anchor: Fix | null; seeded: boolean }>({ total: 0, anchor: null, seeded: false })
   const savedDistance = myTeam?.member_distances?.[user?.uid ?? '']
   const gameActiveForDistance = game?.status === 'active'
+
+  // Make sure this player is on the game's roster (games started before the
+  // roster existed, or a join that failed to record it). Own uid only.
+  const gameLoaded = !!game
+  const rosterHasMe = !!user && !!game?.player_uids?.includes(user.uid)
+  const myUid = user?.uid ?? null
+  const myTeamIdForRoster = myTeam?.id ?? null
+  useEffect(() => {
+    if (!gameId || !myUid || !myTeamIdForRoster || !gameLoaded || rosterHasMe) return
+    registerInGame(gameId, myUid)
+  }, [gameId, myUid, myTeamIdForRoster, gameLoaded, rosterHasMe])
 
   // Write player location to Firestore for the GM map.
   // Driven by hook state changes, throttled to 1 write per 15s.

@@ -160,6 +160,7 @@ export interface Game {
   join_code: string               // 6-character code players use to join
   max_teams: number               // Maximum number of teams allowed
   zones: string[]                 // Active zone IDs for this game
+  player_uids?: string[]          // every player account in the game (see lib/gameMembership.ts)
   closed_zones?: string[]         // Zone IDs that have been closed during gameplay
   map_id?: string | null          // Which map this game was created from (v11; replaces map_set_id)
   started_at: any                 // Firestore Timestamp

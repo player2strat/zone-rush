@@ -62,6 +62,7 @@ import {
 } from '../lib/endGame'
 import { recordGameResults, unrecordGameResults } from '../lib/gameResults'
 import { requestReelRender, type ReelFields } from '../lib/reels'
+import { registerInGame } from '../lib/gameMembership'
 import {
   logEvent,
   getActivityLog,
@@ -334,6 +335,7 @@ export default function GMDashboard() {
         members: arrayUnion(uid),
         member_names: arrayUnion(name),
       })
+      await registerInGame(gameId, uid)
       batch.update(doc(db, 'games', gameId, 'join_requests', uid), {
         status: 'approved',
         team_id: teamId,
