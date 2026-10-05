@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// =============================================================================
+// Foray — Cloud Storage security rules
+//
+// Source of truth for these rules. To deploy: paste into the Firebase console
+// (Storage → Rules → Publish). The first publish asks to let Storage read
+// Firestore (for the team check below) — allow it.
+//
+// What the app does with Storage:
+//   - Players upload proof (photo / video / audio) and side-quest photos to
+//     submissions/{gameId}/{teamId}/{file}, then save the file's download URL
+//     on the submission doc. Everything that shows media afterwards — history,
+//     results galleries, the GM's review and zip export — opens that URL,
+//     which carries its own access token. Who can see those URLs is decided
+//     by firestore.rules: only the game's players and its GM.
+//   - Highlight reels under reels/ are written by the server (Admin SDK),
+//     which bypasses these rules.
+// Nothing in the app browses folders, overwrites or deletes files, so those
+// are refused (anything not allowed below is denied).
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function onTeam(gameId, teamId) {
+      return request.auth != null
+        && request.auth.uid in firestore.get(
+             /databases/(default)/documents/games/$(gameId)/teams/$(teamId)).data.members;
+    }
+
+    function gameRunning(gameId) {
+      return firestore.get(/databases/(default)/documents/games/$(gameId)).data.status
+        in ['strategy', 'active', 'paused'];
+    }
+
+    match /submissions/{gameId}/{teamId}/{fileName} {
+      // The uploader's phone asks for the download URL right after uploading.
+      allow get: if onTeam(gameId, teamId);
+
+      // A team member adds NEW proof while the game runs: a photo, video or
+      // audio clip under 500 MB. Existing files can't be replaced.
+      allow create: if resource == null   // re-uploading to a path counts as create
+        && onTeam(gameId, teamId)
+        && gameRunning(gameId)
+        && request.resource.size < 500 * 1024 * 1024
+        && request.resource.contentType.matches('(image|video|audio)/.+')
+        && !request.resource.contentType.matches('image/svg.*');
+    }
+  }
+}

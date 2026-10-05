@@ -29,6 +29,7 @@ npm run dev
 | `src/lib/` | Game logic: scoring, end-game bonuses, zone geometry, dealing, activity log |
 | `src/components/` | Shared UI (game map, proof submission, side quests) |
 | `firestore.rules` | **Source of truth for security rules** — paste into the Firebase console (Firestore → Rules → Publish) after every change; there is no CLI auto-deploy |
+| `storage.rules` | Source of truth for the photo/video upload rules — paste into the Firebase console (Storage → Rules → Publish) |
 | `ROADMAP.md` | Deferred work + the playtest checklist |
 | `data/` | Raw GeoJSON used to seed maps/zones |
 
@@ -36,7 +37,10 @@ npm run dev
 
 - Roles live on `users/{uid}.role` (`player` / `gm` / `admin`), set from the
   Firebase console. The rules prevent self-promotion.
-- Firestore rules and indexes are managed **manually in the console** — the
-  repo file is canonical, but publishing is a manual step.
+- Firestore rules, Storage rules and indexes are managed **manually in the
+  console** — the repo files are canonical, but publishing is a manual step.
+- Roles: an `admin` sees and manages every game; a `gm` only the games they
+  created. Players see a game only after entering its join code (or being
+  approved as a late joiner).
 - Each game snapshots its zones into `games/{id}/zones` at creation, so
   editing the zone library never breaks past games.
