@@ -18,10 +18,11 @@
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/firestore'
+import { collection, getDoc, getDocs, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
 import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
 import { snapshotZonesIntoBatch } from '../lib/gameZones'
+import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 
 // ---------------------------------------------------------------------------
@@ -56,11 +57,21 @@ interface MapDoc {
 // ---------------------------------------------------------------------------
 function generateJoinCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const values = crypto.getRandomValues(new Uint32Array(6))
   let code = ''
   for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length))
+    code += chars.charAt(values[i] % chars.length)
   }
   return code
+}
+
+// A code no other game uses — join_codes/{code} is how players find a game.
+async function generateUnusedJoinCode(): Promise<string> {
+  for (let tries = 0; tries < 5; tries++) {
+    const code = generateJoinCode()
+    if (!(await getDoc(joinCodeRef(code))).exists()) return code
+  }
+  throw new Error('Could not find a free join code. Please try again.')
 }
 
 // Schedule dropdown options: every 15 minutes from 15 min up to (but not
@@ -330,11 +341,12 @@ export default function CreateGame() {
     setCreating(true)
     setError('')
     try {
-      const joinCode = generateJoinCode()
+      const joinCode = await generateUnusedJoinCode()
       const gameId = 'game_' + Date.now()
 
-      // One atomic batch: the game doc plus every pre-named team.
+      // One atomic batch: the game doc, its join code, and every pre-named team.
       const batch = writeBatch(db)
+      batch.set(joinCodeRef(joinCode), { game_id: gameId, created_at: serverTimestamp() })
       batch.set(doc(db, 'games', gameId), {
         id: gameId,
         name: gameName.trim(),

@@ -217,7 +217,7 @@ export async function getActivityLog(
         points_delta: null,
         details: `Submitted "${chLabel}" (${sub.media_type})`,
         gm_notes: null,
-        metadata: { media_type: sub.media_type, attempted_tier2: sub.attempted_tier2, phone_free_claimed: sub.phone_free_claimed },
+        metadata: { media_type: sub.media_type, attempted_tier2: sub.attempted_tier2 },
       })
     }
 

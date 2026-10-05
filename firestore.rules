@@ -11,32 +11,45 @@ rules_version = '2';
 //   - CONTENT collections (cities, zones, maps, map_sets, challenges) are
 //     readable by any signed-in user but writable ONLY by admin/GM. These hold
 //     the game library and are edited from admin tools.
-//   - GAMEPLAY collections (games and their subcollections, submissions) are
-//     writable by signed-in players ONLY for the things players legitimately
-//     do (join teams, submit proof, withdraw a pending submission, message,
-//     discard a card). Anything that changes points or verdicts — approving
-//     or rejecting a submission, zone scores, team totals, game settings,
-//     the clock — is restricted to admin/GM. This closes the hole where any
-//     signed-in player could approve their own submission or edit scores.
+//   - A GAME and everything in it (teams, scores, chat, photos) is visible
+//     only to:
+//       * its players — accounts on the game's roster, games/{id}/players/{uid}.
+//         You get on the roster by entering the join code while the game is
+//         in the lobby, or by the GM approving your late join;
+//       * its GM — the gm/admin account that created it (or is in gm_uids);
+//       * admins, who can see and manage every game.
+//     Join codes live in join_codes/{code}: anyone signed in can look up one
+//     code, nobody can list them, so knowing the code is the invitation.
+//   - Players write only what players legitimately do: join or leave a team
+//     in the lobby, their own location/distance, their team's discard, proof
+//     for a card in their hand while the game runs, and team chat. Points,
+//     verdicts, zone control, the clock and broadcasts are GM-only.
 //   - users/{uid}: each user manages their own doc, BUT can never set or
 //     change their own "role" field. New accounts must start as "player".
 //     Roles are changed in the Firebase console (which bypasses these rules)
-//     or by an admin/GM. This closes the hole where a player could write
-//     role: "gm" to their own doc and unlock game creation + admin tools.
+//     or by an admin/GM.
 // =============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True when the signed-in user's users/{uid} doc has role admin or gm.
-    function isAdminOrGm() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'gm'];
-    }
-
     function signedIn() {
       return request.auth != null;
+    }
+
+    function hasRole(roles) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'player') in roles;
+    }
+
+    function isAdmin() {
+      return hasRole(['admin']);
+    }
+
+    // Role check only — used for the content library and for creating games.
+    function isAdminOrGm() {
+      return hasRole(['admin', 'gm']);
     }
 
     // Keys this write changes (update only).
@@ -44,18 +57,39 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    // True when the signed-in user is on the given game's roster
-    // (games/{gameId}.player_uids — see src/lib/gameMembership.ts).
+    function gamePath(gameId) {
+      return /databases/$(database)/documents/games/$(gameId);
+    }
+
+    // The signed-in user runs this game (given the game doc).
+    function runsGame(game) {
+      return game.data.get('created_by', null) == request.auth.uid
+        || request.auth.uid in game.data.get('gm_uids', []);
+    }
+
+    // Admins manage every game; a GM manages the games they run. For reads.
+    function isGameStaff(gameId) {
+      return isAdmin()
+        || (isAdminOrGm() && exists(gamePath(gameId)) && runsGame(get(gamePath(gameId))));
+    }
+
+    // Same, for writes. Looks at the game as it will be AFTER this write, so
+    // the batch that creates a game can also create its teams and zones.
+    function isGameStaffWrite(gameId) {
+      return isAdmin()
+        || (isAdminOrGm() && existsAfter(gamePath(gameId)) && runsGame(getAfter(gamePath(gameId))));
+    }
+
+    // On the game's roster (see src/lib/gameMembership.ts).
     function inGame(gameId) {
-      return request.auth != null
+      return signedIn()
         && gameId != null
-        && exists(/databases/$(database)/documents/games/$(gameId))
-        && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.get('player_uids', []);
+        && exists(/databases/$(database)/documents/games/$(gameId)/players/$(request.auth.uid));
     }
 
     // True when the signed-in user is on the given team of the given game.
     function isOnTeam(gameId, teamId) {
-      return request.auth != null
+      return signedIn()
         && teamId != null
         && exists(/databases/$(database)/documents/games/$(gameId)/teams/$(teamId))
         && request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)/teams/$(teamId)).data.members;
@@ -109,100 +143,312 @@ service cloud.firestore {
       allow write: if isAdminOrGm();
     }
 
-    // ---- Gameplay: any signed-in user (players write these mid-game) --------
+    // ---- Join codes: look one up, never list them ---------------------------
+    match /join_codes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      // Written with the game, by its GM, and must match the game's code.
+      allow create: if request.resource.data.keys().hasOnly(['game_id', 'created_at'])
+        && isGameStaffWrite(request.resource.data.game_id)
+        && getAfter(gamePath(request.resource.data.game_id)).data.join_code == code;
+      allow update: if false;
+      allow delete: if isGameStaffWrite(resource.data.game_id);
+    }
+
+    // ---- Games: players on the roster, the game's GM, admins ----------------
     match /games/{gameId} {
-      allow read: if signedIn();
-      // Only Game Masters / admins can create or delete a game. Players join via code.
-      allow create, delete: if isAdminOrGm();
-      // GM/admin can update anything. Player clients only touch the zone
-      // schedule bookkeeping (closed/opened zones) and may flip the game to
-      // 'ended' when the clock runs out. Settings, timers, pause state and
-      // bonus records are GM-only.
-      allow update: if isAdminOrGm()
-        || (signedIn()
-            && changedKeys().hasOnly(['status', 'closed_zones', 'zone_openings_applied'])
-            && (!('status' in changedKeys()) || request.resource.data.status == 'ended'))
-        // A player may add THEMSELVES to the roster, and nothing else.
-        || (signedIn()
-            && changedKeys().hasOnly(['player_uids'])
-            && request.resource.data.player_uids.toSet().hasAll(resource.data.get('player_uids', []).toSet())
-            && request.resource.data.player_uids.toSet().difference(resource.data.get('player_uids', []).toSet()).hasOnly([request.auth.uid]));
+      // Players on the roster and the GM see the game. A late joiner waiting
+      // for approval sees the game doc (name, status) but nothing inside it.
+      allow get: if signedIn() && (
+        isAdmin()
+        || (isAdminOrGm() && runsGame(resource))
+        || inGame(gameId)
+        || exists(/databases/$(database)/documents/games/$(gameId)/join_requests/$(request.auth.uid))
+      );
+      // Listing: admins see everything; anyone else only games they created.
+      allow list: if signedIn()
+        && (isAdmin() || resource.data.created_by == request.auth.uid);
+      allow create: if isAdminOrGm() && request.resource.data.created_by == request.auth.uid;
+      allow delete: if isAdmin() || (isAdminOrGm() && runsGame(resource));
+      // The GM can update anything. A player's clock may end the game once its
+      // time is up — nothing else.
+      allow update: if isAdmin()
+        || (isAdminOrGm() && runsGame(resource))
+        || (inGame(gameId)
+            && changedKeys().hasOnly(['status'])
+            && resource.data.status == 'active'
+            && request.resource.data.status == 'ended'
+            && request.time >= resource.data.ends_at);
+
+      // Roster. Entering the join code while the game is in the lobby puts
+      // you on it; the GM adds late joiners. You may take yourself off.
+      match /players/{playerUid} {
+        allow get: if signedIn() && (request.auth.uid == playerUid || isGameStaff(gameId));
+        allow list: if isGameStaff(gameId);
+        allow create: if isGameStaffWrite(gameId)
+          || (signedIn()
+              && request.auth.uid == playerUid
+              && request.resource.data.keys().hasOnly(['uid', 'via', 'join_code', 'joined_at'])
+              && request.resource.data.uid == playerUid
+              && request.resource.data.via == 'code'
+              && request.resource.data.joined_at == request.time
+              && get(gamePath(gameId)).data.status == 'lobby'
+              && request.resource.data.join_code == get(gamePath(gameId)).data.join_code);
+        allow update: if isGameStaffWrite(gameId);
+        allow delete: if (signedIn() && request.auth.uid == playerUid) || isGameStaffWrite(gameId);
+      }
 
       match /teams/{teamId} {
-        allow read: if signedIn();
-        // Players create teams from the lobby (auto-join), starting at zero.
-        allow create: if isAdminOrGm()
-          || (signedIn()
-              && request.resource.data.get('total_points', 0) == 0
-              && request.resource.data.get('zones_claimed', 0) == 0
-              && request.resource.data.get('zones_locked', 0) == 0);
-        // Players may edit roster, name, hand, discards, locations — never scores.
-        allow update: if isAdminOrGm()
-          || (signedIn()
-              && !changedKeys().hasAny(['total_points', 'zones_claimed', 'zones_locked']));
-        allow delete: if isAdminOrGm();
+        function thisGame() {
+          return get(gamePath(gameId)).data;
+        }
+        function lobbyOpen() {
+          return thisGame().status == 'lobby';
+        }
+        function oldMembers() {
+          return resource.data.get('members', []);
+        }
+        function newMembers() {
+          return request.resource.data.get('members', []);
+        }
+        function oldNames() {
+          return resource.data.get('member_names', []);
+        }
+        function newNames() {
+          return request.resource.data.get('member_names', []);
+        }
 
+        // Lobby auto-join may create the next empty team (team_N, N <= max_teams).
+        function newLobbyTeam() {
+          let t = request.resource.data;
+          return inGame(gameId)
+            && lobbyOpen()
+            && teamId.matches('team_[0-9]+')
+            && int(teamId.split('_')[1]) <= thisGame().get('max_teams', 0)
+            && t.keys().hasOnly(['id', 'name', 'members', 'member_names', 'color',
+                                 'total_points', 'zones_claimed', 'zones_locked', 'taxi_used', 'hand'])
+            && t.id == teamId
+            && t.members.size() == 0
+            && t.member_names.size() == 0
+            && t.hand.size() == 0
+            && t.total_points == 0
+            && t.zones_claimed == 0
+            && t.zones_locked == 0;
+        }
+
+        // Lobby: join this team — adds exactly yourself, if there's room.
+        function joinTeam() {
+          return inGame(gameId)
+            && lobbyOpen()
+            && changedKeys().hasOnly(['members', 'member_names'])
+            && !(request.auth.uid in oldMembers())
+            && request.auth.uid in newMembers()
+            && newMembers().size() == oldMembers().size() + 1
+            && newMembers().toSet().hasAll(oldMembers())
+            && newMembers().size() <= thisGame().get('settings', {}).get('team_size', 0)
+            && newNames().toSet().hasAll(oldNames())
+            && newNames().size() <= oldNames().size() + 1;
+        }
+
+        // Lobby: leave this team — removes exactly yourself.
+        function leaveTeam() {
+          return lobbyOpen()
+            && changedKeys().hasOnly(['members', 'member_names'])
+            && request.auth.uid in oldMembers()
+            && !(request.auth.uid in newMembers())
+            && newMembers().size() == oldMembers().size() - 1
+            && oldMembers().toSet().difference([request.auth.uid].toSet()).difference(newMembers().toSet()).size() == 0
+            && oldNames().toSet().hasAll(newNames())
+            && newNames().size() >= oldNames().size() - 1
+            && newNames().toSet().size() >= oldNames().toSet().size() - 1;
+        }
+
+        // Lobby: fix your own display name on your team.
+        function renameSelf() {
+          return lobbyOpen()
+            && request.auth.uid in oldMembers()
+            && changedKeys().hasOnly(['member_names'])
+            && newNames().size() == oldNames().size();
+        }
+
+        // Your own entry in a per-member map, and nobody else's.
+        function onlyOwnEntry(field) {
+          return request.resource.data.get(field, {})
+            .diff(resource.data.get(field, {}))
+            .affectedKeys()
+            .hasOnly([request.auth.uid]);
+        }
+
+        // One discard: swap exactly one card, count it, record the old card.
+        function validDiscard() {
+          let oldHand = resource.data.get('hand', []);
+          let newHand = request.resource.data.get('hand', []);
+          let removed = oldHand.toSet().difference(newHand.toSet());
+          let oldDiscarded = resource.data.get('discarded_challenges', []);
+          let newDiscarded = request.resource.data.get('discarded_challenges', []);
+          return thisGame().status == 'active'
+            && request.resource.data.get('discard_used', 0) == resource.data.get('discard_used', 0) + 1
+            && request.resource.data.get('discard_used', 0) <= thisGame().get('settings', {}).get('discard_limit', 1)
+            && newHand.size() == oldHand.size()
+            && removed.size() == 1
+            && newHand.toSet().difference(oldHand.toSet()).size() == 1
+            && newDiscarded.size() == oldDiscarded.size() + 1
+            && newDiscarded.toSet().hasAll(oldDiscarded)
+            && removed.difference(newDiscarded.toSet()).size() == 0;
+        }
+
+        // During play, on your own team: your location and distance, and a discard.
+        function ownTeamPlay() {
+          return request.auth.uid in oldMembers()
+            && changedKeys().hasOnly(['member_locations', 'member_distances',
+                                      'hand', 'discard_used', 'discarded_challenges'])
+            && onlyOwnEntry('member_locations')
+            && onlyOwnEntry('member_distances')
+            && (!changedKeys().hasAny(['hand', 'discard_used', 'discarded_challenges'])
+                || validDiscard());
+        }
+
+        allow read: if isGameStaff(gameId) || inGame(gameId);
+        allow create: if isGameStaffWrite(gameId) || newLobbyTeam();
+        // Scores, names, hands dealt, reels: GM only.
+        allow update: if isGameStaffWrite(gameId)
+          || joinTeam()
+          || leaveTeam()
+          || renameSelf()
+          || ownTeamPlay();
+        allow delete: if isGameStaffWrite(gameId);
+
+        // Choose-your-own-adventure progress: that team only.
         match /sequential_progress/{progressId} {
-          allow read, write: if signedIn();
+          allow read: if isOnTeam(gameId, teamId) || isGameStaff(gameId);
+          allow write: if isOnTeam(gameId, teamId);
         }
       }
 
       // Zone points and claim/lock status. Written only by approval and
       // lockout logic, which runs on the GM dashboard.
       match /zone_scores/{scoreId} {
-        allow read: if signedIn();
-        allow write: if isAdminOrGm();
-      }
-
-      match /messages/{messageId} {
-        allow read, write: if signedIn();
-      }
-
-      match /events/{eventId} {
-        allow read, write: if signedIn();
+        allow read: if isGameStaff(gameId) || inGame(gameId);
+        allow write: if isGameStaffWrite(gameId);
       }
 
       // Per-game zone snapshot, written once at game creation by the GM.
       match /zones/{zoneId} {
-        allow read: if signedIn();
-        allow write: if isAdminOrGm();
+        allow read: if isGameStaff(gameId) || inGame(gameId);
+        allow write: if isGameStaffWrite(gameId);
       }
 
-      // Late-join requests (doc id = requesting player's uid). Players create
-      // their own; the GM updates status / assigns a team.
-      match /join_requests/{requestId} {
-        allow read, write: if signedIn();
+      // Chat. Team messages are visible to that team and the GM only;
+      // broadcasts to everyone in the game. Players post only as themselves,
+      // only to their own team; only the GM broadcasts or replies to teams.
+      match /messages/{messageId} {
+        function canReadMessage(m) {
+          return isGameStaff(gameId)
+            || (m.channel_type == 'gm_broadcast' && inGame(gameId))
+            || isOnTeam(gameId, m.team_id);
+        }
+
+        allow read: if canReadMessage(resource.data);
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['channel_type', 'from_uid', 'from_name',
+                                                   'team_id', 'text', 'sent_at', 'read_by'])
+          && request.resource.data.from_uid == request.auth.uid
+          && request.resource.data.sent_at == request.time
+          && request.resource.data.read_by == [request.auth.uid]
+          && request.resource.data.text is string
+          && (
+            (request.resource.data.channel_type in ['team_internal', 'team_to_gm']
+              && isOnTeam(gameId, request.resource.data.team_id))
+            || (request.resource.data.channel_type in ['gm_to_team', 'gm_broadcast']
+              && isGameStaffWrite(gameId))
+          );
+        // Anyone who can see a message may mark it read: add their own uid to
+        // read_by and change nothing else.
+        allow update: if canReadMessage(resource.data)
+          && changedKeys().hasOnly(['read_by'])
+          && request.resource.data.read_by.toSet().hasAll(resource.data.get('read_by', []))
+          && request.resource.data.read_by.toSet()
+               .difference(resource.data.get('read_by', []).toSet())
+               .hasOnly([request.auth.uid]);
+        allow delete: if isGameStaffWrite(gameId);
       }
 
-      // Live emoji reactions during the results reveal. Any signed-in user
+      // Activity log (GM's Activity tab). Players log only their own discards.
+      match /events/{eventId} {
+        allow read: if isGameStaff(gameId);
+        allow create: if isGameStaffWrite(gameId)
+          || (isOnTeam(gameId, request.resource.data.team_id)
+              && request.resource.data.actor_id == request.auth.uid
+              && request.resource.data.event_type in ['card_discarded', 'card_drawn']
+              && request.resource.data.timestamp == request.time);
+        allow update, delete: if isGameStaffWrite(gameId);
+      }
+
+      // Late-join requests (doc id = requesting player's uid). A player who
+      // knows the join code asks to join a running game; the GM approves
+      // (adding them to the roster and a team) or denies.
+      match /join_requests/{requestUid} {
+        allow get: if signedIn() && (request.auth.uid == requestUid || isGameStaff(gameId));
+        allow list: if isGameStaff(gameId);
+        allow create: if signedIn()
+          && request.auth.uid == requestUid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'status', 'requested_at', 'join_code'])
+          && request.resource.data.uid == requestUid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.requested_at == request.time
+          && request.resource.data.name is string
+          && get(gamePath(gameId)).data.status in ['strategy', 'active', 'paused']
+          && request.resource.data.join_code == get(gamePath(gameId)).data.join_code;
+        allow update: if isGameStaffWrite(gameId);
+        allow delete: if (signedIn() && request.auth.uid == requestUid) || isGameStaffWrite(gameId);
+      }
+
+      // Live emoji reactions during the results reveal. Players in the game
       // can read them and post their own (uid must match); only the GM can
       // edit or remove one.
       match /reactions/{reactionId} {
-        allow read: if signedIn();
-        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-        allow update, delete: if isAdminOrGm();
+        allow read: if isGameStaff(gameId) || inGame(gameId);
+        allow create: if inGame(gameId) && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if isGameStaffWrite(gameId);
       }
     }
 
     // Proof submissions. Players create their own (always pending, no
     // verdict fields set) and may withdraw a still-pending submission from
-    // their own team. Only the GM/admin can approve, reject or edit.
-    // READ is scoped to the game: anyone on that game's roster, or on the
-    // submitting team (older games with no roster), or a GM. Queries must
-    // filter by game_id (and team_id for the team path) — every app query does.
+    // their own team. Only the game's GM can approve, reject or edit.
+    // READ is scoped to the game: its roster, the submitting team, its GM.
+    // Queries must filter by game_id (and team_id for the team path).
     match /submissions/{submissionId} {
-      allow read: if isAdminOrGm()
+      // Proof for a card in your team's hand, while the game is running.
+      function validProof() {
+        let s = request.resource.data;
+        let g = get(gamePath(s.game_id)).data;
+        return signedIn()
+          && s.keys().hasOnly(['game_id', 'team_id', 'challenge_id', 'challenge_description',
+                               'challenge_difficulty', 'resolved_task', 'step_choices', 'zone_id',
+                               'submitted_by', 'media_url', 'media_type', 'gps_lat', 'gps_lng',
+                               'gps_accuracy', 'gps_captured_at', 'in_zone', 'status', 'gm_notes',
+                               'reviewed_by', 'reviewed_at', 'attempted_tier2', 'tier2_approved',
+                               'submitted_at'])
+          && s.submitted_by == request.auth.uid
+          && s.status == 'pending'
+          && s.get('gm_notes', '') == ''
+          && s.get('reviewed_by', null) == null
+          && s.get('reviewed_at', null) == null
+          && s.get('tier2_approved', false) == false
+          && s.submitted_at == request.time
+          && isOnTeam(s.game_id, s.team_id)
+          && g.status in ['strategy', 'active', 'paused']
+          && s.challenge_id in get(/databases/$(database)/documents/games/$(s.game_id)/teams/$(s.team_id)).data.get('hand', [])
+          && (s.get('zone_id', null) == null || s.zone_id in g.get('zones', []));
+      }
+
+      allow read: if isGameStaff(resource.data.game_id)
         || inGame(resource.data.game_id)
         || isOnTeam(resource.data.game_id, resource.data.team_id);
-      allow create: if isAdminOrGm()
-        || (signedIn()
-            && request.resource.data.submitted_by == request.auth.uid
-            && request.resource.data.status == 'pending'
-            && request.resource.data.get('reviewed_by', null) == null
-            && request.resource.data.get('tier2_approved', false) == false
-            && isOnTeam(request.resource.data.game_id, request.resource.data.team_id));
-      allow update: if isAdminOrGm();
-      allow delete: if isAdminOrGm()
+      allow create: if isGameStaffWrite(request.resource.data.game_id) || validProof();
+      allow update: if isGameStaffWrite(resource.data.game_id);
+      allow delete: if isGameStaffWrite(resource.data.game_id)
         || (signedIn()
             && resource.data.status == 'pending'
             && (resource.data.submitted_by == request.auth.uid
@@ -211,29 +457,43 @@ service cloud.firestore {
 
     // Side quest submissions (photo tallies, e.g. pothole reporting). Kept as
     // a separate top-level collection so the data can be exported for partners.
-    // Same shape as submissions: players create pending ones, GM reviews.
+    // Same shape as submissions: players create pending ones for their own
+    // team while the game runs; the GM reviews.
     match /side_quest_submissions/{submissionId} {
-      allow read: if isAdminOrGm()
+      function validSideQuest() {
+        let s = request.resource.data;
+        return signedIn()
+          && s.keys().hasOnly(['game_id', 'quest_id', 'quest_title', 'team_id', 'submitted_by',
+                               'submitter_name', 'media_url', 'gps_lat', 'gps_lng', 'status',
+                               'reviewed_by', 'reviewed_at', 'submitted_at'])
+          && s.submitted_by == request.auth.uid
+          && s.status == 'pending'
+          && s.get('reviewed_by', null) == null
+          && s.get('reviewed_at', null) == null
+          && s.submitted_at == request.time
+          && isOnTeam(s.game_id, s.team_id)
+          && get(gamePath(s.game_id)).data.status in ['strategy', 'active', 'paused'];
+      }
+
+      allow read: if isGameStaff(resource.data.game_id)
         || inGame(resource.data.game_id)
         || isOnTeam(resource.data.game_id, resource.data.team_id);
-      allow create: if isAdminOrGm()
-        || (signedIn()
-            && request.resource.data.submitted_by == request.auth.uid
-            && request.resource.data.status == 'pending'
-            && request.resource.data.get('reviewed_by', null) == null);
-      allow update, delete: if isAdminOrGm();
+      allow create: if isGameStaffWrite(request.resource.data.game_id) || validSideQuest();
+      allow update, delete: if isGameStaffWrite(resource.data.game_id);
     }
 
     // Permanent per-team game outcomes behind profiles, badges and the
     // leaderboard. Written by the GM dashboard when the champion is revealed.
     match /game_results/{resultId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow create, update: if isGameStaffWrite(request.resource.data.game_id);
+      allow delete: if isGameStaffWrite(resource.data.game_id);
     }
 
-    // Collection-group read for teams (cross-game team lookups).
+    // Collection-group read for teams: "which teams am I on?" (Home, Past
+    // Forays). Only teams you are a member of.
     match /{path=**}/teams/{teamId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
     }
   }
 }

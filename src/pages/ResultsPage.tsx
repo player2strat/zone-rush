@@ -200,6 +200,8 @@ export default function ResultsPage() {
   const [zoneScores, setZoneScores] = useState<ZoneScoreData[]>([])
   const [allZoneData, setAllZoneData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  // The rules refused to show this game: not on its roster, not its GM.
+  const [denied, setDenied] = useState(false)
 
   // Latest GM broadcast (player view only) — meetup message after game end.
   const [latestBroadcast, setLatestBroadcast] = useState<string | null>(null)
@@ -227,9 +229,13 @@ export default function ResultsPage() {
   // Listen to game doc
   useEffect(() => {
     if (!gameId) return
-    const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
-      if (snap.exists()) setGame({ id: snap.id, ...snap.data() } as GameData)
-    })
+    const unsub = onSnapshot(
+      doc(db, 'games', gameId),
+      (snap) => {
+        if (snap.exists()) setGame({ id: snap.id, ...snap.data() } as GameData)
+      },
+      () => setDenied(true),
+    )
     return () => unsub()
   }, [gameId])
 
@@ -243,7 +249,11 @@ export default function ResultsPage() {
         snap.forEach((d) => t.push({ id: d.id, ...d.data() } as TeamData))
         setTeams(t)
         setLoading(false)
-      }
+      },
+      () => {
+        setDenied(true)
+        setLoading(false)
+      },
     )
     return () => unsub()
   }, [gameId])
@@ -271,11 +281,10 @@ export default function ResultsPage() {
     return teams.find((t) => t.members?.includes(user.uid)) ?? null
   }, [teams, user])
 
-  // Full standings are for the GM/admin only. Being on "no team" is NOT
-  // enough — any signed-in account could otherwise open /results/<id> and
-  // see every team's score, while real players only see their own. The
-  // viewer qualifies if they created this game or their account role is
-  // gm/admin (mirrors the Firestore rules' isAdminOrGm).
+  // Full standings are for the game's GM and admins only. Being on "no team"
+  // is NOT enough — real players only see their own team. The viewer
+  // qualifies if they created this game or their account role is admin
+  // (mirrors the Firestore rules: other GMs can't load this game at all).
   // Role is stored together with the uid it was fetched for, so a signed-out
   // or switched account never reads a stale role.
   const [roleInfo, setRoleInfo] = useState<{ uid: string; role: string } | null>(null)
@@ -291,7 +300,7 @@ export default function ResultsPage() {
   const viewerRole = user && roleInfo?.uid === user.uid ? roleInfo.role : null
 
   const isGM = !!user && !myTeam && !!game && (
-    game.created_by === user.uid || viewerRole === 'gm' || viewerRole === 'admin'
+    game.created_by === user.uid || viewerRole === 'admin'
   )
   // Signed in, data loaded, but neither a player on this game nor its GM.
   const isOutsider = !!user && !!game && teams.length > 0 && !myTeam && viewerRole !== null && !isGM
@@ -512,6 +521,37 @@ export default function ResultsPage() {
   }, [game, myTeam, revealDone, teams, zoneScores, activeZones, zoneOwnership, revealAwards, totalsApplied])
 
   // ---------- Render: loading ----------
+
+  // Shown to anyone who isn't a player on this game or its GM — including
+  // when the security rules refuse to load it at all.
+  const privateResults = () => (
+    <div style={{
+      minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-soft)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24, textAlign: 'center',
+    }}>
+      <div>
+        <p style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px' }}>
+          Results are private to this game's players
+        </p>
+        <p style={{ fontSize: '0.88rem', margin: '0 0 18px' }}>
+          You weren't on a team in {game?.name ?? 'this game'}, so there's nothing to show here.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            background: 'var(--surface)', border: '1px solid var(--line-strong)', color: 'var(--ink)',
+            padding: '10px 18px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          ← Back to Home
+        </button>
+      </div>
+    </div>
+  )
+
+  if (denied) return privateResults()
 
   if (loading || !game) {
     return (
@@ -935,34 +975,7 @@ export default function ResultsPage() {
   // Only render once we're confident the viewer is on no team (teams loaded).
   // =========================================================================
 
-  if (isOutsider) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink-soft)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 24, textAlign: 'center',
-      }}>
-        <div>
-          <p style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink)', margin: '0 0 8px' }}>
-            Results are private to this game's players
-          </p>
-          <p style={{ fontSize: '0.88rem', margin: '0 0 18px' }}>
-            You weren't on a team in {game?.name ?? 'this game'}, so there's nothing to show here.
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--line-strong)', color: 'var(--ink)',
-              padding: '10px 18px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            ← Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (isOutsider) return privateResults()
 
   if (!isGM) {
     return (

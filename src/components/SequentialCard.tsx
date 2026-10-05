@@ -32,7 +32,6 @@ interface SequentialChallenge {
   points: number
   verification_type: string
   tier2: { description: string; bonus_points: number } | null
-  phone_free_eligible: boolean
   is_time_based: boolean
   // sequential-specific
   challenge_type?: string
@@ -301,7 +300,6 @@ export default function SequentialCard({
             points: challenge.points,
             verification_type: challenge.verification_type,
             tier2: challenge.tier2,
-            phone_free_eligible: challenge.phone_free_eligible,
             is_time_based: challenge.is_time_based,
           }}
           closedZones={closedZones}

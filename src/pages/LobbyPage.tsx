@@ -25,7 +25,7 @@ import {
 } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
-import { registerInGame } from '../lib/gameMembership'
+import { removeFromRoster } from '../lib/gameMembership'
 import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
 import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
@@ -273,7 +273,6 @@ export default function LobbyPage() {
         members: arrayUnion(user.uid),
         member_names: arrayUnion(name),
       })
-      await registerInGame(gameId, user.uid)
 
       // Persist their chosen name back to their account so it pre-fills
       // next time too. Non-critical if it fails.
@@ -327,7 +326,6 @@ export default function LobbyPage() {
         members: arrayUnion(user.uid),
         member_names: arrayUnion(displayName),
       })
-      await registerInGame(gameId, user.uid)
     } catch (err) {
       setError('Failed to switch: ' + (err as Error).message)
     }
@@ -454,7 +452,6 @@ export default function LobbyPage() {
         members: arrayUnion(userId),
         member_names: arrayUnion(playerName),
       })
-      await registerInGame(gameId, userId)
     } catch (err) {
       setError('Failed to move player: ' + (err as Error).message)
     }
@@ -463,18 +460,19 @@ export default function LobbyPage() {
   }
 
   // -----------------------------------------------------------------------
-  // GM: remove a player from a team entirely (back to "unassigned")
+  // GM: remove a player from their team and the game's roster
   // -----------------------------------------------------------------------
 
   // Player: leave the lobby. Also drops them from their team, otherwise the
-  // home page's active-game lookup would send them straight back here.
+  // home page's active-game lookup would send them straight back here, and
+  // from the game's roster — coming back takes the join code again.
   const handleLeaveLobby = async () => {
-    if (!isGM && gameId && user && playerTeamId) {
-      const team = teams.find((t) => t.id === playerTeamId)
+    if (!isGM && gameId && user) {
+      const team = playerTeamId ? teams.find((t) => t.id === playerTeamId) : undefined
       const idx = team ? team.members.indexOf(user.uid) : -1
       if (team && idx !== -1) {
         try {
-          await updateDoc(doc(db, 'games', gameId, 'teams', playerTeamId), {
+          await updateDoc(doc(db, 'games', gameId, 'teams', team.id), {
             members: team.members.filter((_, i) => i !== idx),
             member_names: team.member_names.filter((_, i) => i !== idx),
           })
@@ -483,13 +481,14 @@ export default function LobbyPage() {
           return
         }
       }
+      await removeFromRoster(gameId, user.uid)
     }
     navigate('/')
   }
 
   const handleRemovePlayer = async (userId: string, fromTeamId: string) => {
     if (!gameId) return
-    const confirmed = window.confirm('Remove this player from their team? They can rejoin.')
+    const confirmed = window.confirm('Remove this player from the game? They can rejoin with the join code.')
     if (!confirmed) return
 
     setSavingRoster(true)
@@ -509,6 +508,8 @@ export default function LobbyPage() {
         members: updatedMembers,
         member_names: updatedNames,
       })
+      // Off the roster too, so they lose access until they re-enter the code.
+      await removeFromRoster(gameId, userId)
     } catch (err) {
       setError('Failed to remove player: ' + (err as Error).message)
     }

@@ -75,7 +75,6 @@ export interface Challenge {
   player_profile: 'adventurer' | 'academic' | 'gamer' | 'ride_along'
   verification_type: 'photo' | 'video' | 'audio'
   tier2: { description: string; bonus_points: number } | null
-  phone_free_eligible: boolean
   city_tags: string[]
   zone_tags: string[]
   is_active: boolean
@@ -123,8 +122,6 @@ export interface GameSettings {
 
   // Bonus points
   tier2_bonus?: number            // Extra points for completing tier 2 (default: 1)
-  phone_free_bonus?: number       // Bonus for no phones (default: 1)
-  phone_free_no_talk_bonus?: number // Bonus for no phones + no talking (default: 2)
 
   // Side quest bonuses (end-of-game)
   most_zones_bonus?: number       // Points for team with most zones claimed (default: 1)
@@ -160,7 +157,6 @@ export interface Game {
   join_code: string               // 6-character code players use to join
   max_teams: number               // Maximum number of teams allowed
   zones: string[]                 // Active zone IDs for this game
-  player_uids?: string[]          // every player account in the game (see lib/gameMembership.ts)
   closed_zones?: string[]         // Zone IDs that have been closed during gameplay
   map_id?: string | null          // Which map this game was created from (v11; replaces map_set_id)
   started_at: any                 // Firestore Timestamp
@@ -312,8 +308,6 @@ export interface Submission {
   reviewed_at: any                // Firestore Timestamp
   attempted_tier2: boolean
   tier2_approved: boolean
-  phone_free_claimed: boolean
-  phone_free_approved: boolean    // GM confirms phone-free bonus
   submitted_at: any               // Firestore Timestamp
   points_awarded: number          // Set by scoring logic on approval (0 if pending/rejected)
   highlight?: boolean             // GM-starred as a highlight (approved subs only). Optional — absent = not flagged. Drives the post-game video zip pull.

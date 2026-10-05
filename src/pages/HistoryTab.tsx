@@ -29,8 +29,6 @@ interface Submission {
   points_awarded: number
   attempted_tier2: boolean
   tier2_approved: boolean
-  phone_free_claimed: boolean
-  phone_free_approved: boolean
   media_type: 'photo' | 'video' | 'audio'
   media_url: string
   submitted_at: { toDate: () => Date } | null
@@ -252,13 +250,6 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
                     {sub.step_choices && sub.step_choices.length > 0 && (
                       <span style={badge('var(--pink)', 'rgba(var(--pink-rgb), 0.12)')}>
                         🎲 {sub.step_choices.join(' · ')}
-                      </span>
-                    )}
-
-                    {/* Phone-free */}
-                    {sub.phone_free_approved && (
-                      <span style={badge('var(--green)', 'rgba(var(--green-rgb), 0.12)')}>
-                        📵 Phone-free
                       </span>
                     )}
                   </div>

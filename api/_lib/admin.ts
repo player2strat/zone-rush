@@ -58,13 +58,22 @@ export async function requireUser(authHeader: string | undefined): Promise<strin
   }
 }
 
-/** Same as requireUser, plus the users/{uid} doc must carry role gm or admin. */
-export async function requireGm(authHeader: string | undefined): Promise<string> {
+/**
+ * Same as requireUser, plus the caller must run this game: an admin, or a
+ * gm/admin account that created it (or is listed in gm_uids). Mirrors the
+ * Firestore rules' isGameStaff.
+ */
+export async function requireGameGm(
+  authHeader: string | undefined,
+  game: Record<string, unknown>,
+): Promise<string> {
   const uid = await requireUser(authHeader)
   const snap = await adminDb().doc(`users/${uid}`).get()
   const role = snap.exists ? (snap.data()?.role as string) : 'player'
-  if (role !== 'gm' && role !== 'admin') {
-    throw Object.assign(new Error('Game Masters only'), { status: 403 })
+  const runsGame = game.created_by === uid
+    || (Array.isArray(game.gm_uids) && game.gm_uids.includes(uid))
+  if (role !== 'admin' && !(role === 'gm' && runsGame)) {
+    throw Object.assign(new Error("Only this game's Game Master can do that"), { status: 403 })
   }
   return uid
 }

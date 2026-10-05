@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
+import { isPermissionDenied } from '../lib/gameMembership'
 
 interface ExplorerSub {
   id: string
@@ -39,6 +40,8 @@ export default function SideQuestExplorer() {
   const [gameNames, setGameNames] = useState<Map<string, string>>(new Map())
   const [knownQuests, setKnownQuests] = useState<{ id: string; title: string }[]>([])
   const [deadMedia, setDeadMedia] = useState<Set<string>>(new Set())
+  // Reading every game's submissions is admin-only in the security rules.
+  const [adminOnly, setAdminOnly] = useState(false)
 
   // Discover every quest id that has ever received a submission, so one-off
   // custom quests are browsable too (presets are always listed).
@@ -84,7 +87,10 @@ export default function SideQuestExplorer() {
       }))
       if (!cancelled) setGameNames(names)
     }
-    load().catch((err) => console.warn('Load failed:', err))
+    load().catch((err) => {
+      if (isPermissionDenied(err)) setAdminOnly(true)
+      else console.warn('Load failed:', err)
+    })
     return () => { cancelled = true }
   }, [questId])
 
@@ -181,7 +187,11 @@ export default function SideQuestExplorer() {
         </div>
 
         {/* Results */}
-        {loadedQuestId !== questId ? (
+        {adminOnly ? (
+          <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
+            The Side Quest Explorer reads every game's submissions, so it's for admin accounts only.
+          </p>
+        ) : loadedQuestId !== questId ? (
           <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading…</p>
         ) : visible.length === 0 ? (
           <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>

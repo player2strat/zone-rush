@@ -36,12 +36,10 @@ import { loadGameZones } from '../lib/gameZones'
 import SubmitProof from '../components/SubmitProof'
 import SideQuestPanel from '../components/SideQuestPanel'
 import { advanceFix, type Fix } from '../lib/distance'
-import { registerInGame } from '../lib/gameMembership'
 import SequentialCard from '../components/SequentialCard'
 import GameMap from '../components/GameMap'
 import type { ZoneOwner, PlayerLocation } from '../components/GameMap'
 import HistoryTab from './HistoryTab'
-import { runZoneSchedules } from '../lib/scoring'
 import {
   sendTeamMessage,
   subscribeToPlayerMessages,
@@ -61,7 +59,6 @@ interface GameData {
   status: string
   join_code: string
   zones: string[]
-  player_uids?: string[]
   started_at: any
   ends_at: any
   closed_zones?: string[]
@@ -103,7 +100,6 @@ interface Challenge {
   player_profile: string
   verification_type: string
   tier2: { description: string; bonus_points: number } | null
-  phone_free_eligible: boolean
   is_time_based: boolean
   category: string
   // sequential ("Choose Your Own Adventure") fields — absent on standard cards
@@ -327,17 +323,6 @@ export default function GamePage() {
   const savedDistance = myTeam?.member_distances?.[user?.uid ?? '']
   const gameActiveForDistance = game?.status === 'active'
 
-  // Make sure this player is on the game's roster (games started before the
-  // roster existed, or a join that failed to record it). Own uid only.
-  const gameLoaded = !!game
-  const rosterHasMe = !!user && !!game?.player_uids?.includes(user.uid)
-  const myUid = user?.uid ?? null
-  const myTeamIdForRoster = myTeam?.id ?? null
-  useEffect(() => {
-    if (!gameId || !myUid || !myTeamIdForRoster || !gameLoaded || rosterHasMe) return
-    registerInGame(gameId, myUid)
-  }, [gameId, myUid, myTeamIdForRoster, gameLoaded, rosterHasMe])
-
   // Write player location to Firestore for the GM map.
   // Driven by hook state changes, throttled to 1 write per 15s.
   const lastLocationWriteRef = useRef(0)
@@ -385,27 +370,8 @@ export default function GamePage() {
     return () => unsub()
   }, [gameId])
 
-  // Zone open/close schedule timer. Schedules also run immediately and when
-  // the app returns to the foreground, so a closure/opening isn't missed just
-  // because every phone was asleep when its minute arrived.
-  // Zone LOCKOUTS are not run here: they award points, and security rules
-  // only let the GM/admin write scores. The GM dashboard runs them.
-  useEffect(() => {
-  if (game?.status !== 'active' || !gameId) return
-  const run = () => {
-    runZoneSchedules(gameId)
-  }
-  run()
-  const interval = setInterval(run, 60000)
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') run()
-  }
-  document.addEventListener('visibilitychange', onVisible)
-  return () => {
-    clearInterval(interval)
-    document.removeEventListener('visibilitychange', onVisible)
-  }
-}, [game?.status, gameId])
+  // Zone open/close schedules and lockouts run on the GM dashboard only:
+  // security rules don't let players change which zones are open.
 
   // Find player's team and listen for updates
   useEffect(() => {

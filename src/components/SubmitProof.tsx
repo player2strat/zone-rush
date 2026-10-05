@@ -37,7 +37,6 @@ interface SubmitProofProps {
     points: number
     verification_type: string
     tier2: { description: string; bonus_points: number } | null
-    phone_free_eligible: boolean
     is_time_based: boolean
   }
   closedZones: string[]
@@ -213,7 +212,6 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         reviewed_at: null,
         attempted_tier2: attemptTier2,
         tier2_approved: false,
-        phone_free_claimed: false,
         submitted_at: serverTimestamp(),
       })
 

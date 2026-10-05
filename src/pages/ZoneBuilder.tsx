@@ -54,6 +54,7 @@ import {
   type SnapTarget,
 } from "../lib/zoneSnapping";
 import { parseZonesFromGeojson } from "../lib/zoneImport";
+import { isPermissionDenied } from "../lib/gameMembership";
 import { BRAND } from '../lib/brand'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -1268,7 +1269,7 @@ export default function ZoneBuilder() {
     try {
       const [zoneSnap, gameSnap] = await Promise.all([
         getDocs(query(collection(db, "zones"), where("map_id", "==", selectedMap.id))),
-        getDocs(query(collection(db, "games"), where("map_id", "==", selectedMap.id))),
+        gamesOnMap(selectedMap.id),
       ]);
       let liveGames = 0;
       let endedGames = 0;
@@ -1351,10 +1352,21 @@ export default function ZoneBuilder() {
 
   // ---- Merge / split tools ----
 
+  // Every game on this map. Admin-only: the rules let a GM list just their
+  // own games, so for them the query is refused rather than undercounted.
+  async function gamesOnMap(mapId: string) {
+    try {
+      return await getDocs(query(collection(db, "games"), where("map_id", "==", mapId)));
+    } catch (err) {
+      if (isPermissionDenied(err)) throw new Error("only admin accounts can change a map that games use");
+      throw err;
+    }
+  }
+
   // Count games on this map that are still in progress. Changing zone ids
   // under a live game would break it, so merge/split refuse while any exist.
   async function liveGamesOnMap(mapId: string): Promise<number> {
-    const snap = await getDocs(query(collection(db, "games"), where("map_id", "==", mapId)));
+    const snap = await gamesOnMap(mapId);
     let n = 0;
     snap.forEach((g) => {
       if (g.data().status !== "ended") n++;

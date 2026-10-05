@@ -51,9 +51,10 @@ async function loadPastForays(uid: string): Promise<PastForay[]> {
       .map((t) => ({ ref: t.ref.parent.parent, team: t.data() }))
       .filter((r): r is typeof r & { ref: NonNullable<typeof r.ref> } => !!r.ref)
       .filter((r) => !out.has(r.ref.id))
-    const games = await Promise.all(rows.map((r) => getDoc(r.ref)))
+    // A game we're not on the roster of can't be read — skip it, keep the rest.
+    const games = await Promise.all(rows.map((r) => getDoc(r.ref).catch(() => null)))
     games.forEach((g, i) => {
-      if (g.exists() && g.data().status === 'ended') {
+      if (g?.exists() && g.data().status === 'ended') {
         out.set(g.id, {
           id: g.id,
           name: g.data().name || 'Untitled game',

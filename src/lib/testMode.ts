@@ -128,7 +128,6 @@ export async function createTestSubmissions(
       reviewed_at: null,
       attempted_tier2: false,
       tier2_approved: false,
-      phone_free_claimed: false,
       is_test: true,
       submitted_at: serverTimestamp(),
     })

@@ -2,18 +2,21 @@
 // Foray — Late Join Page
 //
 // A player entered the code for a game that has already started and isn't on
-// a team. They pick a name and ask to join; the request lands in
-// games/{gameId}/join_requests/{uid} and the Game Master approves or denies it
-// from the GM Dashboard. This page watches the request and forwards the player
-// into the game the moment it's approved.
+// a team. They pick a name and ask to join; the request (which carries the
+// join code as proof) lands in games/{gameId}/join_requests/{uid} and the Game
+// Master approves or denies it from the GM Dashboard. Until they ask, the
+// rules don't let them see the game at all; while they wait they see only its
+// name and status. Approval puts them on the roster and a team, and this page
+// forwards them into the game.
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import { isPermissionDenied } from '../lib/gameMembership'
 
 interface JoinRequest {
   status: 'pending' | 'approved' | 'denied'
@@ -25,6 +28,8 @@ export default function LateJoinPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const navigate = useNavigate()
   const user = auth.currentUser
+  // The join code typed on the Join page (not there after a page reload).
+  const code = (useLocation().state as { code?: string } | null)?.code ?? null
 
   const [gameName, setGameName] = useState('')
   const [gameStatus, setGameStatus] = useState<string | null>(null)
@@ -33,37 +38,45 @@ export default function LateJoinPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // Watch the game — if it ends (or is somehow back in lobby) route accordingly.
-  useEffect(() => {
-    if (!gameId) return
-    const unsub = onSnapshot(doc(db, 'games', gameId), (snap) => {
-      if (!snap.exists()) {
-        navigate('/', { replace: true })
-        return
-      }
-      const data = snap.data()
-      setGameName(data.name || '')
-      setGameStatus(data.status || null)
-      if (data.status === 'lobby') navigate('/lobby/' + gameId, { replace: true })
-      if (data.status === 'ended') navigate('/results/' + gameId, { replace: true })
-    })
-    return unsub
-  }, [gameId, navigate])
-
   // Watch my request. Approved → into the game (GameRouteGuard does the rest).
   useEffect(() => {
     if (!gameId || !user) return
-    const unsub = onSnapshot(doc(db, 'games', gameId, 'join_requests', user.uid), (snap) => {
-      if (!snap.exists()) {
-        setRequest(null)
-        return
-      }
-      const data = snap.data() as JoinRequest
-      setRequest(data)
-      if (data.status === 'approved') navigate('/game/' + gameId, { replace: true })
-    })
+    const unsub = onSnapshot(
+      doc(db, 'games', gameId, 'join_requests', user.uid),
+      (snap) => {
+        if (!snap.exists()) {
+          setRequest(null)
+          return
+        }
+        const data = snap.data() as JoinRequest
+        setRequest(data)
+        if (data.status === 'approved') navigate('/game/' + gameId, { replace: true })
+      },
+      () => setRequest(null),
+    )
     return unsub
   }, [gameId, user, navigate])
+
+  // Watch the game once we've asked to join — before that the rules don't
+  // let us see it. Shows its name, and notices if it ends while we wait.
+  const hasRequest = !!request
+  useEffect(() => {
+    if (!gameId || !hasRequest) return
+    const unsub = onSnapshot(
+      doc(db, 'games', gameId),
+      (snap) => {
+        if (!snap.exists()) {
+          navigate('/', { replace: true })
+          return
+        }
+        const data = snap.data()
+        setGameName(data.name || '')
+        setGameStatus(data.status || null)
+      },
+      () => { /* request withdrawn — nothing to show */ },
+    )
+    return unsub
+  }, [gameId, hasRequest, navigate])
 
   // Suggest a name from the user's profile, same as the lobby does.
   useEffect(() => {
@@ -84,6 +97,7 @@ export default function LateJoinPage() {
       setError('Enter a name so the Game Master knows who you are.')
       return
     }
+    if (!code) return
     setBusy(true)
     setError('')
     try {
@@ -91,11 +105,14 @@ export default function LateJoinPage() {
         uid: user.uid,
         name: clean,
         status: 'pending',
+        join_code: code,
         requested_at: serverTimestamp(),
       })
       await setDoc(doc(db, 'users', user.uid), { display_name: clean }, { merge: true })
     } catch (err) {
-      setError('Could not send request: ' + (err as Error).message)
+      setError(isPermissionDenied(err)
+        ? "This game isn't taking new players — it may have ended."
+        : 'Could not send request: ' + (err as Error).message)
     }
     setBusy(false)
   }
@@ -127,8 +144,25 @@ export default function LateJoinPage() {
     </div>
   )
 
-  if (request === undefined || gameStatus === null) {
+  if (request === undefined || (request && gameStatus === null)) {
     return shell(<p style={{ color: 'var(--ink-faint)', textAlign: 'center' }}>Loading…</p>)
+  }
+
+  // ---- Ended while waiting ----
+  if (request && request.status !== 'approved' && gameStatus === 'ended') {
+    return shell(
+      <div style={{ textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 12px' }}>
+          This game has ended
+        </h1>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
+          <strong style={{ color: 'var(--ink-soft)' }}>{gameName}</strong> finished before the Game Master let you in.
+        </p>
+        <button onClick={handleCancel} disabled={busy} style={quietBtn}>
+          ← Back to Home
+        </button>
+      </div>
+    )
   }
 
   // ---- Waiting / denied ----
@@ -174,6 +208,23 @@ export default function LateJoinPage() {
     )
   }
 
+  // ---- No code (e.g. the page was reloaded) — the request needs it ----
+  if (!code) {
+    return shell(
+      <div style={{ textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0 0 12px' }}>
+          Enter the join code again
+        </h1>
+        <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
+          To ask the Game Master to let you in, start from the join code.
+        </p>
+        <button onClick={() => navigate('/join', { replace: true })} style={quietBtn}>
+          Enter code →
+        </button>
+      </div>
+    )
+  }
+
   // ---- Ask to join ----
   return shell(
     <>
@@ -181,9 +232,6 @@ export default function LateJoinPage() {
         ← Back
       </button>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
-          {gameName}
-        </p>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>
           This game is in progress
         </h1>

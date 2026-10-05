@@ -10,12 +10,17 @@
 //  - gm_broadcast:  GM sends to ALL teams simultaneously
 //
 // Messages live at: /games/{gameId}/messages/{messageId}
+//
+// Security rules let a player read only their own team's messages and GM
+// broadcasts, so player-side queries always filter by team_id or by
+// channel_type — an unfiltered read of the collection is refused.
 // =============================================================================
 
 import {
   collection, addDoc, query, where, orderBy,
   onSnapshot, updateDoc, doc, serverTimestamp,
   getDocs, arrayUnion,
+  type QuerySnapshot,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { Message } from '../types/game'
@@ -97,6 +102,46 @@ export async function sendGMBroadcast(
 
 // ─── Subscribe to Messages ────────────────────────────────────────────────────
 
+function toMessages(snap: QuerySnapshot): Message[] {
+  // Estimate pending server timestamps so a just-sent message sorts last.
+  return snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } as Message))
+}
+
+function sentAtMillis(msg: Message): number {
+  return (msg.sent_at as any)?.toMillis?.() ?? 0
+}
+
+/**
+ * Live feed of everything a team member may see — their team's messages and
+ * all GM broadcasts — oldest first. Two filtered listeners (the rules refuse
+ * an unfiltered read), merged once both have loaded.
+ */
+function subscribeToTeamFeed(
+  gameId: string,
+  teamId: string,
+  onMessages: (messages: Message[]) => void
+): () => void {
+  const messagesRef = collection(db, 'games', gameId, 'messages')
+  let teamMsgs: Message[] | null = null
+  let broadcasts: Message[] | null = null
+  const emit = () => {
+    if (!teamMsgs || !broadcasts) return
+    onMessages([...teamMsgs, ...broadcasts].sort((a, b) => sentAtMillis(a) - sentAtMillis(b)))
+  }
+  const unsubTeam = onSnapshot(query(messagesRef, where('team_id', '==', teamId)), (snap) => {
+    teamMsgs = toMessages(snap)
+    emit()
+  })
+  const unsubBroadcasts = onSnapshot(query(messagesRef, where('channel_type', '==', 'gm_broadcast')), (snap) => {
+    broadcasts = toMessages(snap)
+    emit()
+  })
+  return () => {
+    unsubTeam()
+    unsubBroadcasts()
+  }
+}
+
 /**
  * Subscribe to messages for a PLAYER (team member).
  * They see:
@@ -112,27 +157,7 @@ export function subscribeToPlayerMessages(
   teamId: string,
   onMessages: (messages: Message[]) => void
 ): () => void {
-  const messagesRef = collection(db, 'games', gameId, 'messages')
-
-  // Firestore can't OR across fields, so we fetch ordered and filter client-side.
-  const q = query(messagesRef, orderBy('sent_at', 'asc'))
-
-  return onSnapshot(q, (snap) => {
-    const messages: Message[] = []
-    snap.forEach((d) => {
-      const msg = { id: d.id, ...d.data() } as Message
-      if (
-        msg.channel_type === 'gm_broadcast' ||
-        ((msg.channel_type === 'team_internal' ||
-          msg.channel_type === 'team_to_gm' ||
-          msg.channel_type === 'gm_to_team') &&
-          msg.team_id === teamId)
-      ) {
-        messages.push(msg)
-      }
-    })
-    onMessages(messages)
-  })
+  return subscribeToTeamFeed(gameId, teamId, onMessages)
 }
 
 /**
@@ -214,24 +239,19 @@ export async function markMessagesRead(
   teamId?: string
 ): Promise<void> {
   const messagesRef = collection(db, 'games', gameId, 'messages')
-  const snap = await getDocs(query(messagesRef, orderBy('sent_at', 'asc')))
+  const queries = [query(messagesRef, where('channel_type', '==', 'gm_broadcast'))]
+  if (teamId) queries.push(query(messagesRef, where('team_id', '==', teamId)))
+  const snaps = await Promise.all(queries.map((q) => getDocs(q)))
 
   const updatePromises: Promise<void>[] = []
 
-  snap.forEach((d) => {
-    const msg = { id: d.id, ...d.data() } as Message
-
-    const isRelevant =
-      msg.channel_type === 'gm_broadcast' ||
-      (!!teamId && msg.team_id === teamId)
-
-    if (isRelevant && !msg.read_by?.includes(uid)) {
-      const msgRef = doc(db, 'games', gameId, 'messages', d.id)
-      updatePromises.push(
-        updateDoc(msgRef, { read_by: [...(msg.read_by ?? []), uid] })
-      )
+  snaps.forEach((snap) => snap.forEach((d) => {
+    const msg = d.data() as Message
+    if (!msg.read_by?.includes(uid)) {
+      // arrayUnion: the rules allow adding only your own uid to read_by.
+      updatePromises.push(updateDoc(d.ref, { read_by: arrayUnion(uid) }))
     }
-  })
+  }))
 
   await Promise.all(updatePromises)
 }
@@ -263,13 +283,9 @@ export function subscribeToUnreadCount(
   teamId: string,
   onCount: (count: number) => void
 ): () => void {
-  const messagesRef = collection(db, 'games', gameId, 'messages')
-  const q = query(messagesRef, orderBy('sent_at', 'asc'))
-
-  return onSnapshot(q, (snap) => {
+  return subscribeToTeamFeed(gameId, teamId, (messages) => {
     let count = 0
-    snap.forEach((d) => {
-      const msg = { id: d.id, ...d.data() } as Message
+    messages.forEach((msg) => {
       const isRelevant =
         msg.channel_type === 'gm_broadcast' ||
         (msg.channel_type === 'gm_to_team' && msg.team_id === teamId) ||

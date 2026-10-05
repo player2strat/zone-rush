@@ -1,6 +1,6 @@
 // =============================================================================
 // POST /api/render-reels   { gameId }
-// Auth: Firebase ID token of a GM/admin in the Authorization header.
+// Auth: Firebase ID token of this game's GM (or an admin) in the Authorization header.
 //
 // Kicks off one highlight-reel render per team. Called by the GM dashboard
 // the moment the champion is revealed (and by its "Render reels" button).
@@ -13,7 +13,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { FieldValue } from 'firebase-admin/firestore'
-import { adminDb, requireGm, errorStatus } from './_lib/admin.js'
+import { adminDb, requireUser, requireGameGm, errorStatus } from './_lib/admin.js'
 import {
   pickHighlights, buildReelSource, buildTemplateModifications, createRender,
   type ReelGame, type ReelTeam,
@@ -26,14 +26,15 @@ const MOCK_VIDEO = 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForB
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
   try {
-    await requireGm(req.headers.authorization)
+    await requireUser(req.headers.authorization)
     const gameId = String(req.body?.gameId ?? '')
-    if (!gameId) return res.status(400).json({ error: 'gameId required' })
+    if (!gameId || gameId.includes('/')) return res.status(400).json({ error: 'gameId required' })
 
     const db = adminDb()
     const gameSnap = await db.doc(`games/${gameId}`).get()
     if (!gameSnap.exists) return res.status(404).json({ error: 'Game not found' })
     const game = gameSnap.data() as Record<string, unknown>
+    await requireGameGm(req.headers.authorization, game)
     if (game.status !== 'ended') return res.status(400).json({ error: 'Game has not ended' })
 
     const when = (game.ended_at as { toDate?: () => Date } | undefined)?.toDate?.() ?? new Date()

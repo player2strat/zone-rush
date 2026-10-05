@@ -5,8 +5,9 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
+import { findGameByCode, joinWithCode, isPermissionDenied } from '../lib/gameMembership'
 
 export default function JoinGame() {
   const navigate = useNavigate()
@@ -26,45 +27,67 @@ export default function JoinGame() {
     setError('')
 
     try {
-      // Find the game with this join code (any status — we route by state below)
-      const q = query(collection(db, 'games'), where('join_code', '==', cleanCode))
-      const snapshot = await getDocs(q)
+      const uid = auth.currentUser?.uid
+      if (!uid) throw new Error('Not signed in')
 
-      if (snapshot.empty) {
+      // Codes are looked up one at a time — games can't be browsed.
+      const gameId = await findGameByCode(cleanCode)
+      if (!gameId) {
         setError('No game found with that code. Check the code and try again.')
         setSearching(false)
         return
       }
 
-      // Prefer a lobby if several games share the code; else the newest.
-      const docs = snapshot.docs
-      const gameDoc = docs.find((d) => d.data().status === 'lobby') || docs[docs.length - 1]
-      const status = gameDoc.data().status
+      // Already in this game (or its GM)? Then we can read it and route by
+      // state. Otherwise the read is refused and we join below.
+      let gameData: Record<string, any> | null = null
+      try {
+        const snap = await getDoc(doc(db, 'games', gameId))
+        gameData = snap.exists() ? snap.data() : null
+      } catch (err) {
+        if (!isPermissionDenied(err)) throw err
+      }
 
+      if (!gameData) {
+        // New to this game: entering the code puts you on the roster while
+        // it's in the lobby. Once it has started, ask the GM instead.
+        if (await joinWithCode(gameId, uid, cleanCode)) {
+          navigate('/lobby/' + gameId)
+        } else {
+          navigate('/late-join/' + gameId, { state: { code: cleanCode } })
+        }
+        return
+      }
+
+      const status = gameData.status
       if (status === 'lobby') {
-        navigate('/lobby/' + gameDoc.id)
+        navigate('/lobby/' + gameId)
         return
       }
       if (status === 'ended') {
-        navigate('/results/' + gameDoc.id)
+        navigate('/results/' + gameId)
         return
       }
       // In progress — only existing team members (or the GM) can enter.
       // GameRouteGuard sends GMs to /gm and players to /game from here.
-      const uid = auth.currentUser?.uid
-      const isGM = uid && (gameDoc.data().created_by === uid || (gameDoc.data().gm_uids || []).includes(uid))
+      const isGM = gameData.created_by === uid || (gameData.gm_uids || []).includes(uid)
       if (isGM) {
-        navigate('/gm/' + gameDoc.id)
+        navigate('/gm/' + gameId)
         return
       }
-      const teamsSnap = await getDocs(collection(db, 'games', gameDoc.id, 'teams'))
-      const onTeam = uid && teamsSnap.docs.some((t) => (t.data().members || []).includes(uid))
+      // (A late joiner still waiting for approval can see the game but not
+      // its teams — the read is refused, which also means "not on a team".)
+      const teamsSnap = await getDocs(collection(db, 'games', gameId, 'teams')).catch((err) => {
+        if (isPermissionDenied(err)) return null
+        throw err
+      })
+      const onTeam = !!teamsSnap?.docs.some((t) => (t.data().members || []).includes(uid))
       if (onTeam) {
-        navigate('/game/' + gameDoc.id)
+        navigate('/game/' + gameId)
         return
       }
       // Not on a team — ask the Game Master to let them in.
-      navigate('/late-join/' + gameDoc.id)
+      navigate('/late-join/' + gameId, { state: { code: cleanCode } })
     } catch (err) {
       setError('Error finding game: ' + (err as Error).message)
       setSearching(false)

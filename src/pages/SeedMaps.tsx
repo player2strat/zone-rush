@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { backfillRostersAndCodes } from '../lib/gameMembership'
 
 // ---------------------------------------------------------------------------
 // All 29 Manhattan zones (28 NTA neighborhoods + Central Park)
@@ -720,6 +721,22 @@ export default function SeedMaps() {
     setRunning(false)
   }
 
+  // One-time: existing games need their players on the roster (and live
+  // games need a join_codes entry) before the roster-based rules go live.
+  const runRosterBackfill = async () => {
+    setRunning(true)
+    setStatus([])
+    log('--- Backfilling game rosters + join codes ---')
+    try {
+      await backfillRostersAndCodes(log)
+      log('')
+      log('\u2705 Done. Existing players can open their games again.')
+    } catch (err) {
+      log(`\u2717 ${(err as Error).message} (admin accounts only)`)
+    }
+    setRunning(false)
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -783,6 +800,26 @@ export default function SeedMaps() {
           }}
         >
           {running ? 'Seeding...' : '\uD83C\uDF31 Seed All Zones + Map Sets'}
+        </button>
+
+        <button
+          onClick={runRosterBackfill}
+          disabled={running}
+          style={{
+            width: '100%',
+            background: running ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.1)',
+            border: '1px solid ' + (running ? 'var(--line)' : 'rgba(var(--marigold-rgb), 0.3)'),
+            color: running ? 'var(--ink-ghost)' : 'var(--marigold-deep)',
+            padding: '14px 24px',
+            borderRadius: 12,
+            fontSize: '0.95rem',
+            fontWeight: 700,
+            cursor: running ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            marginBottom: 20,
+          }}
+        >
+          {running ? 'Working...' : '\uD83D\uDD11 Backfill game rosters + join codes (one-time)'}
         </button>
 
         {status.length > 0 && (

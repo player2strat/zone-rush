@@ -27,8 +27,6 @@ import type { GameSettings, ZoneScore, Submission, Zone, Team } from '../types/g
 // ─── Point Values ─────────────────────────────────────────────────────────────
 
 const DEFAULT_POINTS: Record<string, number> = { easy: 1, medium: 2, hard: 3 }
-const DEFAULT_PHONE_FREE = 1
-const DEFAULT_PHONE_FREE_SILENT = 2
 
 // ─── Helper: read a ZoneScore doc with its id included ───────────────────────
 
@@ -42,7 +40,7 @@ function toZoneScore(docSnap: { id: string; data: () => any }): ZoneScore {
  * Called when a GM approves a submission.
  *
  * What it does:
- *  1. Calculates points (difficulty + tier2 bonus + phone-free bonus)
+ *  1. Calculates points (difficulty + tier2 bonus)
  *  2. Gets or creates the zone_score record for this team/zone
  *  3. Checks for zone claim (team reaches claim_threshold)
  *  4. Checks for zone lock (team reaches lock_threshold) — bonus awarded here
@@ -56,8 +54,7 @@ function toZoneScore(docSnap: { id: string; data: () => any }): ZoneScore {
 export async function approveSubmission(
   submissionId: string,
   reviewedByUid: string,
-  tier2Approved: boolean = false,
-  phoneFreeApproved: boolean = false
+  tier2Approved: boolean = false
 ): Promise<{ pointsAwarded: number; zoneClaimed: boolean; zoneStolen: boolean; zoneLocked: boolean }> {
 
   // 1. Load the submission
@@ -91,20 +88,12 @@ export async function approveSubmission(
     medium: settings.points_medium ?? DEFAULT_POINTS.medium,
     hard: settings.points_hard ?? DEFAULT_POINTS.hard,
   }
-  const phoneFreeBonus = settings.phone_free_bonus ?? DEFAULT_PHONE_FREE
-  const phoneFreeSilentBonus = settings.phone_free_no_talk_bonus ?? DEFAULT_PHONE_FREE_SILENT
 
   const difficultyKey = (challenge.difficulty ?? 'easy').toLowerCase()
   let points = difficultyPoints[difficultyKey] ?? DEFAULT_POINTS.easy
 
   if (tier2Approved && challenge.tier2?.bonus_points) {
     points += challenge.tier2.bonus_points
-  }
-
-  if (phoneFreeApproved) {
-    points += phoneFreeSilentBonus
-  } else if (submission.phone_free_claimed) {
-    points += phoneFreeBonus
   }
 
   // 5. Get or create this team's zone_score record
@@ -237,7 +226,6 @@ export async function approveSubmission(
   batch.update(subRef, {
     status: 'approved',
     tier2_approved: tier2Approved,
-    phone_free_approved: phoneFreeApproved,
     points_awarded: points,
     reviewed_by: reviewedByUid,
     reviewed_at: serverTimestamp(),
@@ -353,10 +341,10 @@ export async function checkZoneClosures(gameId: string): Promise<string[]> {
 }
 
 /**
- * Run both time-based schedules (closures then openings). Safe to call from
- * any client at any time: both checks are idempotent, atomic, and no-ops for
- * games without schedules. Called on an interval AND on screen load / app
- * foreground so a schedule can't be missed just because phones were asleep.
+ * Run both time-based schedules (closures then openings). GM dashboard only —
+ * security rules don't let players change which zones are open. Both checks
+ * are idempotent, atomic, and no-ops for games without schedules. Called on an
+ * interval AND on screen load / app foreground so a schedule isn't missed.
  */
 export async function runZoneSchedules(gameId: string): Promise<void> {
   try {

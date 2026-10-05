@@ -53,8 +53,9 @@ async function findActiveGameForUser(uid: string): Promise<string | null> {
       const gameRef = teamDoc.ref.parent.parent
       if (!gameRef) continue
 
-      const gameSnap = await getDoc(gameRef)
-      if (!gameSnap.exists()) continue
+      // A game we're not on the roster of can't be read — skip it.
+      const gameSnap = await getDoc(gameRef).catch(() => null)
+      if (!gameSnap?.exists()) continue
 
       const status = gameSnap.data().status
       if (status === 'active' || status === 'strategy' || status === 'paused') {

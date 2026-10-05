@@ -62,7 +62,8 @@ import {
 } from '../lib/endGame'
 import { recordGameResults, unrecordGameResults } from '../lib/gameResults'
 import { requestReelRender, type ReelFields } from '../lib/reels'
-import { registerInGame } from '../lib/gameMembership'
+import { addToRosterInBatch } from '../lib/gameMembership'
+import { isSequential, interpolateFinalTask } from '../lib/sequential'
 import {
   logEvent,
   getActivityLog,
@@ -130,7 +131,6 @@ interface SubmissionData {
   reviewed_at: any
   attempted_tier2: boolean
   tier2_approved: boolean
-  phone_free_claimed: boolean
   highlight?: boolean
   // Sequential ("Choose Your Own Adventure") submissions only — absent otherwise.
   resolved_task?: string
@@ -145,9 +145,12 @@ interface ChallengeData {
   difficulty: string
   points: number
   tier2: { description: string; bonus_points: number } | null
-  phone_free_eligible: boolean
   is_time_based: boolean
   player_profile: string
+  // Sequential ("Choose Your Own Adventure") cards only.
+  challenge_type?: string
+  steps?: string[]
+  final_task?: string
 }
 
 interface ZoneScoreData {
@@ -192,7 +195,7 @@ export default function GMDashboard() {
   const [loading, setLoading] = useState(true)
   const [allZoneData, setAllZoneData] = useState<any[]>([])
 
-  interface ReviewState { tier2Approved: boolean; phoneFreeBonus: number; notes: string }
+  interface ReviewState { tier2Approved: boolean; notes: string }
   const [reviewState, setReviewState] = useState<Map<string, ReviewState>>(new Map())
   const [processing, setProcessing] = useState<string | null>(null)
   const toast = useToast()
@@ -323,7 +326,8 @@ export default function GMDashboard() {
     URL.revokeObjectURL(a.href)
   }
 
-  // Approve: add to the chosen team + mark the request. One atomic batch.
+  // Approve: add to the game's roster and the chosen team + mark the
+  // request. One atomic batch.
   const handleApproveJoin = async (uid: string, name: string) => {
     if (!gameId) return
     const teamId = joinTeamPick[uid] || defaultTeamFor()
@@ -331,11 +335,11 @@ export default function GMDashboard() {
     setJoinBusy(uid)
     try {
       const batch = writeBatch(db)
+      addToRosterInBatch(batch, gameId, uid)
       batch.update(doc(db, 'games', gameId, 'teams', teamId), {
         members: arrayUnion(uid),
         member_names: arrayUnion(name),
       })
-      await registerInGame(gameId, uid)
       batch.update(doc(db, 'games', gameId, 'join_requests', uid), {
         status: 'approved',
         team_id: teamId,
@@ -364,11 +368,9 @@ export default function GMDashboard() {
     setJoinBusy(null)
   }
 
-  // Zone open/close schedules also run from the GM's screen — it's the one
-  // most likely to stay awake all game, so schedules fire even when every
-  // player's phone is asleep. Immediate + foreground + once a minute.
-  // Timed zone LOCKOUTS run only here: they award points, and security rules
-  // restrict score writes to the GM/admin.
+  // Zone open/close schedules and timed zone LOCKOUTS run only from the GM's
+  // screen: security rules let only the GM change which zones are open or
+  // award points. Immediate + foreground + once a minute.
   useEffect(() => {
     if (game?.status !== 'active' || !gameId) return
     const run = () => {
@@ -930,11 +932,11 @@ export default function GMDashboard() {
   }
 
   const getReviewState = (subId: string) =>
-    reviewState.get(subId) || { tier2Approved: false, phoneFreeBonus: 0, notes: '' }
+    reviewState.get(subId) || { tier2Approved: false, notes: '' }
 
   const updateReviewState = (
     subId: string,
-    updates: Partial<{ tier2Approved: boolean; phoneFreeBonus: number; notes: string }>
+    updates: Partial<{ tier2Approved: boolean; notes: string }>
   ) => {
     setReviewState((prev) => {
       const next = new Map(prev)
@@ -1021,8 +1023,7 @@ export default function GMDashboard() {
       const result = await approveSubmission(
         sub.id,
         user?.uid ?? '',
-        review.tier2Approved,
-        review.phoneFreeBonus > 0
+        review.tier2Approved
       )
 
     // Auto-broadcasts for zone events
@@ -1862,6 +1863,12 @@ export default function GMDashboard() {
                   const diffColor = DIFFICULTY_COLORS[challenge?.difficulty || 'medium'] || 'var(--marigold-deep)'
                   const basePts = (game?.settings as any)?.[`points_${challenge?.difficulty || 'medium'}`] ?? ({ easy: 1, medium: 2, hard: 3 }[challenge?.difficulty || 'medium'] ?? 2)
                   const gpsCheck = checkGpsProximity(sub)
+                  // Task text comes from the card, never from the submission
+                  // (its resolved_task is player-written). CYOA cards fill the
+                  // card's template with the team's locked choices.
+                  const cyoaTask = challenge && isSequential(challenge)
+                    ? interpolateFinalTask(challenge.final_task ?? '', sub.step_choices ?? [])
+                    : null
 
                   return (
                     <div key={sub.id} style={{ background: sub.status === 'pending' ? 'rgba(var(--marigold-rgb), 0.02)' : 'rgba(var(--ink-rgb), 0.02)', border: `1px solid ${sub.status === 'pending' ? 'rgba(var(--marigold-rgb), 0.15)' : 'var(--line)'}`, borderRadius: 14, padding: 20, opacity: isProcessing ? 0.6 : 1, transition: 'opacity 0.2s' }}>
@@ -1892,7 +1899,7 @@ export default function GMDashboard() {
                       </div>
 
                                           {/* Challenge text — resolved task for CYOA cards, else description */}
-                      {sub.resolved_task ? (
+                      {cyoaTask ? (
                         <div style={{ marginBottom: 14 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '0.62rem', fontWeight: 800, padding: '2px 8px', borderRadius: 20, background: 'rgba(var(--pink-rgb), 0.2)', color: 'var(--pink)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
@@ -1905,7 +1912,7 @@ export default function GMDashboard() {
                             )}
                           </div>
                           <p style={{ color: 'var(--ink)', fontSize: '0.9rem', lineHeight: 1.6, fontWeight: 600, background: 'rgba(var(--pink-rgb), 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(var(--pink-rgb), 0.2)' }}>
-                            {sub.resolved_task}
+                            {cyoaTask}
                           </p>
                         </div>
                       ) : (
