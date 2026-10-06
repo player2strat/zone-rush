@@ -1,4 +1,4 @@
-# Zone Rush — Roadmap / Deferred Work
+# Foray — Roadmap / Deferred Work
 
 A running list of planned and deferred work. Kept in the repo so it travels with
 the code and syncs into the claude.ai project (if connected as a knowledge source).

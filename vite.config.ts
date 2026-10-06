@@ -12,30 +12,9 @@ export default defineConfig({
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
-      manifest: {
-        name: 'Zone Rush',
-        short_name: 'Zone Rush',
-        description: 'Team-based urban scavenger hunt',
-        theme_color: '#0a0a0a',
-        background_color: '#0a0a0a',
-        display: 'standalone',
-        orientation: 'portrait',
-        start_url: '/',
-        icons: [
-          {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-        ],
-      },
+      // The app manifest lives in public/manifest.json (linked from index.html),
+      // so the plugin shouldn't generate a second one.
+      manifest: false,
     }),
   ],
 })

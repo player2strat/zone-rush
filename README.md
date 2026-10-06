@@ -9,7 +9,8 @@ photo tallies across the whole game.
 
 - **React + TypeScript + Vite** — single-page app in `src/`
 - **Firebase** — Auth, Firestore, Storage (project `zonerush-9f2db`, console
-  name "zone-rush-alpha"). Config comes from `.env.local` (`VITE_FIREBASE_*`),
+  name "zone-rush-alpha"; the ID predates the Foray name and Firebase project
+  IDs can't be changed). Config comes from `.env.local` (`VITE_FIREBASE_*`),
   which is not committed — ask a teammate for a copy.
 - **Mapbox GL** — maps and the Zone Builder (`VITE_MAPBOX_TOKEN` in `.env.local`)
 - **Vercel** — hosting; SPA rewrite in `vercel.json`
