@@ -31,6 +31,7 @@ npm run dev
 | `src/components/` | Shared UI (game map, proof submission, side quests) |
 | `firestore.rules` | **Source of truth for security rules** — paste into the Firebase console (Firestore → Rules → Publish) after every change; there is no CLI auto-deploy |
 | `storage.rules` | Source of truth for the photo/video upload rules — paste into the Firebase console (Storage → Rules → Publish) |
+| `storage-cors.json` | Lets the website download Storage files in the browser (Export page, GM highlight zip). Applied once from Google Cloud Shell: `gcloud storage buckets update gs://zonerush-9f2db.firebasestorage.app --cors-file=storage-cors.json`. Add any new site address here and re-apply |
 | `ROADMAP.md` | Deferred work + the playtest checklist |
 | `data/` | Raw GeoJSON used to seed maps/zones |
 
