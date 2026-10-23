@@ -63,6 +63,10 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 // unmounts the whole page. Guard it and show a message instead.
 const HAS_MAPBOX_TOKEN = Boolean(import.meta.env.VITE_MAPBOX_TOKEN)
 
+// Map image id for the designer's lock icon, drawn above locked/closed zone
+// labels (the label font has no 🔒 glyph).
+const LOCK_IMAGE = 'foray-lock'
+
 const ZONE_COLORS: Record<string, string> = {
   zone_district_33: BRAND.green,
   zone_district_34: BRAND.marigold,
@@ -170,22 +174,23 @@ export default function GameMap({
       let borderWidth: number
       let labelColor: string
       let labelText: string = zone.name
+      let showLock = false
       // dashed border for "in progress" zones — clearly different from claimed
       let borderDash: number[] | null = null
 
       if (owner?.locked) {
         // LOCKED — a team reached lock_threshold and now owns this zone.
         // Locked beats closed: even though locking also closes the zone,
-        // it renders in the OWNING TEAM's color with 🔒 LOCKED, never gray.
-        // Rendered notably STRONGER than claimed (0.50 / border 4) so locked
-        // pops on the map — the 🔒 glyph doesn't render in the label font, so
-        // the heavier fill + border carries the visual distinction instead.
+        // it renders in the OWNING TEAM's color with a lock icon + LOCKED,
+        // never gray. Rendered notably STRONGER than claimed (0.50 / border 4)
+        // so locked pops on the map.
         fillColor = owner.teamColor
         fillOpacity = 0.82
         borderColor = owner.teamColor
         borderWidth = 6
         labelColor = owner.teamColor
-        labelText = `🔒 ${zone.name}\nLOCKED`
+        labelText = `${zone.name}\nLOCKED`
+        showLock = true
       } else if (isClosed) {
         // GM-closed but NOT locked → black out. (A locked zone is also closed,
         // but the owner?.locked branch above already handled it.)
@@ -194,7 +199,8 @@ export default function GameMap({
         borderColor = BRAND.inkMuted
         borderWidth = 2
         labelColor = BRAND.inkMuted
-        labelText = `🔒 ${zone.name}\nCLOSED`
+        labelText = `${zone.name}\nCLOSED`
+        showLock = true
       } else if (owner) {
         if (owner.claimed) {
           // Fully claimed → solid heavy fill + ★ label
@@ -242,6 +248,10 @@ export default function GameMap({
         )
         map.current!.setPaintProperty(`zone-label-${zone.id}`, 'text-color', labelColor)
         map.current!.setLayoutProperty(`zone-label-${zone.id}`, 'text-field', labelText)
+        // Lock sits just above the point; the text moves just below it.
+        const lock = showLock && map.current!.hasImage(LOCK_IMAGE)
+        map.current!.setLayoutProperty(`zone-label-${zone.id}`, 'icon-image', lock ? LOCK_IMAGE : '')
+        map.current!.setLayoutProperty(`zone-label-${zone.id}`, 'text-anchor', lock ? 'top' : 'center')
 
         if (map.current!.getLayer(`zone-closed-${zone.id}`)) {
           map.current!.setLayoutProperty(
@@ -272,6 +282,18 @@ export default function GameMap({
     map.current.on('load', async () => {
       if (!map.current) return
       mapLoaded.current = true
+
+      // Lock icon for locked/closed labels — loaded before the label layers
+      // that use it. If it fails, labels just show the LOCKED/CLOSED text.
+      await new Promise<void>((resolve) => {
+        map.current!.loadImage('/icons/lock-richblue.png', (err, img) => {
+          if (!err && img && map.current && !map.current.hasImage(LOCK_IMAGE)) {
+            map.current.addImage(LOCK_IMAGE, img)
+          }
+          resolve()
+        })
+      })
+      if (!map.current) return
 
       // ---- Zone layers ----
       zones.forEach((zone) => {
@@ -334,6 +356,10 @@ export default function GameMap({
             'text-size': compact ? 11 : 14,
             'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
             'text-max-width': 8,
+            // 192px source image → ~22px on screen (~16px on compact maps)
+            'icon-size': compact ? 0.085 : 0.115,
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
           },
           paint: {
             'text-color': color,

@@ -26,6 +26,7 @@ import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
 import { isLocationSubmittable, locationStatusLabel, type UseLocationResult } from '../hooks/useLocation'
 import { compressImage } from '../lib/imageCompress'
+import { Icon } from './Icon'
 
 interface SubmitProofProps {
   gameId: string
@@ -423,7 +424,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             borderRadius: 10, padding: '12px 16px', marginBottom: 20,
             display: 'flex', gap: 10, alignItems: 'center',
           }}>
-            <span style={{ fontSize: '1rem', flexShrink: 0 }}>⏳</span>
+            <span style={{ fontSize: '1rem', flexShrink: 0 }}><Icon name="stopwatch" /></span>
             <p style={{ color: 'var(--ink-muted)', fontSize: '0.8rem', lineHeight: 1.5, margin: 0 }}>
               Loading game zones…
             </p>
@@ -544,7 +545,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
             borderRadius: 10, padding: '16px 20px', textAlign: 'center',
           }}>
             <p style={{ color: 'var(--red)', fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>
-              🔒 Zone {isZoneLocked ? 'Locked' : 'Closed'}
+              <Icon name="lock" /> Zone {isZoneLocked ? 'Locked' : 'Closed'}
             </p>
             <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
               {detectedZoneId?.replace('zone_district_', 'District ').replace('zone_mn_', '')} is no longer accepting submissions.

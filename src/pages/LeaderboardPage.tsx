@@ -12,6 +12,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 import { aggregateLeaderboard, loadAllResults, type LeaderboardRow } from '../lib/gameResults'
 import type { GameResult } from '../types/game'
+import { Icon, type IconName } from '../components/Icon'
 
 const MONO = "'Martian Mono', monospace"
 
@@ -19,7 +20,7 @@ type Scope = 'overall' | 'region' | 'city'
 
 interface CityInfo { id: string; name: string; region: string }
 
-const MEDALS = ['🥇', '🥈', '🥉']
+const MEDALS: IconName[] = ['first', 'second', 'third']
 
 export default function LeaderboardPage() {
   const navigate = useNavigate()
@@ -165,7 +166,7 @@ export default function LeaderboardPage() {
                   }}
                 >
                   <span style={{ fontFamily: MONO, fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-muted)', width: 28 }}>
-                    {i < 3 ? MEDALS[i] : i + 1}
+                    {i < 3 ? <Icon name={MEDALS[i]} size="1.6em" label={`#${i + 1}`} /> : i + 1}
                   </span>
                   <span style={{ flex: 1, minWidth: 0, fontWeight: mine ? 800 : 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.name}{mine ? ' (you)' : ''}

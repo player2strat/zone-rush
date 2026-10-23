@@ -24,6 +24,7 @@ import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
 import { snapshotZonesIntoBatch } from '../lib/gameZones'
 import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
+import { Icon } from '../components/Icon'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -619,7 +620,7 @@ export default function CreateGame() {
               disabled={!step1Valid}
               style={primaryBtnStyle(!step1Valid)}
             >
-              Next: Select Map →
+              Next: Select Map <Icon name="arrow" style={{ opacity: step1Valid ? 1 : 0.35 }} />
             </button>
           </div>
         )}
@@ -860,7 +861,7 @@ export default function CreateGame() {
                       disabled={!step2Valid}
                       style={primaryBtnStyle(!step2Valid)}
                     >
-                      Next: Settings →
+                      Next: Settings <Icon name="arrow" style={{ opacity: step2Valid ? 1 : 0.35 }} />
                     </button>
                   </>
                 )}
@@ -981,8 +982,8 @@ export default function CreateGame() {
                   background: 'rgba(var(--ink-rgb), 0.03)', borderBottom: '1px solid var(--line)',
                 }}>
                   <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--ink-faint)' }}>Zone</span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--green)', textAlign: 'center' }}>🔓 Opens</span>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#F77F00', textAlign: 'center' }}>⏱ Closes</span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--green)', textAlign: 'center' }}><Icon name="unlocked" /> Opens</span>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#F77F00', textAlign: 'center' }}><Icon name="stopwatch" /> Closes</span>
                 </div>
 
                 {zones
@@ -1060,7 +1061,7 @@ export default function CreateGame() {
                       return (
                         <p key={`${entry.kind}-${entry.zone_id}`} style={{ color: isOpen ? 'var(--green)' : '#F77F00', fontSize: '0.82rem', marginBottom: 3 }}>
                           <span style={{ fontFamily: "'Martian Mono', monospace", fontWeight: 700, marginRight: 8 }}>{entry.at} min</span>
-                          {isOpen ? '🔓' : '⏱'} {zone?.name} {isOpen ? 'opens' : 'closes'}
+                          <Icon name={isOpen ? 'unlocked' : 'stopwatch'} /> {zone?.name} {isOpen ? 'opens' : 'closes'}
                         </p>
                       )
                     })}

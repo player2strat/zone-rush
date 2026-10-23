@@ -49,6 +49,7 @@ import {
 import { logEvent } from '../lib/activityLog'
 import { useLocation } from '../hooks/useLocation'
 import LocationStatusPill from '../components/LocationStatusPill'
+import { EmojiIcon, Icon } from '../components/Icon'
 import { useToast } from '../hooks/useToast'
 
 // --------------- Types ---------------
@@ -793,7 +794,7 @@ export default function GamePage() {
         {submissions.size > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: '0.72rem', color: 'var(--ink-faint)' }}>
             {approvedCount > 0 && <span style={{ color: 'var(--green)' }}>✅ {approvedCount} approved</span>}
-            {pendingCount > 0 && <span style={{ color: 'var(--marigold-deep)' }}>⏳ {pendingCount} pending</span>}
+            {pendingCount > 0 && <span style={{ color: 'var(--marigold-deep)' }}><Icon name="stopwatch" /> {pendingCount} pending</span>}
             {zoneOwnership.size > 0 && (
               <span style={{ color: 'var(--pink)' }}>
                 🗺️ {Array.from(zoneOwnership.values()).filter(z => z.claimed).length} zone{Array.from(zoneOwnership.values()).filter(z => z.claimed).length !== 1 ? 's' : ''} claimed
@@ -986,7 +987,7 @@ export default function GamePage() {
                   ]
                 })().map((rule, i) => (
                   <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                    <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}>{rule.icon}</span>
+                    <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}><EmojiIcon emoji={rule.icon} /></span>
                     <p style={{ color: 'var(--ink-soft)', fontSize: '0.88rem', lineHeight: 1.65, margin: 0 }}>
                       {rule.text}
                     </p>
@@ -1117,7 +1118,7 @@ export default function GamePage() {
                             display: 'flex', alignItems: 'center', gap: 4,
                             animation: sub?.status === 'pending' ? 'pendingPulse 2s ease-in-out infinite' : 'none',
                           }}>
-                            {badge.icon} {badge.label}
+                            <EmojiIcon emoji={badge.icon} /> {badge.label}
                           </span>
                         )}
                         {/* ↺ on a collapsed pending card: expand it with the
@@ -1212,7 +1213,7 @@ export default function GamePage() {
                       <div style={{ marginTop: 4 }}>
                         <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '0.78rem', color: 'var(--ink-muted)', flexWrap: 'wrap' }}>
                           <span>Time: {TIME_LABELS[ch.time_estimate] || ch.time_estimate}</span>
-                          {ch.is_time_based && <span style={{ color: 'var(--marigold-deep)' }}>⏱ Timed challenge</span>}
+                          {ch.is_time_based && <span style={{ color: 'var(--marigold-deep)' }}><Icon name="stopwatch" /> Timed challenge</span>}
                         </div>
 
                         {ch.tier2 && (
@@ -1247,7 +1248,7 @@ export default function GamePage() {
                               textAlign: 'center', color: 'var(--marigold-deep)', fontSize: '0.88rem', fontWeight: 600,
                               animation: 'pendingPulse 2s ease-in-out infinite',
                             }}>
-                              ⏳ Waiting for GM review...
+                              <Icon name="stopwatch" /> Waiting for GM review...
                             </div>
                             {/* Withdraw a pending submission (wrong photo/video).
                                 Two taps: the first arms the confirm. */}
@@ -1287,7 +1288,7 @@ export default function GamePage() {
                             border: '1px solid var(--line)', padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem',
                           }}>
-                            🏁 Game Over — submissions closed
+                            <Icon name="flag" /> Game Over — submissions closed
                           </div>
                         ) : (
                           <button
@@ -1467,7 +1468,7 @@ export default function GamePage() {
                     opacity: chatSending ? 0.5 : 1,
                   }}
                 >
-                  {chatSending ? '⏳' : '↑'}
+                  {chatSending ? <Icon name="stopwatch" /> : '↑'}
                 </button>
               </div>
 
@@ -1527,7 +1528,7 @@ export default function GamePage() {
           alignItems: 'center', justifyContent: 'center',
           gap: 16, padding: '0 32px', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
         }}>
-          <span style={{ fontSize: '2.5rem' }}>🏁</span>
+          <span style={{ fontSize: '2.5rem', lineHeight: 1 }}><Icon name="flag" /></span>
           <h2 style={{ color: 'var(--marigold-deep)', fontWeight: 800, fontSize: '1.5rem', textAlign: 'center', margin: 0 }}>Game Over</h2>
           <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', textAlign: 'center', lineHeight: 1.6, margin: 0 }}>
             The GM has ended the game. Time to see how you did!
@@ -1540,7 +1541,7 @@ export default function GamePage() {
               padding: '14px 32px', cursor: 'pointer',
             }}
           >
-            View Results →
+            View Results <Icon name="arrow" />
           </button>
         </div>
       )}

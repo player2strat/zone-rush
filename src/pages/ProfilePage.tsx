@@ -13,6 +13,7 @@ import { loadPlayerResults, playedAtMs } from '../lib/gameResults'
 import { computeBadges, crewStreak } from '../lib/badges'
 import { formatDistance } from '../lib/distance'
 import type { GameResult } from '../types/game'
+import { EmojiIcon, Icon } from '../components/Icon'
 
 const MONO = "'Martian Mono', monospace"
 
@@ -112,7 +113,7 @@ export default function ProfilePage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 18, color: 'var(--ink-muted)', fontSize: '0.8rem', marginBottom: 28, flexWrap: 'wrap' }}>
               <span>🚶 {formatDistance(stats.distance)} covered</span>
-              <span>🏴 {stats.zones} zones</span>
+              <span><Icon name="flag" /> {stats.zones} zones</span>
               <span>⚡ {stats.challenges} challenges</span>
             </div>
 
@@ -128,7 +129,7 @@ export default function ProfilePage() {
                   borderRadius: 12, padding: '12px 8px', textAlign: 'center',
                   opacity: b.earned ? 1 : 0.6,
                 }}>
-                  <div style={{ fontSize: '1.5rem', lineHeight: 1, filter: b.earned ? 'none' : 'grayscale(1)' }}>{b.emoji}</div>
+                  <div style={{ fontSize: '1.5rem', lineHeight: 1, filter: b.earned ? 'none' : 'grayscale(1)' }}><EmojiIcon emoji={b.emoji} /></div>
                   <p style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--ink)', margin: '6px 0 2px' }}>{b.label}</p>
                   <p style={{ fontSize: '0.62rem', color: 'var(--ink-faint)', margin: 0, lineHeight: 1.3 }}>
                     {b.earned ? b.description : b.progress}

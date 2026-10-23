@@ -16,6 +16,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { EndGameAward } from '../types/game'
+import { EmojiIcon, Icon } from './Icon'
 import {
   revealStageAt, revealTotalSteps, revealedAwardCount, revealedPoints, finalPoints, ordinal,
 } from '../lib/reveal'
@@ -76,8 +77,11 @@ function placeLabel(place: number, tied: boolean): string {
   return `${tied ? 'T-' : ''}${ordinal(place)}`
 }
 
-function medalFor(place: number): string {
-  return place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : ''
+function medalFor(place: number): ReactNode {
+  if (place === 1) return <Icon name="first" label="1st" />
+  if (place === 2) return <Icon name="second" label="2nd" />
+  if (place === 3) return <Icon name="third" label="3rd" />
+  return null
 }
 
 export default function EndGameReveal({
@@ -224,7 +228,7 @@ export default function EndGameReveal({
           border: `1px solid ${winner ? winner.color + '60' : 'var(--line)'}`,
           animation: 'revealPop 0.6s ease both',
         }}>
-          <div style={{ fontSize: compact ? '1.6rem' : '2.4rem', lineHeight: 1, marginBottom: 8 }}>{award.emoji}</div>
+          <div style={{ fontSize: compact ? '1.6rem' : '2.4rem', lineHeight: 1, marginBottom: 8 }}><EmojiIcon emoji={award.emoji} /></div>
           <p style={{ fontWeight: 800, fontSize: compact ? '0.95rem' : '1.15rem', color: 'var(--ink)', margin: '0 0 4px' }}>
             {award.label}
           </p>
@@ -341,7 +345,7 @@ export default function EndGameReveal({
         border: `1px solid ${champion.color}70`,
         animation: 'revealPop 0.7s ease both',
       }}>
-        <div style={{ fontSize: compact ? '1.8rem' : '2.8rem', lineHeight: 1, marginBottom: 8 }}>🏆</div>
+        <div style={{ fontSize: compact ? '1.8rem' : '2.8rem', lineHeight: 1, marginBottom: 8 }}><Icon name="trophy" /></div>
         <p style={{ fontSize: '0.7rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700, margin: '0 0 8px' }}>
           {tiedTop ? 'Tied champions' : 'Champions'}
         </p>

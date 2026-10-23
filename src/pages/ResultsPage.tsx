@@ -40,6 +40,7 @@ import RecapCarousel, { type RecapCardSpec } from '../components/RecapCarousel'
 import { teamDistanceMeters, formatDistance } from '../lib/distance'
 import { shareReel, type ReelFields } from '../lib/reels'
 import type { EndGameAward } from '../types/game'
+import { EmojiIcon, Icon } from '../components/Icon'
 
 // --------------- Types ---------------
 
@@ -817,7 +818,7 @@ export default function ResultsPage() {
                             : sub.status === 'rejected' ? 'var(--red)' : 'var(--marigold)',
                           fontWeight: 700,
                         }}>
-                          {sub.status === 'approved' ? '✓ Approved' : sub.status === 'rejected' ? '✕ Rejected' : '⏳ Pending'}
+                          {sub.status === 'approved' ? '✓ Approved' : sub.status === 'rejected' ? '✕ Rejected' : <><Icon name="stopwatch" /> Pending</>}
                         </span>
                         {sub.zone_id && (
                           <span style={{ color: 'var(--ink-faint)' }}> · {formatZoneLabel(sub.zone_id)}</span>
@@ -842,10 +843,10 @@ export default function ResultsPage() {
             }}
           >
             {revealDone
-              ? "🏆 That's a wrap — thanks for playing!"
+              ? <><Icon name="trophy" /> That's a wrap — thanks for playing!</>
               : revealStarted
                 ? '👀 The GM is revealing the results live. Keep this screen open.'
-                : '🏁 Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.'}
+                : <><Icon name="flag" /> Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.</>}
           </div>
 
           {/* ====== HIGHLIGHT REEL (arrives a few minutes after the reveal) ====== */}
@@ -903,7 +904,7 @@ export default function ResultsPage() {
                 </div>
               ) : myTeam.reel_status === 'rendering' ? (
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--pink-rgb), 0.05)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 12 }}>
-                  ⏳ Your reel is rendering. It takes a few minutes — it'll appear here and we'll email you when it's ready.
+                  <Icon name="stopwatch" /> Your reel is rendering. It takes a few minutes — it'll appear here and we'll email you when it's ready.
                 </p>
               ) : (
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 12 }}>
@@ -1074,7 +1075,7 @@ export default function ResultsPage() {
             }}
           >
             <p style={{ fontSize: '2.4rem', marginBottom: 10 }}>
-              {isTie ? '🤝' : '🏆'}
+              {isTie ? '🤝' : <Icon name="trophy" />}
             </p>
             <p style={{
               fontSize: '0.72rem', color: isTie ? 'var(--ink-muted)' : winner.color,
@@ -1132,7 +1133,7 @@ export default function ResultsPage() {
                     alignItems: 'center', marginBottom: 10,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: '1.2rem' }}>{rankStyle.medal}</span>
+                      <span style={{ fontSize: '1.2rem' }}><EmojiIcon emoji={rankStyle.medal} label={rankStyle.label} /></span>
                       <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
                       <div>
                         <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{team.name}</span>
@@ -1202,7 +1203,7 @@ export default function ResultsPage() {
                             fontWeight: 600,
                           }}>
                             {formatZoneLabel(zs.zone_id)} · {zs.points}pt
-                            {zs.status === 'locked' ? ' 🔒' : zs.status === 'claimed' ? ' ★' : ''}
+                            {zs.status === 'locked' ? <> <Icon name="lock" /></> : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                         ))}
                     </div>

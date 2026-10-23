@@ -17,6 +17,7 @@
 
 import { useState, useEffect } from 'react'
 import SubmitProof from './SubmitProof'
+import { Icon } from './Icon'
 import {
   subscribeProgress, lockStep, markCompleted, interpolateFinalTask,
 } from '../lib/sequential'
@@ -138,7 +139,7 @@ export default function SequentialCard({
         </div>
         {submissionStatus && (
           <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isApproved ? 'var(--green)' : isPending ? 'var(--marigold-deep)' : 'var(--red)' }}>
-            {isApproved ? '✅ Approved' : isPending ? '⏳ Pending' : '❌ Rejected'}
+            {isApproved ? '✅ Approved' : isPending ? <><Icon name="stopwatch" /> Pending</> : '❌ Rejected'}
           </span>
         )}
       </div>
@@ -225,7 +226,7 @@ export default function SequentialCard({
                   cursor: draft.trim() && !locking ? 'pointer' : 'default', fontFamily: 'inherit',
                 }}
               >
-                {locking ? 'Locking…' : `🔒 Lock Part ${lockedCount + 1} (can\u2019t be changed)`}
+                {locking ? 'Locking…' : <><Icon name="lock" /> Lock Part {lockedCount + 1} (can’t be changed)</>}
               </button>
               <p style={{ fontSize: '0.68rem', color: 'var(--ink-muted)', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
                 Once locked, this choice is final. You won\u2019t see the full challenge until every part is locked.
@@ -263,11 +264,11 @@ export default function SequentialCard({
           {allLocked && resolvedTask && !isApproved && (
             isPending ? (
               <div style={{ width: '100%', background: 'rgba(var(--marigold-rgb), 0.08)', border: '1px solid rgba(var(--marigold-rgb), 0.2)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--marigold-deep)', fontSize: '0.88rem', fontWeight: 600 }}>
-                ⏳ Waiting for GM review…
+                <Icon name="stopwatch" /> Waiting for GM review…
               </div>
             ) : gameEnded ? (
               <div style={{ width: '100%', background: 'rgba(var(--ink-rgb), 0.03)', border: '1px solid var(--line)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem' }}>
-                🏁 Game Over — submissions closed
+                <Icon name="flag" /> Game Over — submissions closed
               </div>
             ) : (
               <button

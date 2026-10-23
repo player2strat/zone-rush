@@ -72,6 +72,7 @@ import {
 } from '../lib/activityLog'
 import JSZip from 'jszip'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
+import { Icon } from '../components/Icon'
 
 // --------------- Types ---------------
 
@@ -1321,7 +1322,7 @@ export default function GMDashboard() {
             )}
             {game.status === 'ended' && (
               <button onClick={() => navigate('/results/' + gameId)} style={{ background: 'rgba(var(--marigold-rgb), 0.12)', border: '1px solid rgba(var(--marigold-rgb), 0.3)', color: 'var(--marigold-deep)', padding: '7px 12px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                🏆 View Results
+                <Icon name="trophy" /> View Results
               </button>
             )}
           </div>
@@ -1363,7 +1364,7 @@ export default function GMDashboard() {
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', background: bonusesApplied ? 'rgba(var(--green-rgb), 0.03)' : 'rgba(var(--marigold-rgb), 0.03)', flexShrink: 0 }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             <p style={{ fontSize: '0.7rem', color: bonusesApplied ? 'var(--green)' : 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700, marginBottom: bonusesApplied ? 6 : 16 }}>
-              {bonusesApplied ? '🎬 Results Reveal' : '🏁 Award Side Quest Points'}
+              {bonusesApplied ? '🎬 Results Reveal' : <><Icon name="flag" /> Award Side Quest Points</>}
             </p>
             {!bonusesApplied && (
               <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -8, marginBottom: 16 }}>
@@ -1411,7 +1412,7 @@ export default function GMDashboard() {
                       disabled={revealBusy || done}
                       style={{ background: done ? 'rgba(var(--green-rgb), 0.12)' : 'var(--marigold)', border: `1px solid ${done ? 'rgba(var(--green-rgb), 0.35)' : 'var(--marigold-deep)'}`, color: done ? 'var(--green)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: revealBusy || done ? 'default' : 'pointer', fontFamily: 'inherit', flex: '1 1 auto', minWidth: 200 }}
                     >
-                      {done ? '✅ Reveal complete · bonus points added to totals' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : `Next → ${nextLabel}`}
+                      {done ? '✅ Reveal complete · bonus points added to totals' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : <>Next: {nextLabel} <Icon name="arrow" /></>}
                     </button>
                     <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: 'var(--ink-faint)' }}>
                       {step} / {total}
@@ -1493,7 +1494,7 @@ export default function GMDashboard() {
                       </div>
                       {teams.map((t) => {
                         const label = t.reel_status === 'ready' ? (t.reel_mock ? '✅ ready (sample video)' : '✅ ready')
-                          : t.reel_status === 'rendering' ? '⏳ rendering…'
+                          : t.reel_status === 'rendering' ? <><Icon name="stopwatch" /> rendering…</>
                           : t.reel_status === 'failed' ? `❌ failed — ${t.reel_error ?? 'unknown error'}`
                           : t.reel_status === 'skipped' ? '— no media to build from'
                           : 'not started'
@@ -1592,7 +1593,7 @@ export default function GMDashboard() {
                   {/* Most Zones With Challenges */}
                   <div style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>
-                      🏆 Most Zones Explored
+                      <Icon name="trophy" /> Most Zones Explored
                       <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{game.settings.most_zones_with_challenges_bonus ?? 8} pts</span>
                     </p>
                     <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Zones with at least 1 challenge completed</p>
@@ -1945,7 +1946,7 @@ export default function GMDashboard() {
 
                       {gpsCheck === 'outside' && sub.status === 'pending' && (
                         <div style={{ background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.2)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>🚩</span>
+                          <Icon name="flag" color="red" />
                           <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}</p>
                         </div>
                       )}
@@ -2046,7 +2047,7 @@ export default function GMDashboard() {
                           const owned = zs.status === 'claimed' || zs.status === 'locked'
                           return (
                           <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: owned ? `${team.color}20` : 'rgba(var(--ink-rgb), 0.04)', border: `1px solid ${owned ? `${team.color}40` : 'var(--line)'}`, color: owned ? team.color : 'var(--ink-faint)', fontWeight: 600, fontFamily: "'Martian Mono', monospace" }}>
-                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'locked' ? ' 🔒' : zs.status === 'claimed' ? ' ★' : ''}
+                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'locked' ? <> <Icon name="lock" /></> : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                           )
                         })}
@@ -2308,7 +2309,7 @@ export default function GMDashboard() {
                   disabled={activityLoading}
                   style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-muted)', padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: activityLoading ? 'wait' : 'pointer', fontFamily: 'inherit' }}
                 >
-                  {activityLoading ? '⏳ Loading...' : '↻ Refresh'}
+                  {activityLoading ? <><Icon name="stopwatch" /> Loading...</> : '↻ Refresh'}
                 </button>
                 <button
                   onClick={handleDownloadActivityCSV}
@@ -2350,7 +2351,7 @@ export default function GMDashboard() {
 
             {activityLoading && activityRows.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-ghost)' }}>
-                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}>⏳</p>
+                <p style={{ fontSize: '1.5rem', marginBottom: 8 }}><Icon name="stopwatch" /></p>
                 <p>Loading activity log...</p>
               </div>
             ) : activityRows.length === 0 ? (
