@@ -14,7 +14,7 @@
 // CORS setting (storage-cors.json) to allow this site.
 // =============================================================================
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '../lib/firebase'
 import { useUserRole } from '../hooks/useUserRole'
@@ -42,6 +42,10 @@ const STATUS_LABEL: Record<string, string> = {
 const TONE_COLOR: Record<Tone, string> = {
   ok: 'var(--green-deep)', warn: 'var(--marigold-deep)', error: 'var(--red-deep)',
 }
+
+const ALL_GMS = '*'
+
+const gamesLabel = (n: number) => `${n} game${n === 1 ? '' : 's'}`
 
 function startLabel(game: ExportGame): string {
   if (!game.startedAt) return 'Not started'
@@ -73,7 +77,18 @@ export default function ExportPage() {
   const [counts, setCounts] = useState<Record<string, Counts>>({})
   const [job, setJob] = useState<Job | null>(null)
   const [results, setResults] = useState<Record<string, { tone: Tone; text: string }>>({})
+  const [gmFilter, setGmFilter] = useState(ALL_GMS)
   const abortRef = useRef<AbortController | null>(null)
+
+  // One option per GM, A to Z. Keyed by uid, since two GMs could share a name.
+  const gmOptions = useMemo(() => {
+    const byId = new Map<string, { name: string; count: number }>()
+    games?.forEach((g) => {
+      const prev = byId.get(g.gmId)
+      byId.set(g.gmId, { name: g.gmName, count: (prev?.count ?? 0) + 1 })
+    })
+    return [...byId].map(([id, o]) => ({ id, ...o })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [games])
 
   const setResult = (gameId: string, tone: Tone, text: string) =>
     setResults((prev) => ({ ...prev, [gameId]: { tone, text } }))
@@ -229,7 +244,27 @@ export default function ExportPage() {
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {games.map((g) => {
+            {gmOptions.length > 1 && (
+              <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-muted)', marginBottom: 4 }}>
+                Filter by GM
+                <select
+                  value={gmFilter}
+                  disabled={!!job}
+                  onChange={(e) => setGmFilter(e.target.value)}
+                  style={{
+                    background: 'var(--surface)', border: '1px solid var(--line-strong)', color: 'var(--ink)',
+                    padding: '8px 10px', borderRadius: 8, fontSize: '0.85rem', fontFamily: 'inherit', maxWidth: '100%',
+                    cursor: job ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <option value={ALL_GMS}>All GMs ({gamesLabel(games.length)})</option>
+                  {gmOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name} ({gamesLabel(o.count)})</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {games.filter((g) => gmFilter === ALL_GMS || g.gmId === gmFilter).map((g) => {
               const c = counts[g.id]
               const hasSubs = !c || c === 'error' || c.submissions > 0
               const enabled = !job && hasSubs

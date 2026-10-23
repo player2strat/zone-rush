@@ -30,6 +30,7 @@ export interface ExportGame {
   startedAt: Date | null
   createdAt: Date | null
   practice: boolean
+  gmId: string      // the game's created_by uid
   gmName: string
 }
 

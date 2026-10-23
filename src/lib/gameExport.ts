@@ -41,7 +41,8 @@ export async function listExportGames(uid: string, isAdmin: boolean): Promise<Ex
   const creators = await getDocsById('users', creatorIds)
   const list = snap.docs.map((d): ExportGame => {
     const data = d.data()
-    const creator = creators.get(text(data.created_by))
+    const gmId = text(data.created_by)
+    const creator = creators.get(gmId)
     return {
       id: d.id,
       name: (data.name as string) || d.id,
@@ -49,6 +50,7 @@ export async function listExportGames(uid: string, isAdmin: boolean): Promise<Ex
       startedAt: toDate(data.started_at),
       createdAt: toDate(data.created_at),
       practice: data.practice === true,
+      gmId,
       gmName: text(creator?.display_name) || text(creator?.email) || 'Unknown',
     }
   })

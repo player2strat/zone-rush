@@ -7,7 +7,7 @@ import {
 
 const GAME: ExportGame = {
   id: 'g1', name: 'Beta: Brooklyn #2', status: 'ended',
-  startedAt: null, createdAt: null, practice: false, gmName: 'Sam',
+  startedAt: null, createdAt: null, practice: false, gmId: 'u1', gmName: 'Sam',
 }
 
 const url = (file: string) =>
