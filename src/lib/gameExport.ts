@@ -33,12 +33,15 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) =>
   return results
 }
 
-/** Games this account can export, newest first (by start, else creation). */
+/** Games this account can export, newest first (by start, else creation), with the GM's name. */
 export async function listExportGames(uid: string, isAdmin: boolean): Promise<ExportGame[]> {
   const games = collection(db, 'games')
   const snap = await getDocs(isAdmin ? games : query(games, where('created_by', '==', uid)))
+  const creatorIds = [...new Set(snap.docs.map((d) => text(d.data().created_by)).filter(Boolean))]
+  const creators = await getDocsById('users', creatorIds)
   const list = snap.docs.map((d): ExportGame => {
     const data = d.data()
+    const creator = creators.get(text(data.created_by))
     return {
       id: d.id,
       name: (data.name as string) || d.id,
@@ -46,6 +49,7 @@ export async function listExportGames(uid: string, isAdmin: boolean): Promise<Ex
       startedAt: toDate(data.started_at),
       createdAt: toDate(data.created_at),
       practice: data.practice === true,
+      gmName: text(creator?.display_name) || text(creator?.email) || 'Unknown',
     }
   })
   const when = (g: ExportGame) => (g.startedAt ?? g.createdAt)?.getTime() ?? 0

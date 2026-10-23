@@ -101,7 +101,7 @@ export default function AdminSeed() {
           ))}
         </div>
 
-        {/* Category breakdown */}
+        {/* Category breakdown (every challenge has exactly one, so these add up to Total) */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 24 }}>
           {[
             { label: "Humor", value: stats.byCategory.humor, color: "var(--pink)" },
@@ -111,7 +111,6 @@ export default function AdminSeed() {
             { label: "Fitness", value: stats.byCategory.fitness, color: "var(--red)" },
             { label: "Civic", value: stats.byCategory.civic, color: "var(--marigold)" },
             { label: "Art", value: stats.byCategory.art, color: "var(--pink)" },
-            { label: "Interact", value: stats.requiresInteraction, color: "var(--blue)" },
           ].map((s) => (
             <div key={s.label} style={{ background: "rgba(var(--ink-rgb), 0.03)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>
               <p style={{ fontSize: "1rem", fontWeight: 700, color: s.color }}>{s.value}</p>

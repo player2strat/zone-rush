@@ -259,6 +259,8 @@ export default function ExportPage() {
                     <div style={{ color: 'var(--ink-muted)', fontSize: '0.8rem', marginTop: 4 }}>
                       {startLabel(g)}
                       {' · '}
+                      GM: <strong style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>{g.gmName}</strong>
+                      {' · '}
                       {c === undefined
                         ? 'counting…'
                         : c === 'error'

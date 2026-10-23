@@ -30,6 +30,7 @@ export interface ExportGame {
   startedAt: Date | null
   createdAt: Date | null
   practice: boolean
+  gmName: string
 }
 
 /** One submission with the names needed to make it readable. */
