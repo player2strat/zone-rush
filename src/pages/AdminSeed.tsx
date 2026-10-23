@@ -2,29 +2,64 @@
 // Foray — Admin Seed Page
 // Route: /admin/seed (only accessible by admin/gm role users)
 // Purpose: One-click seeding of challenges into Firestore
+//
+// The cards count every challenge in Firestore (what games deal from), which
+// can be more than the seed file holds. Seeding only adds or overwrites the
+// seed file's challenges; it never removes the others.
 // =============================================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, doc, setDoc, getDocs } from "firebase/firestore";
 import { db, auth } from "../lib/firebase"; // adjust path to your firebase config
 import { challengeSeedData, getChallengeStats } from "../data/challengeSeedData";
+import { countChallenges, type ChallengeCounts } from "../lib/challengeStats";
+
+const CARD_COLOR: Record<string, string> = {
+  total: "var(--marigold)",
+  easy: "var(--green)",
+  medium: "var(--marigold)",
+  hard: "var(--red)",
+  humor: "var(--pink)",
+  culture: "var(--blue)",
+  exploration: "var(--green)",
+  food: "#F77F00",
+  fitness: "var(--red)",
+  civic: "var(--marigold)",
+  art: "var(--pink)",
+};
+
+async function loadChallengeCounts(): Promise<ChallengeCounts> {
+  const snapshot = await getDocs(collection(db, "challenges"));
+  return countChallenges(snapshot.docs.map((d) => d.data()));
+}
 
 export default function AdminSeed() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"idle" | "seeding" | "done" | "error">("idle");
   const [log, setLog] = useState<string[]>([]);
-  const [existingCount, setExistingCount] = useState<number | null>(null);
+  const [counts, setCounts] = useState<ChallengeCounts | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
 
   const addLog = (msg: string) => {
     setLog((prev) => [...prev, new Date().toLocaleTimeString() + " · " + msg]);
   };
 
+  // Count what's in Firestore as soon as the page opens.
+  useEffect(() => {
+    let cancelled = false;
+    loadChallengeCounts()
+      .then((c) => { if (!cancelled) setCounts(c); })
+      .catch((err) => { if (!cancelled) setCountError((err as Error).message); });
+    return () => { cancelled = true; };
+  }, []);
+
   const checkExisting = async () => {
     try {
-      const snapshot = await getDocs(collection(db, "challenges"));
-      setExistingCount(snapshot.size);
-      addLog("Found " + snapshot.size + " existing challenges in Firestore.");
+      const c = await loadChallengeCounts();
+      setCounts(c);
+      setCountError(null);
+      addLog("Found " + c.total + " existing challenges in Firestore.");
     } catch (err) {
       addLog("Error checking existing: " + (err as Error).message);
     }
@@ -67,10 +102,10 @@ export default function AdminSeed() {
 
     addLog("Done! " + success + " seeded, " + failed + " failed.");
     setStatus("done");
-    setExistingCount(success);
+    await checkExisting();
   };
 
-  const stats = getChallengeStats();
+  const seedTotal = challengeSeedData.length;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--paper)", color: "var(--ink)", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", padding: 24 }}>
@@ -82,42 +117,38 @@ export default function AdminSeed() {
           ← Home
         </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: 8 }}>Admin: Seed Challenges</h1>
-        <p style={{ color: "var(--ink-muted)", marginBottom: 24, fontSize: "0.9rem" }}>
-          Push all {stats.total} challenges into Firestore. Safe to run multiple times (uses set/upsert).
+        <p style={{ color: "var(--ink-muted)", marginBottom: 24, fontSize: "0.9rem", lineHeight: 1.5 }}>
+          The cards count every challenge in Firestore. "Seed All Challenges" adds the {seedTotal} challenges
+          in the seed file, overwriting any that are already there, and leaves all other challenges alone.
         </p>
 
-        {/* Top-level stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-          {[
-            { label: "Total", value: stats.total, color: "var(--marigold)" },
-            { label: "Easy", value: stats.byDifficulty.easy, color: "var(--green)" },
-            { label: "Medium", value: stats.byDifficulty.medium, color: "var(--marigold)" },
-            { label: "Hard", value: stats.byDifficulty.hard, color: "var(--red)" },
-          ].map((s) => (
-            <div key={s.label} style={{ background: "rgba(var(--ink-rgb), 0.03)", border: "1px solid var(--line)", borderRadius: 8, padding: 12, textAlign: "center" }}>
-              <p style={{ fontSize: "1.3rem", fontWeight: 700, color: s.color }}>{s.value}</p>
-              <p style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>{s.label}</p>
+        {countError ? (
+          <p style={{ color: "var(--red)", fontSize: "0.85rem", marginBottom: 24 }}>Couldn't count challenges: {countError}</p>
+        ) : !counts ? (
+          <p style={{ color: "var(--ink-faint)", fontSize: "0.85rem", marginBottom: 24 }}>Counting challenges in Firestore…</p>
+        ) : (
+          <>
+            {/* Total and difficulty (adds up to Total) */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(" + (counts.byDifficulty.length + 1) + ", 1fr)", gap: 8, marginBottom: 16 }}>
+              {[{ key: "total", label: "Total", count: counts.total }, ...counts.byDifficulty].map((s) => (
+                <div key={s.key} style={{ background: "rgba(var(--ink-rgb), 0.03)", border: "1px solid var(--line)", borderRadius: 8, padding: 12, textAlign: "center" }}>
+                  <p style={{ fontSize: "1.3rem", fontWeight: 700, color: CARD_COLOR[s.key] ?? "var(--ink-soft)" }}>{s.count}</p>
+                  <p style={{ fontSize: "0.72rem", color: "var(--ink-muted)" }}>{s.label}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Category breakdown (every challenge has exactly one, so these add up to Total) */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 24 }}>
-          {[
-            { label: "Humor", value: stats.byCategory.humor, color: "var(--pink)" },
-            { label: "Culture", value: stats.byCategory.culture, color: "var(--blue)" },
-            { label: "Exploration", value: stats.byCategory.exploration, color: "var(--green)" },
-            { label: "Food", value: stats.byCategory.food, color: "#F77F00" },
-            { label: "Fitness", value: stats.byCategory.fitness, color: "var(--red)" },
-            { label: "Civic", value: stats.byCategory.civic, color: "var(--marigold)" },
-            { label: "Art", value: stats.byCategory.art, color: "var(--pink)" },
-          ].map((s) => (
-            <div key={s.label} style={{ background: "rgba(var(--ink-rgb), 0.03)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>
-              <p style={{ fontSize: "1rem", fontWeight: 700, color: s.color }}>{s.value}</p>
-              <p style={{ fontSize: "0.68rem", color: "var(--ink-faint)" }}>{s.label}</p>
+            {/* Category breakdown (adds up to Total) */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 24 }}>
+              {counts.byCategory.map((s) => (
+                <div key={s.key} style={{ background: "rgba(var(--ink-rgb), 0.03)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>
+                  <p style={{ fontSize: "1rem", fontWeight: 700, color: CARD_COLOR[s.key] ?? "var(--ink-soft)" }}>{s.count}</p>
+                  <p style={{ fontSize: "0.68rem", color: "var(--ink-faint)" }}>{s.label}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
@@ -129,20 +160,17 @@ export default function AdminSeed() {
           </button>
         </div>
 
-        {existingCount !== null && (
-          <p style={{ color: "var(--ink-muted)", fontSize: "0.85rem", marginBottom: 16 }}>
-            Firestore currently has <strong style={{ color: "var(--ink)" }}>{existingCount}</strong> challenge documents.
-          </p>
-        )}
-
         {/* Additional stats */}
-        <div style={{ marginBottom: 24, padding: 16, background: "rgba(var(--ink-rgb), 0.02)", borderRadius: 8, border: "1px solid var(--line)", fontSize: "0.85rem", color: "var(--ink-muted)", display: "grid", gap: 6 }}>
-          <div>{stats.withTier2} have tier 2 bonuses</div>
-          <div>{stats.timeBased} are time-based (GM compares across teams)</div>
-          <div>{stats.requiresMoney} require spending money</div>
-          <div>{stats.requiresInteraction} require talking to strangers</div>
-          <div>{stats.needsTeammate} require 2+ players</div>
-        </div>
+        {counts && (
+          <div style={{ marginBottom: 24, padding: 16, background: "rgba(var(--ink-rgb), 0.02)", borderRadius: 8, border: "1px solid var(--line)", fontSize: "0.85rem", color: "var(--ink-muted)", display: "grid", gap: 6 }}>
+            <div>{counts.active} are active (only these get dealt in games)</div>
+            <div>{counts.withTier2} have tier 2 bonuses</div>
+            <div>{counts.timeBased} are time-based (GM compares across teams)</div>
+            <div>{counts.requiresMoney} require spending money</div>
+            <div>{counts.requiresInteraction} require talking to strangers</div>
+            <div>{counts.needsTeammate} require 2+ players</div>
+          </div>
+        )}
 
         {/* Log output */}
         {log.length > 0 && (
