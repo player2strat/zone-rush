@@ -202,7 +202,7 @@ export default function EndGameReveal({
         </div>
         <p style={{ color: 'var(--ink-faint)', fontSize: '0.78rem', textAlign: 'center', margin: '14px 0 0', lineHeight: 1.5 }}>
           {awards.length > 0
-            ? `${awards.length} bonus${awards.length === 1 ? '' : 'es'} still to come — anything can happen.`
+            ? `${awards.length} bonus${awards.length === 1 ? '' : 'es'} still to come. Anything can happen.`
             : 'No bonuses this game. On to the final standings…'}
         </p>
       </div>
@@ -255,7 +255,7 @@ export default function EndGameReveal({
             </div>
           ) : (
             <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', fontWeight: 600, margin: 0, animation: 'revealSlide 0.5s 0.35s ease both' }}>
-              It's a tie — nobody takes this one.
+              It's a tie, so nobody takes this one.
             </p>
           )}
         </div>
@@ -316,10 +316,12 @@ export default function EndGameReveal({
             border: `1px solid ${mine ? t.color + '60' : 'var(--line)'}`,
             animation: justRevealed ? 'revealSlide 0.5s ease both' : undefined,
           }}>
+            {/* Top three get the designer's 1/2/3 icon; everyone else the text label */}
             <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--ink-muted)', width: 44, fontWeight: 700 }}>
-              {placeLabel(place, finalTied(idx))}
+              {place <= 3
+                ? <span style={{ fontSize: '0.9rem' }}>{medalFor(place)}</span>
+                : placeLabel(place, finalTied(idx))}
             </span>
-            <span style={{ fontSize: '0.9rem', width: 18 }}>{medalFor(place)}</span>
             <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color, flexShrink: 0 }} />
             <span style={{
               fontWeight: mine ? 800 : 600, fontSize: compact ? '0.8rem' : '0.9rem', color: 'var(--ink)',

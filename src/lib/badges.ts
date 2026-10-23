@@ -40,7 +40,7 @@ export const CREW_PODIUMS = 3       // Podium Crew
 export const BADGES: BadgeDef[] = [
   { key: 'first_foray',   label: 'First Foray',      emoji: '🧭', description: 'Played your first game' },
   { key: 'regular',       label: 'Regular',          emoji: '🗓️', description: 'Played three games' },
-  { key: 'veteran',       label: 'Local',            emoji: '🗽', description: 'Played ten games — you know the city now' },
+  { key: 'veteran',       label: 'Local',            emoji: '🗽', description: 'Played ten games. You know the city now' },
   { key: 'podium',        label: 'Podium',           emoji: '🥉', description: 'Finished in the top three' },
   { key: 'champion',      label: 'Champion',         emoji: '🏆', description: 'Won a game' },
   { key: 'serial_winner', label: 'Serial Winner',    emoji: '👑', description: 'Won three games' },

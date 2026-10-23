@@ -243,7 +243,7 @@ export async function getActivityLog(
         points_delta: sub.status === 'approved' ? (sub.points_awarded ?? null) : 0,
         details:
           sub.status === 'approved'
-            ? `Approved "${chLabel}" — +${sub.points_awarded ?? '?'}pt`
+            ? `Approved "${chLabel}" (+${sub.points_awarded ?? '?'}pt)`
             : `Rejected "${chLabel}"`,
         gm_notes: sub.gm_notes ?? null,
         metadata: { tier2_approved: sub.tier2_approved },
@@ -329,7 +329,7 @@ export async function getActivityLog(
           zone_id: null,
           zone_name: null,
           points_delta: null,
-          details: `🎬 Game started — ${g.name ?? gameId}`,
+          details: `🎬 Game started: ${g.name ?? gameId}`,
           gm_notes: null,
           metadata: { settings: g.settings },
         })
@@ -443,7 +443,7 @@ function describeEvent(
 
 /**
  * Plain-English summary of the end-game side quest awards, e.g.
- *   🏁 Side quest points awarded — Most Zones Claimed: Pigeon Squad (+8) ·
+ *   🏁 Side quest points awarded: Most Zones Claimed: Pigeon Squad (+8) ·
  *   Most Zones Explored: no winner (tie) · Pothole Reporting: The Bodega Cats (+5)
  */
 function describeSideQuestAwards(
@@ -464,7 +464,7 @@ function describeSideQuestAwards(
     parts.push(`${quest?.title ?? questId}: ${teamLabel(teamId as string | null, quest?.bonus_points ?? 0)}`)
   }
   const who = auto ? 'awarded automatically' : 'awarded by GM'
-  return `🏁 Side quest points ${who} — ${parts.join(' · ')}`
+  return `🏁 Side quest points ${who}: ${parts.join(' · ')}`
 }
 
 // --------------- CSV export ---------------

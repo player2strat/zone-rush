@@ -1158,7 +1158,7 @@ export default function LobbyPage() {
               <div style={{ padding: '16px 20px 20px' }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--ink-faint)', marginBottom: 16, lineHeight: 1.6 }}>
                   Move players between teams, rename teams, or remove players.
-                  Changes apply instantly — all players see updates in real time.
+                  Changes apply instantly, and all players see updates in real time.
                 </p>
 
                 {teams.length === 0 && (

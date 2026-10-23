@@ -543,7 +543,7 @@ export default function CreateGame() {
             <div style={{ marginBottom: 28 }}>
               <label style={labelStyle}>Team Names</label>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
-                Pre-filled with fun defaults — leave them as-is or rename any team. You can also rename teams later in the lobby.
+                Pre-filled with fun defaults. Leave them as-is or rename any team. You can also rename teams later in the lobby.
               </p>
               <div style={{ display: 'grid', gap: 8 }}>
                 {teamNames.map((name, i) => {
@@ -728,7 +728,7 @@ export default function CreateGame() {
                       {activeMap?.name || 'Zones'}
                     </h1>
                     <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
-                      All zones included — toggle any off if needed
+                      All zones included. Toggle any off if needed
                     </p>
                   </div>
                   <button
@@ -887,7 +887,7 @@ export default function CreateGame() {
               <label style={labelStyle}>Side Quests</label>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 Running photo tallies (unlimited submissions, GM-reviewed).
-                Worth no points during the game — the team with the most
+                Worth no points during the game. The team with the most
                 approved wins the bonus at the end.
               </p>
 
@@ -971,7 +971,7 @@ export default function CreateGame() {
               <label style={labelStyle}>Zone Schedule</label>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
                 <strong style={{ color: 'var(--green)' }}>Opens</strong>: hold a zone back so it starts closed and opens at the set time.{' '}
-                <strong style={{ color: '#F77F00' }}>Closes</strong>: shut a zone at the set time — teams keep points earned there but can't score new ones. Leave both blank for a zone that's live all game.
+                <strong style={{ color: '#F77F00' }}>Closes</strong>: shut a zone at the set time. Teams keep points earned there but can't score new ones. Leave both blank for a zone that's live all game.
               </p>
 
               <div style={{ border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
@@ -1077,7 +1077,7 @@ export default function CreateGame() {
                     const zone = zones.find((z) => z.id === zoneId)
                     return (
                       <p key={zoneId} style={{ color: 'var(--red)', fontSize: '0.82rem', marginBottom: 3 }}>
-                        ⚠ {zone?.name} would open at or after it closes — its opening time will be ignored.
+                        ⚠ {zone?.name} would open at or after it closes, so its opening time will be ignored.
                       </p>
                     )
                   })}

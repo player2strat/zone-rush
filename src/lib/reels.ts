@@ -52,7 +52,7 @@ export async function shareReel(url: string, teamName: string): Promise<'shared'
       const file = new File([blob], `foray-${teamName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-reel.mp4`, { type: 'video/mp4' })
       if (nav.share && nav.canShare?.({ files: [file] })) {
         try {
-          await nav.share({ files: [file], title: `${teamName} — Foray highlight reel` })
+          await nav.share({ files: [file], title: `${teamName} · Foray highlight reel` })
           return 'shared'
         } catch (err) {
           if ((err as Error).name === 'AbortError') return 'cancelled'

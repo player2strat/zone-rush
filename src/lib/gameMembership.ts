@@ -111,7 +111,7 @@ export async function backfillRostersAndCodes(
       if (newCode) codes++
       log(`  \u2713 ${game.name || g.id}: ${uids.size} player(s)${newCode ? ', join code saved' : ''}`)
     } catch (err) {
-      log(`  \u2717 ${game.name || g.id} \u2014 ${(err as Error).message}`)
+      log(`  \u2717 ${game.name || g.id}: ${(err as Error).message}`)
     }
   }
   log(`Rosters: ${players} player entries across ${games.size} games; ${codes} join code(s) saved.`)

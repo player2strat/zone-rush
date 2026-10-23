@@ -487,11 +487,11 @@ export default function GamePage() {
         if (prevSubStatusRef.current && before === 'pending' && data.status !== 'pending') {
           const title = (data.challenge_description ?? 'your challenge').toString()
           if (data.status === 'approved') {
-            const pts = typeof data.points_awarded === 'number' ? ` +${data.points_awarded} pts` : ''
-            fresh.push({ id: d.id, at: Date.now(), tone: 'good', text: `Approved:${pts} — ${title}` })
+            const pts = typeof data.points_awarded === 'number' ? ` (+${data.points_awarded} pts)` : ''
+            fresh.push({ id: d.id, at: Date.now(), tone: 'good', text: `Approved${pts}: ${title}` })
           } else if (data.status === 'rejected') {
             const note = (data.gm_notes ?? '').toString().trim()
-            fresh.push({ id: d.id, at: Date.now(), tone: 'bad', text: `Not approved — ${title}${note ? ` (${note})` : ''}` })
+            fresh.push({ id: d.id, at: Date.now(), tone: 'bad', text: `Not approved: ${title}${note ? ` (${note})` : ''}` })
           }
         }
         const existing = statusMap.get(data.challenge_id)
@@ -786,7 +786,7 @@ export default function GamePage() {
               color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold-deep)',
               fontWeight: 600,
             }}>
-              {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '—' : game?.status?.toUpperCase())}
+              {game?.status === 'paused' ? 'PAUSED' : timeLeft || (game?.status === 'active' ? '--:--' : game?.status?.toUpperCase())}
             </div>
           </div>
         </div>
@@ -1237,7 +1237,7 @@ export default function GamePage() {
                             padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: 'var(--green)', fontSize: '0.88rem', fontWeight: 600,
                           }}>
-                            ✅ Challenge Complete — {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
+                            ✅ Challenge Complete: {diff.pts} point{diff.pts !== 1 ? 's' : ''} earned
                           </div>
                         ) : sub?.status === 'pending' ? (
                           <div style={{ width: '100%' }}>
@@ -1288,7 +1288,7 @@ export default function GamePage() {
                             border: '1px solid var(--line)', padding: '12px 20px', borderRadius: 8,
                             textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem',
                           }}>
-                            <Icon name="flag" /> Game Over — submissions closed
+                            <Icon name="flag" /> Game Over: submissions closed
                           </div>
                         ) : (
                           <button
@@ -1356,7 +1356,7 @@ export default function GamePage() {
                   <div key={zoneId} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: owner.teamColor, opacity: owner.claimed ? 1 : 0.4 }} />
                     <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
-                      {zoneNameById.get(zoneId) ?? zoneId} — {owner.teamName}
+                      {zoneNameById.get(zoneId) ?? zoneId}: {owner.teamName}
                       {owner.locked ? ' (locked)' : !owner.claimed ? ' (contesting)' : ''}
                     </span>
                   </div>

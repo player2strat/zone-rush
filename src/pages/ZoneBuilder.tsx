@@ -955,7 +955,7 @@ export default function ZoneBuilder() {
       } catch {
         /* ignore */
       }
-      setMessage("Imported boundary — review it, then Save boundary or Cancel.");
+      setMessage("Imported boundary. Review it, then Save boundary or Cancel.");
     } catch (err) {
       setMessage("Error reading file: " + (err as Error).message);
     }
@@ -1147,7 +1147,7 @@ export default function ZoneBuilder() {
           m.id === selectedMap.id ? { ...m, is_active: next } : m
         )
       );
-      setMessage(next ? "Map published — it's now selectable." : "Map unpublished.");
+      setMessage(next ? "Map published. It's now selectable." : "Map unpublished.");
     } catch (err) {
       setMessage("Error updating publish state: " + (err as Error).message);
     }
@@ -1701,7 +1701,7 @@ export default function ZoneBuilder() {
     } catch {
       /* ignore */
     }
-    setMessage("Editing zone — drag the points to reshape, then Save changes.");
+    setMessage("Editing zone. Drag the points to reshape, then Save changes.");
   }
 
   // Delete a saved zone from Firestore and the map.
@@ -2117,7 +2117,7 @@ export default function ZoneBuilder() {
               >
                 {gapPercent === 0
                   ? "✓ fully covered"
-                  : `~${gapPercent}% uncovered — click an orange area to fill it`}
+                  : `~${gapPercent}% uncovered. Click an orange area to fill it`}
               </div>
             )}
             {fillGap && (
@@ -2341,7 +2341,7 @@ export default function ZoneBuilder() {
                       Delete this map &amp; its zones
                     </button>
                     <p style={{ color: "var(--ink-faint)", fontSize: "0.72rem", marginTop: 6 }}>
-                      Permanent — removes the map and every zone on it.
+                      Permanent. Removes the map and every zone on it.
                     </p>
                   </>
                 ) : (
@@ -2585,11 +2585,11 @@ export default function ZoneBuilder() {
                 {splitPhase === "preview" && splitPieces && (
                   <>
                     <label style={{ color: "var(--green)", fontSize: "0.75rem" }}>
-                      Green piece (keeps this zone's id) — {Math.round(area(splitPieces.a)).toLocaleString()} m²
+                      Green piece (keeps this zone's id): {Math.round(area(splitPieces.a)).toLocaleString()} m²
                     </label>
                     <input value={splitNameA} onChange={(e) => setSplitNameA(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
                     <label style={{ color: "var(--marigold)", fontSize: "0.75rem" }}>
-                      Yellow piece (new zone) — {Math.round(area(splitPieces.b)).toLocaleString()} m²
+                      Yellow piece (new zone): {Math.round(area(splitPieces.b)).toLocaleString()} m²
                     </label>
                     <input value={splitNameB} onChange={(e) => setSplitNameB(e.target.value)} disabled={toolBusy} style={toolInputStyle} />
                   </>
@@ -2674,7 +2674,7 @@ export default function ZoneBuilder() {
           zones.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <p style={{ ...labelStyle, marginBottom: 8 }}>
-                Zones ({zones.length}) — click to edit
+                Zones ({zones.length}) · click to edit
               </p>
               <div
                 style={{
@@ -2964,7 +2964,7 @@ export default function ZoneBuilder() {
                     {saving
                       ? "Saving…"
                       : blocked
-                      ? "Overlap — blocked"
+                      ? "Overlap: blocked"
                       : editingZoneId
                       ? "Save changes"
                       : "Save zone"}

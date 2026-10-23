@@ -298,7 +298,7 @@ export async function sendReelEmail(
       <p style="font-size:12px;letter-spacing:2px;color:#7A6400;margin:0 0 8px">FORAY · CLAIM THE CITY</p>
       <h1 style="font-size:22px;margin:0 0 12px">${escapeHtml(teamName)}, your highlight reel is ready 🎬</h1>
       <p style="font-size:15px;line-height:1.5;margin:0 0 20px">
-        Relive ${escapeHtml(gameName)} and post it — the reel is vertical and ready for Stories, Reels, and TikTok.
+        Relive ${escapeHtml(gameName)} and post it. The reel is vertical and ready for Stories, Reels, and TikTok.
       </p>
       <a href="${resultsUrl}" style="display:inline-block;background:#FFD626;color:#202122;font-weight:700;padding:12px 20px;border-radius:10px;text-decoration:none">
         Watch and share your reel
@@ -308,7 +308,7 @@ export async function sendReelEmail(
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to, subject: `${teamName} — your Foray highlight reel is ready`, html }),
+    body: JSON.stringify({ from, to, subject: `${teamName}, your Foray highlight reel is ready`, html }),
   })
   if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return 'sent'

@@ -524,7 +524,7 @@ export default function GMDashboard() {
         {
           key: 'halfway',
           minsRemaining: halfwayMins,
-          message: `⏱ Halfway point! You have ${halfwayMins} minutes left. Check the map — now's a good time to make your move.`,
+          message: `⏱ Halfway point! You have ${halfwayMins} minutes left. Check the map. Now's a good time to make your move.`,
         },
         {
           key: '30min',
@@ -534,7 +534,7 @@ export default function GMDashboard() {
         {
           key: '5min',
           minsRemaining: 5,
-          message: `🚨 5 minutes left! Head back to the start now. Don't forget Side Quests — most zones, most transport modes, most challenges.`,
+          message: `🚨 5 minutes left! Head back to the start now. Don't forget Side Quests: most zones, most transport modes, most challenges.`,
         },
       ]
 
@@ -767,7 +767,7 @@ export default function GMDashboard() {
       URL.revokeObjectURL(url)
 
       if (failed > 0) {
-        toast.info(`Done — but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`, { duration: 9000 })
+        toast.info(`Done, but ${failed} video(s) could not be downloaded and were skipped. The rest are in the zip.`, { duration: 9000 })
       }
     } catch (err) {
       console.error('Highlight zip failed:', err)
@@ -805,8 +805,8 @@ export default function GMDashboard() {
     const isAlreadyClosed = current.includes(zoneId)
     const confirmed = window.confirm(
       isAlreadyClosed
-        ? `Reopen ${zoneId.replace('zone_district_', 'District ')}?`
-        : `Close ${zoneId.replace('zone_district_', 'District ')} now?`
+        ? `Reopen ${formatZoneLabel(zoneId, allZoneData)}?`
+        : `Close ${formatZoneLabel(zoneId, allZoneData)} now?`
     )
     if (!confirmed) return
     const updated = isAlreadyClosed ? current.filter((z) => z !== zoneId) : [...current, zoneId]
@@ -902,7 +902,7 @@ export default function GMDashboard() {
       const n = Object.keys(r.outcomes).length
       toast.success(r.mock
         ? `Mock mode: ${n} reels marked ready with a sample video.`
-        : `Rendering started for ${n} teams — a few minutes each.`)
+        : `Rendering started for ${n} teams. Each takes a few minutes.`)
     } catch (err) {
       toast.error('Could not start the reels: ' + (err as Error).message, { retry: handleRenderReels })
     } finally {
@@ -990,15 +990,15 @@ export default function GMDashboard() {
     const lockedZoneIds = zoneScores.filter((zs) => zs.status === 'locked').map((zs) => zs.zone_id)
     if (sub.zone_id && lockedZoneIds.includes(sub.zone_id)) {
       toast.info(
-        `${sub.zone_id.replace('zone_district_', 'District ').replace('zone_mn_', '')} is LOCKED. ` +
-        `Submissions in a locked zone can't be approved — reject this one instead.`
+        `${formatZoneLabel(sub.zone_id, allZoneData)} is LOCKED. ` +
+        `Submissions in a locked zone can't be approved. Reject this one instead.`
       )
       return
     }
 
     const closedZones = game.closed_zones ?? []
     if (closedZones.includes(sub.zone_id)) {
-      const confirmed = window.confirm(`⚠️ ${sub.zone_id.replace('zone_district_', 'District ')} is closed — approve anyway?`)
+      const confirmed = window.confirm(`⚠️ ${formatZoneLabel(sub.zone_id, allZoneData)} is closed. Approve anyway?`)
       if (!confirmed) return
     }
     scheduleVerdict('approve', sub)
@@ -1302,7 +1302,7 @@ export default function GMDashboard() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontFamily: "'Martian Mono', monospace", fontSize: '1.2rem', fontWeight: 700, color: timeLeft === 'GAME OVER' ? 'var(--red)' : 'var(--marigold-deep)' }}>
-            {timeLeft || '—'}
+            {timeLeft || '--:--'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {game.status !== 'ended' && (
@@ -1394,8 +1394,8 @@ export default function GMDashboard() {
                     </p>
                   )}
                   <p style={{ color: 'var(--ink-soft)', fontSize: '0.85rem', lineHeight: 1.5, marginTop: -2, marginBottom: 14 }}>
-                    Bonus points are locked in but not yet added to team totals — that happens on the final tap,
-                    so nobody can see them early. Every player's results screen — in the room or remote — follows
+                    Bonus points are locked in but not yet added to team totals. That happens on the final tap,
+                    so nobody can see them early. Every player's results screen, in the room or remote, follows
                     these taps live: standings before bonuses, then each bonus one at a time, then a countdown
                     from last place to the champion.
                   </p>
@@ -1412,7 +1412,7 @@ export default function GMDashboard() {
                       disabled={revealBusy || done}
                       style={{ background: done ? 'rgba(var(--green-rgb), 0.12)' : 'var(--marigold)', border: `1px solid ${done ? 'rgba(var(--green-rgb), 0.35)' : 'var(--marigold-deep)'}`, color: done ? 'var(--green)' : 'var(--ink)', padding: '10px 20px', borderRadius: 10, fontSize: '0.88rem', fontWeight: 700, cursor: revealBusy || done ? 'default' : 'pointer', fontFamily: 'inherit', flex: '1 1 auto', minWidth: 200 }}
                     >
-                      {done ? '✅ Reveal complete · bonus points added to totals' : step === 0 ? `▶ Start the reveal — ${nextLabel}` : <>Next: {nextLabel} <Icon name="arrow" /></>}
+                      {done ? '✅ Reveal complete · bonus points added to totals' : step === 0 ? `▶ Start the reveal: ${nextLabel}` : <>Next: {nextLabel} <Icon name="arrow" /></>}
                     </button>
                     <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.7rem', color: 'var(--ink-faint)' }}>
                       {step} / {total}
@@ -1433,7 +1433,7 @@ export default function GMDashboard() {
                     <p style={{ fontSize: '0.78rem', color: game.results_recorded ? 'var(--green)' : 'var(--ink-muted)', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       {game.practice ? (
                         <>
-                          <span style={{ color: 'var(--marigold-deep)' }}>🧪 Practice game — not recorded for profiles or the leaderboard.</span>
+                          <span style={{ color: 'var(--marigold-deep)' }}>🧪 Practice game. Not recorded for profiles or the leaderboard.</span>
                           <button
                             onClick={() => handleSetPractice(false)}
                             disabled={togglingPractice}
@@ -1445,13 +1445,13 @@ export default function GMDashboard() {
                       ) : game.results_recorded
                         ? (
                           <>
-                            <span>✅ Results recorded — player profiles and the leaderboard are updated.</span>
+                            <span>✅ Results recorded. Player profiles and the leaderboard are updated.</span>
                             <button
                               onClick={() => handleSetPractice(true)}
                               disabled={togglingPractice}
                               style={{ background: 'none', border: 'none', color: 'var(--ink-ghost)', fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}
                             >
-                              {togglingPractice ? 'Removing…' : 'This was a test — remove from leaderboard'}
+                              {togglingPractice ? 'Removing…' : 'This was a test? Remove from leaderboard'}
                             </button>
                           </>
                         )
@@ -1495,8 +1495,8 @@ export default function GMDashboard() {
                       {teams.map((t) => {
                         const label = t.reel_status === 'ready' ? (t.reel_mock ? '✅ ready (sample video)' : '✅ ready')
                           : t.reel_status === 'rendering' ? <><Icon name="stopwatch" /> rendering…</>
-                          : t.reel_status === 'failed' ? `❌ failed — ${t.reel_error ?? 'unknown error'}`
-                          : t.reel_status === 'skipped' ? '— no media to build from'
+                          : t.reel_status === 'failed' ? `❌ failed: ${t.reel_error ?? 'unknown error'}`
+                          : t.reel_status === 'skipped' ? 'no media to build from'
                           : 'not started'
                         return (
                           <p key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: 'var(--ink-muted)', margin: '4px 0' }}>
@@ -1534,7 +1534,7 @@ export default function GMDashboard() {
                       🗺️ Most Zones Claimed
                       <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{game.settings.most_zones_claimed_bonus ?? 8} pts</span>
                     </p>
-                    <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Auto-calculated — confirm below</p>
+                    <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Auto-calculated. Confirm below</p>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       <button
                         onClick={() => setBonusAwards((p) => ({ ...p, mostZonesClaimed: null }))}
@@ -1568,7 +1568,7 @@ export default function GMDashboard() {
                           🧩 {quest.title}
                           <span style={{ color: 'var(--marigold-deep)', marginLeft: 6 }}>+{quest.bonus_points} pts</span>
                         </p>
-                        <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Most approved photo submissions — confirm below</p>
+                        <p style={{ fontSize: '0.68rem', color: 'var(--ink-ghost)', marginBottom: 8 }}>Most approved photo submissions. Confirm below</p>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                           <button
                             onClick={() => pick(null)}
@@ -1656,7 +1656,7 @@ export default function GMDashboard() {
                 </p>
                 <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>
                   {flaggedCount > 0
-                    ? `${flaggedCount} flagged assets${flaggedCount !== 1 ? 's' : ''} ready — one zip, one folder per team.`
+                    ? `${flaggedCount} flagged assets${flaggedCount !== 1 ? 's' : ''} ready: one zip, one folder per team.`
                     : 'No assets flagged yet. Star approved assets to include them.'}
                 </p>
                 {zipProgress && (
@@ -1759,7 +1759,7 @@ export default function GMDashboard() {
                   )}
                 </div>
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.75rem', margin: '0 0 12px' }}>
-                  Approvals count toward the running tally only — points come from the post-game bonus.
+                  Approvals count toward the running tally only. Points come from the post-game bonus.
                 </p>
 
                 {/* Approved tallies per quest */}
@@ -1768,7 +1768,7 @@ export default function GMDashboard() {
                   return (
                     <p key={quest.id} style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
                       <strong style={{ color: 'var(--ink-soft)' }}>{quest.title}</strong>
-                      {' — '}
+                      {': '}
                       {byTeam && byTeam.size > 0
                         ? teams
                             .filter((t) => byTeam.has(t.id))
@@ -1936,7 +1936,7 @@ export default function GMDashboard() {
                       </div>
 
                       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--ink-faint)', marginBottom: sub.status === 'pending' ? 14 : 0 }}>
-                        {sub.zone_id && <span>📍 {sub.zone_id.replace('zone_district_', 'D')}</span>}
+                        {sub.zone_id && <span>📍 {formatZoneLabel(sub.zone_id, allZoneData)}</span>}
                         {!sub.zone_id && sub.gps_lat && sub.gps_lng && <span style={{ color: 'var(--marigold-deep)' }}>⚠ No zone · GPS: {sub.gps_lat.toFixed(4)}, {sub.gps_lng.toFixed(4)}</span>}
                         {!sub.zone_id && !sub.gps_lat && <span style={{ color: 'var(--red)' }}>⚠ No zone · No GPS</span>}
                         {sub.submitted_at && <span>{sub.submitted_at.toDate ? sub.submitted_at.toDate().toLocaleTimeString() : ''}</span>}
@@ -1947,7 +1947,7 @@ export default function GMDashboard() {
                       {gpsCheck === 'outside' && sub.status === 'pending' && (
                         <div style={{ background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.2)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Icon name="flag" color="red" />
-                          <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {sub.zone_id?.replace('zone_district_', 'District ')}</p>
+                          <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, margin: 0 }}>GPS outside {formatZoneLabel(sub.zone_id, allZoneData)}</p>
                         </div>
                       )}
 
@@ -1960,7 +1960,7 @@ export default function GMDashboard() {
                               </button>
                             )}
                             {ZIP_MEDIA_TYPES.includes(sub.media_type) && (
-                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar — won\'t be included in the post-game pull' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold-deep)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <button onClick={() => handleToggleHighlight(sub)} title={sub.highlight ? 'Unstar (won\'t be included in the post-game pull)' : 'Star as a highlight (included in the post-game pull)'} style={{ background: sub.highlight ? 'rgba(var(--marigold-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)', border: `1px solid ${sub.highlight ? 'rgba(var(--marigold-rgb), 0.4)' : 'var(--line)'}`, color: sub.highlight ? 'var(--marigold-deep)' : 'var(--ink-muted)', padding: '7px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                 {sub.highlight ? '★ Highlight' : '☆ Highlight'}
                               </button>
                             )}
@@ -2047,7 +2047,7 @@ export default function GMDashboard() {
                           const owned = zs.status === 'claimed' || zs.status === 'locked'
                           return (
                           <span key={zs.zone_id} style={{ fontSize: '0.68rem', padding: '3px 8px', borderRadius: 4, background: owned ? `${team.color}20` : 'rgba(var(--ink-rgb), 0.04)', border: `1px solid ${owned ? `${team.color}40` : 'var(--line)'}`, color: owned ? team.color : 'var(--ink-faint)', fontWeight: 600, fontFamily: "'Martian Mono', monospace" }}>
-                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt{zs.status === 'locked' ? <> <Icon name="lock" /></> : zs.status === 'claimed' ? ' ★' : ''}
+                            {formatZoneLabel(zs.zone_id, allZoneData)} · {zs.points}pt{zs.status === 'locked' ? <> <Icon name="lock" /></> : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                           )
                         })}
@@ -2124,7 +2124,7 @@ export default function GMDashboard() {
                           </div>
                         ) : (
                           <p style={{ fontSize: '0.72rem', color: 'var(--ink-ghost)', fontStyle: 'italic', margin: 0 }}>
-                            {isClosed ? '—' : 'Unclaimed'}
+                            {isClosed ? 'Closed' : 'Unclaimed'}
                           </p>
                         )}
                         {game.status === 'active' && (
@@ -2391,7 +2391,7 @@ export default function GMDashboard() {
                       </span>
                       <span style={{ fontSize: '0.84rem', color: 'var(--ink-soft)', lineHeight: 1.4 }}>
                         {r.details}
-                        {r.gm_notes && <span style={{ color: 'var(--red)', fontStyle: 'italic', marginLeft: 6 }}>— {r.gm_notes}</span>}
+                        {r.gm_notes && <span style={{ color: 'var(--red)', fontStyle: 'italic', marginLeft: 6 }}>({r.gm_notes})</span>}
                       </span>
                       <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.72rem', color: r.points_delta && r.points_delta > 0 ? 'var(--green)' : 'var(--ink-ghost)', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {r.points_delta !== null && r.points_delta !== 0 ? (r.points_delta > 0 ? `+${r.points_delta}pt` : `${r.points_delta}pt`) : ''}
@@ -2408,7 +2408,7 @@ export default function GMDashboard() {
       {showFullMap && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--paper)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper)', flexShrink: 0 }}>
-            <p style={{ fontSize: '0.82rem', color: 'var(--marigold-deep)', fontWeight: 700, margin: 0 }}>🗺️ Zone Map — {game.name}</p>
+            <p style={{ fontSize: '0.82rem', color: 'var(--marigold-deep)', fontWeight: 700, margin: 0 }}>🗺️ Zone Map: {game.name}</p>
             <button onClick={() => setShowFullMap(false)} style={{ background: 'rgba(var(--ink-rgb), 0.05)', border: '1px solid var(--line)', color: 'var(--ink-soft)', padding: '6px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✕ Close</button>
           </div>
           <div style={{ flex: 1 }}>

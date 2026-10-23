@@ -17,7 +17,7 @@ export default function AdminSeed() {
   const [existingCount, setExistingCount] = useState<number | null>(null);
 
   const addLog = (msg: string) => {
-    setLog((prev) => [...prev, new Date().toLocaleTimeString() + " — " + msg]);
+    setLog((prev) => [...prev, new Date().toLocaleTimeString() + " · " + msg]);
   };
 
   const checkExisting = async () => {
@@ -61,7 +61,7 @@ export default function AdminSeed() {
         }
       } catch (err) {
         failed++;
-        addLog("FAILED: " + challenge.id + " (" + challenge.title + ") — " + (err as Error).message);
+        addLog("FAILED: " + challenge.id + " (" + challenge.title + "): " + (err as Error).message);
       }
     }
 
@@ -83,7 +83,7 @@ export default function AdminSeed() {
         </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: 8 }}>Admin: Seed Challenges</h1>
         <p style={{ color: "var(--ink-muted)", marginBottom: 24, fontSize: "0.9rem" }}>
-          Push all {stats.total} challenges into Firestore. Safe to run multiple times — uses set (upsert).
+          Push all {stats.total} challenges into Firestore. Safe to run multiple times (uses set/upsert).
         </p>
 
         {/* Top-level stats */}

@@ -14,6 +14,8 @@ import {
   doc,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { loadGameZones, type GameZone } from '../lib/gameZones'
+import { formatZoneLabel } from '../utils/formatZoneLabel'
 
 // Difficulty badge colors — must match the rest of the app
 const DIFF_COLORS: Record<string, { bg: string; text: string }> = {
@@ -51,6 +53,12 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [challengeMap, setChallengeMap] = useState<Map<string, { description: string; difficulty: string }>>(new Map())
+  const [zones, setZones] = useState<GameZone[]>([])
+
+  // Zone names for the submission cards
+  useEffect(() => {
+    loadGameZones(gameId).then(setZones).catch(() => setZones([]))
+  }, [gameId])
 
   // ------------------------------------------------------------------
   // Real-time listener on approved submissions for this team + game
@@ -117,15 +125,12 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
   // Helpers
   // ------------------------------------------------------------------
   const formatTime = (ts: Submission['submitted_at']): string => {
-    if (!ts) return '—'
+    if (!ts) return 'Just now'
     const d = ts.toDate()
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  const zoneName = (zoneId: string | null | undefined) => {
-  if (!zoneId) return 'Unknown zone'
-  return zoneId.replace('zone_district_', 'District ').replace(/_/g, ' ')
-}
+  const zoneName = (zoneId: string | null | undefined) => formatZoneLabel(zoneId, zones)
 
   const mediaIcon = (type: string) =>
     type === 'video' ? '🎥' : type === 'audio' ? '🎙️' : '📷'
@@ -155,7 +160,7 @@ export default function HistoryTab({ gameId, teamId, totalPoints }: HistoryTabPr
             No completed challenges yet
           </p>
           <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', lineHeight: 1.6, textAlign: 'center', maxWidth: 240 }}>
-            Get out there and complete your first challenge — it'll show up here once the GM approves it.
+            Get out there and complete your first challenge. It'll show up here once the GM approves it.
           </p>
         </div>
       </div>

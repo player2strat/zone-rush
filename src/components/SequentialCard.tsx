@@ -146,7 +146,7 @@ export default function SequentialCard({
 
       {/* Card title / flavour */}
       <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 14 }}>
-        {challenge.description || 'Lock in each choice below — you won\u2019t see how it\u2019s used until everything is locked.'}
+        {challenge.description || 'Lock in each choice below. You won\u2019t see how it\u2019s used until everything is locked.'}
       </p>
 
       {loadingProgress ? (
@@ -268,7 +268,7 @@ export default function SequentialCard({
               </div>
             ) : gameEnded ? (
               <div style={{ width: '100%', background: 'rgba(var(--ink-rgb), 0.03)', border: '1px solid var(--line)', padding: '12px', borderRadius: 8, textAlign: 'center', color: 'var(--ink-faint)', fontSize: '0.88rem' }}>
-                <Icon name="flag" /> Game Over — submissions closed
+                <Icon name="flag" /> Game Over: submissions closed
               </div>
             ) : (
               <button

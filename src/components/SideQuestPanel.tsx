@@ -149,7 +149,7 @@ export default function SideQuestPanel({
       })
     } catch (err) {
       console.error('Side quest submission failed while ' + step + ':', err)
-      setError(`Couldn't submit — failed while ${step}. ${(err as Error).message}`)
+      setError(`Couldn't submit. Failed while ${step}. ${(err as Error).message}`)
     }
     setUploadingQuest(null)
   }
@@ -171,7 +171,7 @@ export default function SideQuestPanel({
         🧩 Side Quests
       </p>
       <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', margin: '0 0 14px', lineHeight: 1.5 }}>
-        Submit as many as you spot — the team with the most approved wins a
+        Submit as many as you spot. The team with the most approved wins a
         bonus at the end. How much? That's revealed after the game.
       </p>
 

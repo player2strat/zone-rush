@@ -165,7 +165,7 @@ export default function RecapCarousel({ cards, accentColor, shareTitle }: RecapC
         )}
       </div>
       <p style={{ color: 'var(--ink-faint)', fontSize: '0.74rem', textAlign: 'center', margin: '10px 0 0', lineHeight: 1.5 }}>
-        Swipe for more. Share opens your phone's share sheet — pick Save Image to keep it.
+        Swipe for more. Share opens your phone's share sheet. Pick Save Image to keep it.
       </p>
       {note && (
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', textAlign: 'center', margin: '6px 0 0' }}>{note}</p>

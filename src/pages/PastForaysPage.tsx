@@ -117,7 +117,7 @@ export default function PastForaysPage() {
           Past Forays
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: '0 0 28px' }}>
-          Every game you've played — tap one to revisit the score, your team's
+          Every game you've played. Tap one to revisit the score, your team's
           submissions, and the final map.
         </p>
 
@@ -130,7 +130,7 @@ export default function PastForaysPage() {
           }}>
             <p style={{ fontSize: '1.5rem', margin: '0 0 8px' }}>🧭</p>
             <p style={{ margin: 0, fontSize: '0.9rem' }}>
-              No finished forays yet — your completed games will show up here.
+              No finished forays yet. Your completed games will show up here.
             </p>
           </div>
         ) : (

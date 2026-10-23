@@ -485,7 +485,7 @@ const CANONICAL_MAPS: CanonicalMap[] = [
   {
     id: MAP_BROOKLYN_ID,
     name: 'Brooklyn Alpha (D33–36)',
-    description: 'Original alpha test map — Brooklyn City Council Districts 33, 34, 35, 36.',
+    description: 'Original alpha test map: Brooklyn City Council Districts 33, 34, 35, 36.',
     city: 'nyc',
     borough: 'Brooklyn',
     map_center: { lat: 40.6782, lng: -73.9442, zoom: 12 },
@@ -496,7 +496,7 @@ const CANONICAL_MAPS: CanonicalMap[] = [
   {
     id: MAP_MANHATTAN_ID,
     name: 'Manhattan (Full Borough)',
-    description: '29 zones covering all of Manhattan — Lower Manhattan to Inwood, plus Central Park.',
+    description: '29 zones covering all of Manhattan, from Lower Manhattan to Inwood, plus Central Park.',
     city: 'nyc',
     borough: 'Manhattan',
     map_center: { lat: 40.7831, lng: -73.9712, zoom: 12 },
@@ -537,7 +537,7 @@ export default function SeedMaps() {
         created++
         log(`  \u2713 ${zone.name} (${zone.id})`)
       } catch (err) {
-        log(`  \u2717 ${zone.name} \u2014 ${(err as Error).message}`)
+        log(`  \u2717 ${zone.name}: ${(err as Error).message}`)
       }
     }
     log(`Manhattan zones: ${created} written`)
@@ -570,7 +570,7 @@ export default function SeedMaps() {
         }, { merge: true })
         log(`  \u2713 map: ${m.name} (${m.id})`)
       } catch (err) {
-        log(`  \u2717 map: ${m.name} \u2014 ${(err as Error).message}`)
+        log(`  \u2717 map: ${m.name}: ${(err as Error).message}`)
       }
     }
 
@@ -596,7 +596,7 @@ export default function SeedMaps() {
       }
       if (ported === 0) log('  (no extra legacy map_sets to port)')
     } catch (err) {
-      log(`  \u2717 porting legacy map_sets \u2014 ${(err as Error).message}`)
+      log(`  \u2717 porting legacy map_sets: ${(err as Error).message}`)
     }
 
     log('Maps seeded.')
@@ -646,7 +646,7 @@ export default function SeedMaps() {
         for (const zid of ids) assign(zid, d.id)
       }
     } catch (err) {
-      log(`  \u2717 reading map_sets \u2014 ${(err as Error).message}`)
+      log(`  \u2717 reading map_sets: ${(err as Error).message}`)
     }
 
     // Pass 2 \u2014 known Manhattan zones
@@ -667,7 +667,7 @@ export default function SeedMaps() {
         await setDoc(doc(db, 'zones', zoneId), { map_id: mapId }, { merge: true })
         written++
       } catch (err) {
-        log(`  \u2717 ${zoneId} \u2014 ${(err as Error).message}`)
+        log(`  \u2717 ${zoneId}: ${(err as Error).message}`)
       }
     }
     log(`  \u2713 assigned map_id to ${written} zones`)
@@ -681,10 +681,10 @@ export default function SeedMaps() {
     // Report orphans (zones with no map after all passes)
     const orphans = [...allZoneIds].filter((zid) => !assignment.has(zid))
     if (orphans.length > 0) {
-      log(`  \u26a0 ${orphans.length} zone(s) have NO map_id \u2014 assign a map manually:`)
+      log(`  \u26a0 ${orphans.length} zone(s) have NO map_id. Assign a map manually:`)
       orphans.forEach((zid) => log(`      ${zid}`))
     } else {
-      log('  \u2713 no orphan zones \u2014 every zone has a map_id')
+      log('  \u2713 no orphan zones: every zone has a map_id')
     }
   }
 

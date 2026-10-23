@@ -26,6 +26,7 @@ import { detectZone } from '../lib/geo'
 import { validateSubmissionZone } from '../lib/scoring'
 import { isLocationSubmittable, locationStatusLabel, type UseLocationResult } from '../hooks/useLocation'
 import { compressImage } from '../lib/imageCompress'
+import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { Icon } from './Icon'
 
 interface SubmitProofProps {
@@ -464,7 +465,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
               </p>
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.78rem', lineHeight: 1.5 }}>
                 Make sure you're in one of the game zones before submitting.
-                The GM will see your location — submissions from outside zones may be rejected.
+                The GM will see your location, and submissions from outside zones may be rejected.
               </p>
             </div>
           </div>
@@ -548,7 +549,7 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
               <Icon name="lock" /> Zone {isZoneLocked ? 'Locked' : 'Closed'}
             </p>
             <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
-              {detectedZoneId?.replace('zone_district_', 'District ').replace('zone_mn_', '')} is no longer accepting submissions.
+              {formatZoneLabel(detectedZoneId, zones)} is no longer accepting submissions.
               Points and claims already earned here are kept.
             </p>
           </div>

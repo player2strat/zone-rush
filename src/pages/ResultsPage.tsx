@@ -821,7 +821,7 @@ export default function ResultsPage() {
                           {sub.status === 'approved' ? '✓ Approved' : sub.status === 'rejected' ? '✕ Rejected' : <><Icon name="stopwatch" /> Pending</>}
                         </span>
                         {sub.zone_id && (
-                          <span style={{ color: 'var(--ink-faint)' }}> · {formatZoneLabel(sub.zone_id)}</span>
+                          <span style={{ color: 'var(--ink-faint)' }}> · {formatZoneLabel(sub.zone_id, allZoneData)}</span>
                         )}
                       </p>
                     </div>
@@ -843,10 +843,10 @@ export default function ResultsPage() {
             }}
           >
             {revealDone
-              ? <><Icon name="trophy" /> That's a wrap — thanks for playing!</>
+              ? <><Icon name="trophy" /> That's a wrap. Thanks for playing!</>
               : revealStarted
                 ? '👀 The GM is revealing the results live. Keep this screen open.'
-                : <><Icon name="flag" /> Great game! Bonus points and final standings will be revealed right here once the GM kicks it off — keep this screen open.</>}
+                : <><Icon name="flag" /> Great game! Bonus points and final standings will be revealed right here once the GM kicks it off, so keep this screen open.</>}
           </div>
 
           {/* ====== HIGHLIGHT REEL (arrives a few minutes after the reveal) ====== */}
@@ -875,7 +875,7 @@ export default function ResultsPage() {
                         setSharingReel(true); setReelNote(null)
                         try {
                           const r = await shareReel(myTeam.reel_url!, myTeam.name)
-                          if (r === 'opened') setReelNote('Opened in a new tab — use Save or Share there.')
+                          if (r === 'opened') setReelNote('Opened in a new tab. Use Save or Share there.')
                         } catch (err) {
                           setReelNote('Could not share: ' + (err as Error).message)
                         } finally {
@@ -894,7 +894,7 @@ export default function ResultsPage() {
                     </button>
                     {myTeam.reel_mock && (
                       <p style={{ color: 'var(--ink-faint)', fontSize: '0.72rem', textAlign: 'center', margin: '8px 0 0' }}>
-                        Sample video — the reel service isn't connected yet.
+                        Sample video. The reel service isn't connected yet.
                       </p>
                     )}
                     {reelNote && (
@@ -904,7 +904,7 @@ export default function ResultsPage() {
                 </div>
               ) : myTeam.reel_status === 'rendering' ? (
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--pink-rgb), 0.05)', border: '1px solid rgba(var(--pink-rgb), 0.25)', borderRadius: 12 }}>
-                  <Icon name="stopwatch" /> Your reel is rendering. It takes a few minutes — it'll appear here and we'll email you when it's ready.
+                  <Icon name="stopwatch" /> Your reel is rendering. It takes a few minutes. It'll appear here and we'll email you when it's ready.
                 </p>
               ) : (
                 <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem', lineHeight: 1.5, margin: 0, padding: '14px 16px', background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 12 }}>
@@ -924,7 +924,7 @@ export default function ResultsPage() {
               }}>
                 Share your Foray
               </p>
-              <RecapCarousel cards={shareCards} accentColor={myTeam.color} shareTitle={`${myTeam.name} — Foray`} />
+              <RecapCarousel cards={shareCards} accentColor={myTeam.color} shareTitle={`${myTeam.name} · Foray`} />
               <button
                 onClick={() => navigate('/profile')}
                 style={{
@@ -1133,7 +1133,9 @@ export default function ResultsPage() {
                     alignItems: 'center', marginBottom: 10,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: '1.2rem' }}><EmojiIcon emoji={rankStyle.medal} label={rankStyle.label} /></span>
+                      {rankStyle.medal
+                        ? <span style={{ fontSize: '1.2rem' }}><EmojiIcon emoji={rankStyle.medal} label={rankStyle.label} /></span>
+                        : <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.72rem', fontWeight: 700, color: rankStyle.color }}>{rankStyle.label}</span>}
                       <div style={{ width: 10, height: 10, borderRadius: 3, background: team.color }} />
                       <div>
                         <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{team.name}</span>
@@ -1202,7 +1204,7 @@ export default function ResultsPage() {
                             color: (zs.status === 'claimed' || zs.status === 'locked') ? team.color : 'var(--ink-ghost)',
                             fontWeight: 600,
                           }}>
-                            {formatZoneLabel(zs.zone_id)} · {zs.points}pt
+                            {formatZoneLabel(zs.zone_id, allZoneData)} · {zs.points}pt
                             {zs.status === 'locked' ? <> <Icon name="lock" /></> : zs.status === 'claimed' ? ' ★' : ''}
                           </span>
                         ))}
@@ -1249,7 +1251,7 @@ export default function ResultsPage() {
                       background: owner.teamColor,
                     }} />
                     <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
-                      {formatZoneLabel(zoneId)} — {owner.teamName}
+                      {formatZoneLabel(zoneId, allZoneData)}: {owner.teamName}
                     </span>
                   </div>
                 ))}

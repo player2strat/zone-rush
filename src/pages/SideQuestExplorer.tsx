@@ -140,7 +140,7 @@ export default function SideQuestExplorer() {
           🧩 Side Quest Explorer
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', margin: '0 0 20px' }}>
-          Every submission across all games — for reviewing history and sharing
+          Every submission across all games, for reviewing history and sharing
           with external partners.
         </p>
 

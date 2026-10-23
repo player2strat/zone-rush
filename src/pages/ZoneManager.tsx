@@ -760,7 +760,7 @@ export default function ZoneManager() {
             <input
               value={mapDesc}
               onChange={(e) => setMapDesc(e.target.value)}
-              placeholder="Description (optional — shown on the picker card)"
+              placeholder="Description (optional, shown on the picker card)"
               style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginBottom: 12 }}
             />
             <div

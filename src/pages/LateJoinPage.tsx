@@ -111,7 +111,7 @@ export default function LateJoinPage() {
       await setDoc(doc(db, 'users', user.uid), { display_name: clean }, { merge: true })
     } catch (err) {
       setError(isPermissionDenied(err)
-        ? "This game isn't taking new players — it may have ended."
+        ? "This game isn't taking new players. It may have ended."
         : 'Could not send request: ' + (err as Error).message)
     }
     setBusy(false)
@@ -177,7 +177,7 @@ export default function LateJoinPage() {
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 32 }}>
           Your request to join as <strong style={{ color: 'var(--ink-soft)' }}>{request.name}</strong> has been sent.
-          Keep this screen open — you'll be dropped into the game as soon as it's approved.
+          Keep this screen open. You'll be dropped into the game as soon as it's approved.
         </p>
         <div style={{
           width: 36, height: 36, margin: '0 auto 32px',
@@ -236,7 +236,7 @@ export default function LateJoinPage() {
           This game is in progress
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', marginTop: 8, lineHeight: 1.5 }}>
-          You can still join — the Game Master needs to approve you and put you on a team.
+          You can still join. The Game Master needs to approve you and put you on a team.
         </p>
       </div>
 
