@@ -35,10 +35,9 @@ function pick<T>(arr: T[]): T {
  */
 export async function createTestTeam(
   gameId: string,
-  existingTeamCount: number,
+  index: number,               // 0-based team slot, from firstFreeTeamIndex()
   playerCount = 2
 ): Promise<string> {
-  const index = existingTeamCount
   const teamId = `team_${index + 1}`
   const stamp = Date.now().toString(36)
   const members = Array.from({ length: playerCount }, (_, i) => `test_${stamp}_${i + 1}`)

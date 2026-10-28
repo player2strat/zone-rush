@@ -21,14 +21,14 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, updateDoc, collection,
-  getDocs, setDoc, arrayUnion,
+  getDocs, setDoc, arrayUnion, runTransaction,
 } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { removeFromRoster } from '../lib/gameMembership'
 import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
-import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
+import { defaultTeamName, defaultTeamColor, firstFreeTeamIndex } from '../lib/teamDefaults'
 import { createTestTeam } from '../lib/testMode'
 
 interface GameData {
@@ -206,7 +206,7 @@ export default function LobbyPage() {
 
     if (currentTeams.length < game.max_teams && (!smallest || smallest.members.length > 0)) {
       // Create a fresh team
-      const teamIndex = currentTeams.length
+      const teamIndex = firstFreeTeamIndex(currentTeams.map((t) => t.id))
       const teamId = 'team_' + (teamIndex + 1)
       const teamRef = doc(db, 'games', gameId, 'teams', teamId)
       await setDoc(teamRef, {
@@ -378,7 +378,7 @@ export default function LobbyPage() {
     setAddingTestTeam(true)
     setError('')
     try {
-      await createTestTeam(gameId, teams.length, game?.settings.team_size ?? 2)
+      await createTestTeam(gameId, firstFreeTeamIndex(teams.map((t) => t.id)), game?.settings.team_size ?? 2)
     } catch (err) {
       setError('Failed to add test team: ' + (err as Error).message)
     } finally {
@@ -525,6 +525,9 @@ export default function LobbyPage() {
   // initial hand) AND log a `card_drawn` event per card so the activity log
   // captures every card a team ever held — from the opening deal through
   // every replacement and discard.
+  //
+  // Teams nobody joined are deleted first, so they never appear in the live
+  // game (where a late joiner could be put on one and get no cards).
   // -----------------------------------------------------------------------
 
   const handleStartGame = async () => {
@@ -537,7 +540,23 @@ export default function LobbyPage() {
     }
 
     try {
-      const teamIds = activeTeams.map((t) => t.id)
+      // Re-check each empty team inside a transaction: if a player joined it
+      // a moment ago, keep it and deal it a hand instead of deleting it.
+      const emptyTeams = teams.filter((t) => t.members.length === 0)
+      const joinedJustNow = emptyTeams.length === 0 ? [] : await runTransaction(db, async (tx) => {
+        const snaps = await Promise.all(
+          emptyTeams.map((t) => tx.get(doc(db, 'games', gameId, 'teams', t.id)))
+        )
+        const kept: string[] = []
+        for (const snap of snaps) {
+          if (!snap.exists()) continue
+          if ((snap.data().members ?? []).length > 0) kept.push(snap.id)
+          else tx.delete(snap.ref)
+        }
+        return kept
+      })
+
+      const teamIds = [...activeTeams.map((t) => t.id), ...joinedJustNow]
       const handSize = game.settings.hand_size || 6
       const city = 'nyc'
 

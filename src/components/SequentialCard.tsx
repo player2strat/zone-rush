@@ -229,7 +229,7 @@ export default function SequentialCard({
                 {locking ? 'Locking…' : <><Icon name="lock" /> Lock Part {lockedCount + 1} (can’t be changed)</>}
               </button>
               <p style={{ fontSize: '0.68rem', color: 'var(--ink-muted)', textAlign: 'center', marginTop: 6, lineHeight: 1.4 }}>
-                Once locked, this choice is final. You won\u2019t see the full challenge until every part is locked.
+                Once locked, this choice is final. You won’t see the full challenge until every part is locked.
               </p>
               {lockError && (
                 <p style={{ fontSize: '0.74rem', color: 'var(--red)', textAlign: 'center', marginTop: 6 }}>{lockError}</p>

@@ -37,3 +37,15 @@ export function defaultTeamName(index: number): string {
 export function defaultTeamColor(index: number): string {
   return TEAM_COLORS[index]?.hex || '#55544E'
 }
+
+/**
+ * 0-based index of the first team_N slot not already taken. Counting teams
+ * isn't enough: empty teams are deleted at game start, which can leave gaps
+ * (team_1, team_3), and team_{count + 1} would then overwrite a real team.
+ */
+export function firstFreeTeamIndex(teamIds: string[]): number {
+  const taken = new Set(teamIds)
+  let index = 0
+  while (taken.has('team_' + (index + 1))) index++
+  return index
+}
