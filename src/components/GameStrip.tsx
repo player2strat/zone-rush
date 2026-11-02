@@ -100,12 +100,18 @@ export default function GameStrip({ currentGameId }: { currentGameId: string | u
   )
 }
 
-// One game: name and status, the top two teams (or who's joined, before it
-// starts), the clock, and what's waiting spelled out, or "All caught up".
+// One game: name and status, the top two teams with their ranks (or who's
+// joined, before it starts), the clock, and what's waiting spelled out, or
+// "All caught up". The card is the same size whatever the number of teams.
 function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; current: boolean; onOpen: () => void }) {
   const status = STATUS_LABEL[game.status]
   const waiting = waitingParts(game)
   const clock = timeLeft(game, now)
+  const underway = isUnderway(game)
+  const top = game.teams.slice(0, 2)
+  const moreTeams = game.teams.length - top.length
+  // Tied teams share a rank, so two teams on 27 both read "1".
+  const rank = (points: number) => 1 + game.teams.filter((t) => t.points > points).length
   const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', minHeight: 18 }
   const clip: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
@@ -114,6 +120,10 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
       data-current={current}
       aria-current={current ? 'page' : undefined}
       onClick={current ? undefined : onOpen}
+      // Hovering shows the full standings.
+      title={underway && game.teams.length > 0
+        ? game.teams.map((t) => `${rank(t.points)}. ${t.name}: ${t.points}`).join('\n')
+        : undefined}
       style={{
         flex: '0 0 auto',
         // Wide enough for the clock plus two "waiting" chips on one line.
@@ -126,7 +136,10 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
         fontFamily: 'inherit',
         fontWeight: 400,
         borderRadius: 10,
-        border: current ? '2px solid var(--marigold)' : '1px solid var(--line)',
+        // The open game's outline is drawn twice as thick without changing
+        // the card's size: an inner shadow on top of the 1px border.
+        border: current ? '1px solid var(--marigold)' : '1px solid var(--line)',
+        boxShadow: current ? 'inset 0 0 0 1px var(--marigold)' : 'none',
         background: current ? 'rgba(var(--marigold-rgb), 0.12)' : 'var(--paper)',
         cursor: current ? 'default' : 'pointer',
       }}
@@ -138,13 +151,21 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
         </span>
       </span>
 
-      {isUnderway(game) ? (
-        // Top two teams, like the two rows of a score.
-        game.teams.slice(0, 2).map((t) => (
+      {underway ? (
+        // Top two teams, like the two rows of a score. When there are more,
+        // "+3 more" ends the second row (a matching blank keeps the points
+        // lined up on the first), so the card never grows.
+        top.map((t, i) => (
           <span key={t.id} style={row}>
+            <span style={{ width: 10, flexShrink: 0, textAlign: 'right', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ink-faint)' }}>{rank(t.points)}</span>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
             <span style={{ ...clip, color: 'var(--ink-soft)' }}>{t.name}</span>
             <strong style={{ color: 'var(--ink)' }}>{t.points}</strong>
+            {moreTeams > 0 && (
+              <span style={{ width: 52, flexShrink: 0, textAlign: 'right', fontSize: '0.68rem', color: 'var(--ink-faint)' }}>
+                {i === 1 ? `+${moreTeams} more` : ''}
+              </span>
+            )}
           </span>
         ))
       ) : (
@@ -155,7 +176,7 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
       )}
 
       {/* The clock, then what's waiting for the GM here, spelled out */}
-      <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginTop: 3 }}>
+      <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginTop: 3, minHeight: 18 }}>
         <span style={{ marginRight: 'auto', paddingRight: 4, fontFamily: clock ? "'Martian Mono', monospace" : 'inherit', fontSize: '0.72rem', fontWeight: 700, color: clock ? 'var(--marigold-deep)' : 'var(--ink-faint)' }}>
           {clock ?? 'Not started'}
         </span>
