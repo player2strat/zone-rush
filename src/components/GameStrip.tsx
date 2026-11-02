@@ -147,14 +147,14 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
       <span style={row}>
         <span style={{ ...clip, fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink)' }}>{game.name}</span>
         <span style={{ flexShrink: 0, fontSize: '0.64rem', fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: status.bg, color: status.color }}>
-          {current ? `${status.label} · Open` : status.label}
+          {status.label}
         </span>
       </span>
 
       {underway ? (
         // Top two teams, like the two rows of a score. When there are more,
-        // "+3 more" ends the second row (a matching blank keeps the points
-        // lined up on the first), so the card never grows.
+        // "+3" ends the second row (a matching blank keeps the points lined
+        // up on the first), so the card never grows. Hover lists them all.
         top.map((t, i) => (
           <span key={t.id} style={row}>
             <span style={{ width: 10, flexShrink: 0, textAlign: 'right', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ink-faint)' }}>{rank(t.points)}</span>
@@ -162,8 +162,8 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
             <span style={{ ...clip, color: 'var(--ink-soft)' }}>{t.name}</span>
             <strong style={{ color: 'var(--ink)' }}>{t.points}</strong>
             {moreTeams > 0 && (
-              <span style={{ width: 52, flexShrink: 0, textAlign: 'right', fontSize: '0.68rem', color: 'var(--ink-faint)' }}>
-                {i === 1 ? `+${moreTeams} more` : ''}
+              <span style={{ width: 22, flexShrink: 0, textAlign: 'right', fontSize: '0.68rem', fontWeight: 700, color: 'var(--ink-faint)' }}>
+                {i === 1 ? `+${moreTeams}` : ''}
               </span>
             )}
           </span>
