@@ -2,15 +2,16 @@
 // Foray — GameSummaryCard
 //
 // A clickable summary of one of the GM's running games for the home screen's
-// list: status, time left (or players joined), number of teams, the top of the
-// standings, and what's waiting (submissions and side quest photos to review,
-// messages, join requests). Clicking it opens that game.
+// list: status, time left (or players joined, or for an ended game the next
+// wrap-up step), number of teams, the top of the standings, and what's waiting
+// (submissions and side quest photos to review, messages, join requests).
+// Clicking it opens that game.
 // =============================================================================
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { RunningGame } from '../hooks/useRunningGames'
-import { STATUS_LABEL, isUnderway, plural, timeLeft, waitingParts } from '../lib/runningGameFormat'
+import { STATUS_LABEL, plural, showsStandings, timeLeft, waitingParts, wrapUpStep } from '../lib/runningGameFormat'
 
 // Teams shown in the standings line; the rest are counted as "+N".
 const TOP_TEAMS = 3
@@ -53,12 +54,15 @@ export default function GameSummaryCard({ game }: { game: RunningGame }) {
       </span>
 
       <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
-        {timeLeft(game, now) ?? `${plural(game.players, 'player')} joined`}
+        {/* An ended game shows the next wrap-up step on its dashboard */}
+        {wrapUpStep(game)
+          ? <strong style={{ color: 'var(--marigold-deep)' }}>{wrapUpStep(game)}</strong>
+          : timeLeft(game, now) ?? `${plural(game.players, 'player')} joined`}
         {game.teams.length > 0 && ` · ${plural(game.teams.length, 'team')}`}
       </span>
 
-      {/* Standings: top teams by points, once the game is underway */}
-      {isUnderway(game) && top.length > 0 && (
+      {/* Standings: top teams by points, once the game is underway (or final) */}
+      {showsStandings(game) && top.length > 0 && (
         <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 12px', fontSize: '0.78rem', color: 'var(--ink-soft)' }}>
           {top.map((t) => (
             <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>

@@ -782,7 +782,12 @@ export default function GMDashboard() {
     const clamped = Math.max(0, Math.min(next, total))
     setRevealBusy(true)
     try {
-      await updateDoc(doc(db, 'games', gameId), { reveal_step: clamped })
+      // Reaching the champion wraps the game up: it leaves the GM's
+      // running-games cards (see RunningGamesProvider).
+      await updateDoc(doc(db, 'games', gameId), {
+        reveal_step: clamped,
+        ...(clamped === total ? { wrapped_up: true } : {}),
+      })
       // Champion revealed → bonus points finally go into team totals. Until
       // now no screen, however stale, could have shown a post-bonus score.
       if (clamped === total && game.bonus_totals_applied === false) {

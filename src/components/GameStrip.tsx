@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRunningGames, type RunningGame } from '../hooks/useRunningGames'
-import { STATUS_LABEL, isUnderway, plural, timeLeft, waitingParts } from '../lib/runningGameFormat'
+import { STATUS_LABEL, plural, showsStandings, timeLeft, waitingParts, wrapUpStep } from '../lib/runningGameFormat'
 
 export default function GameStrip({ currentGameId }: { currentGameId: string | undefined }) {
   const games = useRunningGames()
@@ -107,7 +107,9 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
   const status = STATUS_LABEL[game.status]
   const waiting = waitingParts(game)
   const clock = timeLeft(game, now)
-  const underway = isUnderway(game)
+  // An ended game shows its final standings and the next wrap-up step.
+  const wrapUp = wrapUpStep(game)
+  const standings = showsStandings(game)
   const top = game.teams.slice(0, 2)
   const moreTeams = game.teams.length - top.length
   // Tied teams share a rank, so two teams on 27 both read "1".
@@ -121,7 +123,7 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
       aria-current={current ? 'page' : undefined}
       onClick={current ? undefined : onOpen}
       // Hovering shows the full standings.
-      title={underway && game.teams.length > 0
+      title={standings && game.teams.length > 0
         ? game.teams.map((t) => `${rank(t.points)}. ${t.name}: ${t.points}`).join('\n')
         : undefined}
       style={{
@@ -151,7 +153,7 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
         </span>
       </span>
 
-      {underway ? (
+      {standings ? (
         // Top two teams, like the two rows of a score. When there are more,
         // "+3" ends the second row (a matching blank keeps the points lined
         // up on the first), so the card never grows. Hover lists them all.
@@ -175,13 +177,15 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
         </>
       )}
 
-      {/* The clock, then what's waiting for the GM here, spelled out */}
+      {/* The clock (or the wrap-up step), then what's waiting for the GM here */}
       <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginTop: 3, minHeight: 18 }}>
-        <span style={{ marginRight: 'auto', paddingRight: 4, fontFamily: clock ? "'Martian Mono', monospace" : 'inherit', fontSize: '0.72rem', fontWeight: 700, color: clock ? 'var(--marigold-deep)' : 'var(--ink-faint)' }}>
-          {clock ?? 'Not started'}
+        <span style={{ marginRight: 'auto', paddingRight: 4, fontFamily: clock ? "'Martian Mono', monospace" : 'inherit', fontSize: '0.72rem', fontWeight: 700, color: clock || wrapUp ? 'var(--marigold-deep)' : 'var(--ink-faint)' }}>
+          {clock ?? wrapUp ?? 'Not started'}
         </span>
         {waiting.length === 0 ? (
-          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--green)' }}>All caught up</span>
+          // An ended game still has its wrap-up to do, so it's never "caught up".
+          !wrapUp && 
+<span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--green)' }}>All caught up</span>
         ) : (
           waiting.map((w) => (
             <span key={w} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(var(--marigold-rgb), 0.18)', color: 'var(--marigold-deep)' }}>

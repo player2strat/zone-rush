@@ -376,6 +376,9 @@ export default function CreateGame() {
         join_code: joinCode,
         max_teams: maxTeams,
         practice,
+        // Flips to true when the results reveal finishes. Until then an ended
+        // game stays on the GM's running-games cards so they can wrap it up.
+        wrapped_up: false,
         zones: selectedZones,
         // Zones with a scheduled opening start the game closed; the opening
         // check releases them once their time arrives.

@@ -178,6 +178,9 @@ export interface Game {
                                              // The GM taps "Next" to increment; every
                                              // player screen follows it live.
   results_recorded?: boolean                 // game_results docs written (see lib/gameResults.ts)
+  wrapped_up?: boolean                       // false from creation until the reveal reaches the
+                                             // champion; ended games stay on the GM's
+                                             // running-games cards until then
   practice?: boolean                         // test/rehearsal game: never recorded for
                                              // profiles or the leaderboard (GM can flip it)
 }

@@ -2,10 +2,10 @@
 // Foray — RunningGamesProvider
 //
 // One live feed of the signed-in GM's running games (hooks/useRunningGames),
-// with team standings and what each one is waiting on. Mounted once in App, for GMs and admins
-// only. From here:
-//  - the home screen shows a summary card for each game, and each dashboard
-//    lists the others' cards under its "waiting in other games" tag;
+// plus ended ones not yet wrapped up, with team standings and what each one is
+// waiting on. Mounted once in App, for GMs and admins only. From here:
+//  - the home screen shows a summary card for each game, and the scoreboard
+//    strip (components/GameStrip) runs across the top of each game's screens;
 //  - anything new (a submission, side quest photo, join request or "Message
 //    GM" ping) plays a chime and shows a desktop pop-up (lib/gmAlerts), unless
 //    the GM is already looking at that game;
@@ -16,16 +16,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  collection, onSnapshot, query, where,
+  collection, onSnapshot, query, updateDoc, where,
   type DocumentData, type Query,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useUserRole } from '../hooks/useUserRole'
 import { useGameTimers } from '../hooks/useGameTimers'
 import { playChime, primeChime, showPopup } from '../lib/gmAlerts'
+import { endedAt } from '../lib/runningGameFormat'
 import {
   RunningGamesContext, RUNNING_STATUSES, waitingCount,
-  type RunningGame, type RunningStatus, type RunningTeam,
+  type CardStatus, type RunningGame, type RunningTeam,
 } from '../hooks/useRunningGames'
 
 type Counts = {
@@ -41,8 +42,14 @@ type GameDoc = Omit<RunningGame,
 const NO_COUNTS: Counts = { subs: 0, sideQuests: 0, joins: 0, messages: 0, players: 0 }
 const APP_TITLE = 'Foray'
 
-// Live games first, then the ones still being set up.
-const STATUS_ORDER: Record<RunningStatus, number> = { active: 0, paused: 1, strategy: 2, lobby: 3 }
+// Live games first, then ended games still to wrap up, then the ones still
+// being set up.
+const STATUS_ORDER: Record<CardStatus, number> = { active: 0, paused: 1, ended: 2, strategy: 3, lobby: 4 }
+
+// An ended game that's never wrapped up (an abandoned test, say) leaves the
+// list a day after its clock ran out. It's still in Past Forays, which opens
+// its dashboard.
+const WRAP_UP_WINDOW_MS = 24 * 60 * 60 * 1000
 
 const clip = (text: unknown) => {
   const s = String(text ?? '').trim()
@@ -52,22 +59,54 @@ const clip = (text: unknown) => {
 export default function RunningGamesProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const { role } = useUserRole()
   const isGM = role === 'admin' || role === 'gm'
-  const [docs, setDocs] = useState<GameDoc[]>([])
+  const [runningDocs, setRunningDocs] = useState<GameDoc[]>([])
+  const [endedDocs, setEndedDocs] = useState<GameDoc[]>([])
   const [counts, setCounts] = useState<Record<string, Counts>>({})
   const [teams, setTeams] = useState<Record<string, RunningTeam[]>>({})
+  const docs = useMemo(() => [...runningDocs, ...endedDocs], [runningDocs, endedDocs])
 
   useEffect(() => {
     if (!isGM) return
-    const q = query(
+    const running = query(
       collection(db, 'games'),
       where('created_by', '==', uid),
       where('status', 'in', RUNNING_STATUSES)
     )
-    return onSnapshot(
-      q,
-      (snap) => setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() } as GameDoc))),
+    // Ended but not wrapped up. Equality filters only, so no extra index.
+    const ended = query(
+      collection(db, 'games'),
+      where('created_by', '==', uid),
+      where('status', '==', 'ended'),
+      where('wrapped_up', '==', false)
+    )
+    const unsubRunning = onSnapshot(
+      running,
+      (snap) => {
+        setRunningDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() } as GameDoc)))
+        // Games created before wrapped_up existed get it now, so they stay
+        // listed after they end.
+        snap.docs.forEach((d) => {
+          if (d.data().wrapped_up === undefined) {
+            updateDoc(d.ref, { wrapped_up: false }).catch((err) => console.warn('wrapped_up backfill failed:', err))
+          }
+        })
+      },
       (err) => console.warn('Running games feed failed:', err)
     )
+    const unsubEnded = onSnapshot(
+      ended,
+      (snap) => {
+        const cutoff = Date.now() - WRAP_UP_WINDOW_MS
+        setEndedDocs(snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as GameDoc))
+          .filter((g) => (endedAt(g) ?? 0) >= cutoff))
+      },
+      (err) => console.warn('Ended games feed failed:', err)
+    )
+    return () => {
+      unsubRunning()
+      unsubEnded()
+    }
   }, [isGM, uid])
 
   // What the alerts need without restarting the listeners: game names, the

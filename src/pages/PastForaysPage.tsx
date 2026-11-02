@@ -3,7 +3,9 @@
 //
 // The player's game history: every finished game they played (or ran as GM),
 // newest first, with the team they were on and the date. Tapping a row opens
-// that game's results page (score, submissions gallery, final map).
+// that game's results page (score, submissions gallery, final map). Games the
+// user ran also get an "Open dashboard" button (side quest points, the
+// results reveal, the highlight reel), flagged when the reveal hasn't run.
 // =============================================================================
 
 import { useEffect, useState } from 'react'
@@ -18,6 +20,7 @@ interface PastForay {
   name: string
   teamName: string | null   // null when the user was the GM
   teamColor: string | null
+  needsWrapUp?: boolean     // GM games whose results reveal hasn't finished
   reelUrl?: string | null
   created_at?: { seconds?: number }
 }
@@ -39,6 +42,7 @@ async function loadPastForays(uid: string): Promise<PastForay[]> {
         name: g.data().name || 'Untitled game',
         teamName: null,
         teamColor: null,
+        needsWrapUp: g.data().wrapped_up === false,
         created_at: g.data().created_at,
       })
     })
@@ -136,10 +140,13 @@ export default function PastForaysPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {forays.map((g) => (
+              // A game you ran also gets an "Open dashboard" button, laid over
+              // the row's corner (a button can't sit inside another button).
+              <div key={g.id} style={{ position: 'relative' }}>
               <button
-                key={g.id}
                 onClick={() => navigate('/results/' + g.id)}
                 style={{
+                  width: '100%',
                   background: 'rgba(var(--ink-rgb), 0.02)',
                   border: '1px solid var(--line)',
                   borderRadius: 12,
@@ -186,15 +193,36 @@ export default function PastForaysPage() {
                       </span>
                     </>
                   ) : (
-                    <span style={{
-                      color: 'var(--marigold-deep)', fontSize: '0.7rem', fontWeight: 700,
-                      textTransform: 'uppercase', letterSpacing: 1,
-                    }}>
-                      Game Master
-                    </span>
+                    <>
+                      <span style={{
+                        color: 'var(--marigold-deep)', fontSize: '0.7rem', fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: 1,
+                      }}>
+                        Game Master
+                      </span>
+                      {g.needsWrapUp && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--marigold-deep)', background: 'rgba(var(--marigold-rgb), 0.18)', padding: '2px 8px', borderRadius: 4 }}>
+                          Reveal not run
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
               </button>
+              {!g.teamName && (
+                <button
+                  onClick={() => navigate('/gm/' + g.id)}
+                  style={{
+                    position: 'absolute', right: 12, bottom: 10,
+                    background: 'var(--paper)', border: '1px solid var(--line-strong)',
+                    color: 'var(--ink-soft)', borderRadius: 8, padding: '5px 10px',
+                    fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  Open dashboard
+                </button>
+              )}
+              </div>
             ))}
           </div>
         )}
