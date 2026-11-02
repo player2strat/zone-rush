@@ -71,6 +71,13 @@ Fix: when a GM has two or more games in lobby/strategy/active/paused, the home s
 
 - **Server-side schedule guarantee** — zone open/close schedules run only on the GM dashboard (on load, foreground, and once a minute; writes are atomic) — the security rules don't let players change which zones are open. If the GM's screen is asleep, a change lands when it wakes. A Vercel cron using the existing Admin SDK (`api/_lib/admin.ts`), or a Cloud Functions scheduled job (Blaze plan), would make timing exact.
 
+## Borough maps (Brooklyn, Bronx, Queens, Staten Island, All NYC)
+
+- **Seeded from /admin/seed-maps** ("Borough maps" box). Zones come from `public/seed/nyc-boroughs-2010.json`: NYC Planning 2010 NTAs (same as Manhattan), with 11 big parks cut out along the 2020 park outlines and every other park, cemetery and airport piece folded into its longest-border neighbor. New maps start hidden; publish in Zone Builder. Build All NYC last; it copies the five borough maps as they are at that moment.
+- **Big zones:** airports fold into a neighbor, so JFK makes "Springfield Gardens South-Brookville" about 24 km², and LaGuardia joins East Elmhurst. Staten Island neighborhoods are big too (New Springville is about 30 km² with Freshkills). Split them in Zone Builder if they play badly.
+- **Create Game loads every NYC zone** (`where('city', '==', 'nyc')`, full docs with boundaries). With the borough maps plus All NYC that's 400+ zone docs, roughly 1 MB, every time a GM opens setup. Load only the picked map's zones instead.
+- `transit_lines` come from `public/subway-stations.json`, whose line labels are by trunk group (e.g. "B-D-F-M"), so they're approximate. Not shown anywhere in the game yet.
+
 ## Zone Manager
 
 - **City-filter the zone load** — currently loads every zone in the DB (no city filter), which won't scale as more zones/cities are added. Filter the load by selected city; the per-map filter already exists in the UI.

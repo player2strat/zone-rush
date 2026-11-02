@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, setDoc, getDoc, collection, getDocs, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { backfillRostersAndCodes } from '../lib/gameMembership'
 
@@ -506,6 +506,96 @@ const CANONICAL_MAPS: CanonicalMap[] = [
   },
 ]
 
+// ---------------------------------------------------------------------------
+// Brooklyn, Bronx, Queens, Staten Island, and All NYC.
+//
+// Zones live in /seed/nyc-boroughs-2010.json, fetched only when a button is
+// clicked. Same source as Manhattan (NYC Planning 2010 NTAs). Eleven big parks
+// are their own zones, cut along NYC Planning's 2020 park outlines; every other
+// park, cemetery and airport piece joins the neighborhood it shares the
+// longest border with, and islands nobody can reach (Rikers, Jamaica Bay
+// marshes) are left out.
+//
+// New maps are written hidden (is_active: false) so they can be checked in
+// Zone Builder first; re-seeding never flips a map that's already published.
+// ---------------------------------------------------------------------------
+const BOROUGH_SEED_URL = '/seed/nyc-boroughs-2010.json'
+const MAP_ALL_NYC_ID = 'nyc_all_neighborhoods'
+
+interface SeedMapDoc {
+  id: string
+  name: string
+  description: string
+  city: string
+  borough: string
+  map_center: { lat: number; lng: number; zoom: number }
+  boundary: GeoJSON.Polygon | GeoJSON.MultiPolygon
+  recommended_teams: number
+  recommended_duration: number
+}
+
+interface SeedZoneDoc {
+  id: string
+  map_id: string
+  nta_code: string
+  name: string
+  full_name: string
+  borough: string
+  city: string
+  center_lat: number
+  center_lng: number
+  culture_tags: string[]
+  transit_lines: string[]
+  landmarks: string[]
+  difficulty_rating: number
+  boundary: GeoJSON.Polygon | GeoJSON.MultiPolygon
+}
+
+interface BoroughSeed {
+  maps: SeedMapDoc[]
+  all_nyc: SeedMapDoc
+  zones: SeedZoneDoc[]
+}
+
+const SEED_BOROUGHS = ['Brooklyn', 'Bronx', 'Queens', 'Staten Island']
+
+async function loadBoroughSeed(): Promise<BoroughSeed> {
+  const res = await fetch(BOROUGH_SEED_URL)
+  if (!res.ok) throw new Error(`couldn't load ${BOROUGH_SEED_URL} (${res.status})`)
+  return res.json()
+}
+
+// Firestore caps a batch at 500 writes.
+async function writeZoneDocs(docs: { id: string; data: Record<string, unknown> }[]) {
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = writeBatch(db)
+    for (const d of docs.slice(i, i + 450)) {
+      batch.set(doc(db, 'zones', d.id), d.data, { merge: true })
+    }
+    await batch.commit()
+  }
+}
+
+// Writes a map doc. A new map starts hidden; an existing one keeps its
+// published state and created_at.
+async function writeMapDoc(m: SeedMapDoc): Promise<boolean> {
+  const ref = doc(db, 'maps', m.id)
+  const existing = await getDoc(ref)
+  await setDoc(ref, {
+    id: m.id,
+    name: m.name,
+    description: m.description,
+    city: m.city,
+    borough: m.borough,
+    map_center: m.map_center,
+    boundary: JSON.stringify(m.boundary),
+    recommended_teams: m.recommended_teams,
+    recommended_duration: m.recommended_duration,
+    ...(existing.exists() ? {} : { is_active: false, created_at: new Date() }),
+  }, { merge: true })
+  return existing.exists() && existing.data().is_active === true
+}
+
 export default function SeedMaps() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<string[]>([])
@@ -737,6 +827,84 @@ export default function SeedMaps() {
     setRunning(false)
   }
 
+  const seedBorough = async (borough: string) => {
+    setRunning(true)
+    setStatus([])
+    log(`--- Seeding ${borough} ---`)
+    try {
+      const seed = await loadBoroughSeed()
+      const map = seed.maps.find((m) => m.borough === borough)
+      if (!map) throw new Error(`no ${borough} map in the seed file`)
+      const zones = seed.zones.filter((z) => z.map_id === map.id)
+      await writeZoneDocs(zones.map((z) => ({
+        id: z.id,
+        data: { ...z, boundary: JSON.stringify(z.boundary) },
+      })))
+      log(`  ✓ ${zones.length} zones written`)
+      const published = await writeMapDoc(map)
+      log(`  ✓ map: ${map.name} (${map.id})`)
+      log('')
+      log(published
+        ? `✅ Done. ${map.name} is already published, so GMs see the update now.`
+        : `✅ Done. ${map.name} is hidden until you publish it in Zone Builder.`)
+    } catch (err) {
+      log(`✗ ${(err as Error).message}`)
+    }
+    setRunning(false)
+  }
+
+  // All NYC copies whatever the five borough maps hold right now (including
+  // any Zone Builder edits), since a zone can only belong to one map.
+  const buildAllNyc = async () => {
+    setRunning(true)
+    setStatus([])
+    log('--- Building All NYC ---')
+    try {
+      const seed = await loadBoroughSeed()
+      const sources = [
+        { borough: 'Manhattan', mapId: MAP_MANHATTAN_ID },
+        ...seed.maps.map((m) => ({ borough: m.borough, mapId: m.id })),
+      ]
+      const copies: { id: string; data: Record<string, unknown> }[] = []
+      const missing: string[] = []
+      for (const s of sources) {
+        const snap = await getDocs(query(collection(db, 'zones'), where('map_id', '==', s.mapId)))
+        if (snap.empty) missing.push(s.borough)
+        log(`  ${s.borough}: ${snap.size} zones`)
+        snap.forEach((d) => {
+          const id = 'zone_nyc_' + d.id.replace(/^zone_/, '')
+          copies.push({ id, data: { ...d.data(), id, map_id: MAP_ALL_NYC_ID, borough: d.data().borough || s.borough } })
+        })
+      }
+      if (missing.length > 0) {
+        throw new Error(`seed ${missing.join(', ')} first; nothing was written`)
+      }
+      await writeZoneDocs(copies)
+      log(`  ✓ ${copies.length} zones copied`)
+      const published = await writeMapDoc(seed.all_nyc)
+      log(`  ✓ map: ${seed.all_nyc.name} (${seed.all_nyc.id})`)
+      log('')
+      log(published
+        ? `✅ Done. ${seed.all_nyc.name} is already published, so GMs see the update now.`
+        : `✅ Done. ${seed.all_nyc.name} is hidden until you publish it in Zone Builder.`)
+    } catch (err) {
+      log(`✗ ${(err as Error).message}`)
+    }
+    setRunning(false)
+  }
+
+  const boroughButtonStyle: React.CSSProperties = {
+    background: running ? 'var(--line)' : 'rgba(var(--green-rgb), 0.08)',
+    border: '1px solid ' + (running ? 'var(--line)' : 'rgba(var(--green-rgb), 0.3)'),
+    color: running ? 'var(--ink-ghost)' : 'var(--green)',
+    padding: '12px 14px',
+    borderRadius: 10,
+    fontSize: '0.88rem',
+    fontWeight: 700,
+    cursor: running ? 'not-allowed' : 'pointer',
+    fontFamily: 'inherit',
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -821,6 +989,32 @@ export default function SeedMaps() {
         >
           {running ? 'Working...' : '\uD83D\uDD11 Backfill game rosters + join codes (one-time)'}
         </button>
+
+        <div style={{
+          border: '1px solid var(--line)',
+          borderRadius: 10,
+          padding: 16,
+          marginBottom: 20,
+        }}>
+          <p style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 6 }}>
+            Borough maps
+          </p>
+          <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: 14 }}>
+            Full-borough maps built from the same city neighborhood data as Manhattan.
+            New maps start hidden; publish them in Zone Builder once they look right.
+            Build All NYC last: it copies the five borough maps as they are right now.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            {SEED_BOROUGHS.map((b) => (
+              <button key={b} onClick={() => seedBorough(b)} disabled={running} style={boroughButtonStyle}>
+                Seed {b}
+              </button>
+            ))}
+          </div>
+          <button onClick={buildAllNyc} disabled={running} style={{ ...boroughButtonStyle, width: '100%' }}>
+            Build All NYC
+          </button>
+        </div>
 
         {status.length > 0 && (
           <div style={{

@@ -26,6 +26,9 @@ import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 import { Icon } from '../components/Icon'
 
+// One-off custom side quests are hidden for now; GMs pick from the presets only.
+const ALLOW_CUSTOM_SIDE_QUESTS = false
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -136,11 +139,11 @@ export default function CreateGame() {
 
   // Step 3: Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [claimThreshold, setClaimThreshold] = useState(6)
-  const [zoneBonusPoints, setZoneBonusPoints] = useState(3)
-  const [discardLimit, setDiscardLimit] = useState(1)
+  const [claimThreshold, setClaimThreshold] = useState(4)
+  const [zoneBonusPoints, setZoneBonusPoints] = useState(8)
+  const [discardLimit, setDiscardLimit] = useState(2)
   const [handSize, setHandSize] = useState(5)
-  const [lockThreshold, setLockThreshold] = useState(10)
+  const [lockThreshold, setLockThreshold] = useState(40)
 
   // Hand composition rules
   const [handMinEasy, setHandMinEasy] = useState(1)
@@ -328,6 +331,7 @@ export default function CreateGame() {
 
   // Get the active map (for display)
   const activeMap = maps.find((m) => m.id === selectedMapId) || null
+  const addablePresets = SIDE_QUEST_PRESETS.filter((p) => !sideQuests.some((q) => q.id === p.id))
 
   // ---------------------------------------------------------------------------
   // Create Game
@@ -936,7 +940,7 @@ export default function CreateGame() {
                 </div>
               ))}
 
-              <select
+              {(addablePresets.length > 0 || ALLOW_CUSTOM_SIDE_QUESTS) && <select
                 value=""
                 onChange={(e) => {
                   const v = e.target.value
@@ -959,11 +963,11 @@ export default function CreateGame() {
                 }}
               >
                 <option value="">+ Add a side quest…</option>
-                {SIDE_QUEST_PRESETS.filter((p) => !sideQuests.some((q) => q.id === p.id)).map((p) => (
+                {addablePresets.map((p) => (
                   <option key={p.id} value={p.id}>{p.title} (recurring)</option>
                 ))}
-                <option value="__custom__">Custom side quest (this game only)</option>
-              </select>
+                {ALLOW_CUSTOM_SIDE_QUESTS && <option value="__custom__">Custom side quest (this game only)</option>}
+              </select>}
             </div>
 
             {/* Zone schedule — one row per zone, Opens + Closes side by side */}
@@ -1122,8 +1126,8 @@ export default function CreateGame() {
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                     <SettingInput label="Zone Claim (pts)" value={claimThreshold} onChange={setClaimThreshold} min={4} max={10} />
-                    <SettingInput label="Zone Bonus" value={zoneBonusPoints} onChange={setZoneBonusPoints} min={0} max={5} />
-                    <SettingInput label="Zone Lock (pts)" value={lockThreshold} onChange={setLockThreshold} min={claimThreshold} max={20} />
+                    <SettingInput label="Zone Bonus" value={zoneBonusPoints} onChange={setZoneBonusPoints} min={0} max={20} />
+                    <SettingInput label="Zone Lock (pts)" value={lockThreshold} onChange={setLockThreshold} min={claimThreshold} max={100} />
                     <SettingInput label="Discards" value={discardLimit} onChange={setDiscardLimit} min={0} max={5} />
                     <SettingInput label="Hand Size" value={handSize} onChange={setHandSize} min={3} max={8} />
                   </div>

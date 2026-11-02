@@ -99,10 +99,10 @@ export interface Challenge {
 
 export interface GameSettings {
   // Core thresholds
-  claim_threshold: number         // Points needed to claim a zone (default: 6)
-  lock_threshold: number          // Points needed to lock a zone (default: 10)
-  zone_bonus_points: number       // Bonus awarded on first claim (default: 3)
-  discard_limit: number           // Times a team can discard+draw per game (default: 1)
+  claim_threshold: number         // Points needed to claim a zone (default: 4)
+  lock_threshold: number          // Points needed to lock a zone (default: 40)
+  zone_bonus_points: number       // Bonus awarded on first claim (default: 8)
+  discard_limit: number           // Times a team can discard+draw per game (default: 2)
   team_size: number               // Target players per team (default: 3)
   duration_minutes: number        // Total game length in minutes (default: 180)
   hand_size: number               // Challenge cards per team (default: 5)
