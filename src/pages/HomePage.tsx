@@ -11,7 +11,7 @@ import { useRunningGames } from '../hooks/useRunningGames'
 import GameSummaryCard from '../components/GameSummaryCard'
 import GMAlertSettings from '../components/GMAlertSettings'
 
-// Admin/GM-only tools. These routes are gated by AdminGuard; this list just
+// Admin-only tools. These routes are gated by AdminGuard; this list just
 // surfaces them so admins don't have to type URLs.
 const ADMIN_LINKS = [
   { path: '/admin/zones', label: 'Zone Manager', desc: 'Import & edit zone metadata' },
@@ -25,9 +25,11 @@ export default function HomePage() {
   const navigate = useNavigate()
   const user = auth.currentUser
   const { role, loading: roleLoading } = useUserRole()
-  // GM/admin see the Game Master view (Create + Join + admin tools).
-  // Everyone else sees the Player view (Join only).
+  // GM/admin see the Game Master view (running games, Create + Join); only
+  // admins also get Zone Builder and the admin tools. Everyone else sees the
+  // Player view (Join only).
   const isGM = role === 'admin' || role === 'gm'
+  const isAdmin = role === 'admin'
   // With games running, a smaller logo keeps Create Game on screen below the list.
   const runningGames = useRunningGames()
   const compact = isGM && runningGames.length > 0
@@ -113,9 +115,9 @@ export default function HomePage() {
         </button>
         )}
 
-        {/* Zone Builder — GM only. Primary action so admins don't have to
+        {/* Zone Builder — admin only. Primary action so admins don't have to
             dig through the Admin Tools list. */}
-        {isGM && (
+        {isAdmin && (
         <button
           onClick={() => navigate('/admin/zone-builder')}
           style={{
@@ -175,8 +177,8 @@ export default function HomePage() {
       </div>
       )}
 
-      {/* Admin tools — only for admin/GM roles */}
-      {isGM && (
+      {/* Admin tools — admins only */}
+      {isAdmin && (
         <div style={{
           marginTop: 32,
           width: '100%',

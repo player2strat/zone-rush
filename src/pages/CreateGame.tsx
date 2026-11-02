@@ -25,6 +25,7 @@ import { snapshotZonesIntoBatch } from '../lib/gameZones'
 import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 import { Icon } from '../components/Icon'
+import { useUserRole } from '../hooks/useUserRole'
 
 // One-off custom side quests are hidden for now; GMs pick from the presets only.
 const ALLOW_CUSTOM_SIDE_QUESTS = false
@@ -106,6 +107,8 @@ function schedulePresets(durationMinutes: number, blankLabel: string) {
 export default function CreateGame() {
   const navigate = useNavigate()
   const user = auth.currentUser
+  // Building maps is admin-only; GMs pick from the published maps.
+  const isAdmin = useUserRole().role === 'admin'
 
   // Step tracker: 1 = Basics, 2 = Pick Map, 3 = Settings & Create
   const [step, setStep] = useState(1)
@@ -661,17 +664,21 @@ export default function CreateGame() {
                 </h1>
                 <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem', marginBottom: 24 }}>
                   Choose which area to play in
-                  {' · '}
-                  <button
-                    onClick={() => navigate('/admin/zone-builder')}
-                    style={{
-                      background: 'none', border: 'none', padding: 0,
-                      color: 'var(--pink)', cursor: 'pointer',
-                      fontFamily: 'inherit', fontSize: 'inherit',
-                    }}
-                  >
-                    Build a new map
-                  </button>
+                  {isAdmin && (
+                    <>
+                      {' · '}
+                      <button
+                        onClick={() => navigate('/admin/zone-builder')}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          color: 'var(--pink)', cursor: 'pointer',
+                          fontFamily: 'inherit', fontSize: 'inherit',
+                        }}
+                      >
+                        Build a new map
+                      </button>
+                    </>
+                  )}
                 </p>
 
                 {loadingMaps || loadingZones ? (

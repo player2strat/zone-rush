@@ -1,13 +1,14 @@
 // =============================================================================
-// Wraps admin-only routes. Checks user role from Firestore.
-// Allows "admin" and "gm" roles through. Everyone else gets sent home.
+// Wraps admin-only routes (Zone Builder, Zone Manager, seeding, exports).
+// Checks the user's role from Firestore and lets only "admin" through; with
+// `allowGm` (Create Game) "gm" gets in too. Everyone else gets sent home.
 // =============================================================================
 
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useUserRole } from '../hooks/useUserRole'
 
-export default function AdminGuard({ children }: { children: ReactNode }) {
+export default function AdminGuard({ children, allowGm = false }: { children: ReactNode; allowGm?: boolean }) {
   const { role, loading } = useUserRole()
 
   if (loading) {
@@ -26,8 +27,7 @@ export default function AdminGuard({ children }: { children: ReactNode }) {
     )
   }
 
-  // Only admin and gm roles can access these pages
-  if (role !== 'admin' && role !== 'gm') {
+  if (role !== 'admin' && !(allowGm && role === 'gm')) {
     return <Navigate to="/" replace />
   }
 

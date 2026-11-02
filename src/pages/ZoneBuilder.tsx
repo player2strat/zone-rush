@@ -1,11 +1,11 @@
 // =============================================================================
-// Zone Builder (admin/GM only)
+// Zone Builder (admin only)
 // Click-and-drag polygon drawing on a Mapbox map, writing directly into the
 // maps/zones Firestore structure. Flow: open/create a map → draw its outer
 // boundary → draw zones (name + tags) → save → publish.
 //
-// Gated by AdminGuard in App.tsx (admin/gm roles only). Firestore rules already
-// restrict maps/zones writes to admin/GM, so no rules change is needed.
+// Gated by AdminGuard in App.tsx (admins only). Firestore rules restrict
+// maps/zones writes to admins too.
 //
 // Built in steps. This is step 2: pick a city, open an existing map, and render
 // its saved zones + boundary read-only. Drawing/validation land in later steps.

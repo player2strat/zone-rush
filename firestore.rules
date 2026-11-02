@@ -47,7 +47,7 @@ service cloud.firestore {
       return hasRole(['admin']);
     }
 
-    // Role check only — used for the content library and for creating games.
+    // Role check only — GMs and admins: creating and running games.
     function isAdminOrGm() {
       return hasRole(['admin', 'gm']);
     }
@@ -121,26 +121,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ---- Content: read by any signed-in user, write only by admin/GM --------
+    // ---- Content: read by any signed-in user, write only by admins ----------
+    // (Zone Builder, Zone Manager and the seed pages are admin-only; GMs play
+    // on the published maps.)
     match /cities/{cityId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow write: if isAdmin();
     }
     match /zones/{zoneId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow write: if isAdmin();
     }
     match /maps/{mapId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow write: if isAdmin();
     }
     match /map_sets/{setId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow write: if isAdmin();
     }
     match /challenges/{challengeId} {
       allow read: if signedIn();
-      allow write: if isAdminOrGm();
+      allow write: if isAdmin();
     }
 
     // ---- Join codes: look one up, never list them ---------------------------

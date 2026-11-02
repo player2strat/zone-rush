@@ -136,8 +136,9 @@ export default function App() {
             <HomePage />
           </>
         } />
-        {/* Only GMs/admins can create games; players are sent home. */}
-        <Route path="/create" element={<AdminGuard><CreateGame /></AdminGuard>} />
+        {/* Only GMs/admins can create games; players are sent home. Every
+            /admin page below is admins only. */}
+        <Route path="/create" element={<AdminGuard allowGm><CreateGame /></AdminGuard>} />
         <Route path="/join" element={<JoinGame />} />
         {/* Player asking to join a game that already started; GM approves from the dashboard. */}
         <Route path="/late-join/:gameId" element={<LateJoinPage />} />
