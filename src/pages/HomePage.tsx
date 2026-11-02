@@ -3,10 +3,12 @@
 // First screen after login. Navigate to create or join a game.
 // =============================================================================
 
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useUserRole } from '../hooks/useUserRole'
+import { useRunningGames, type RunningGame, type RunningStatus } from '../hooks/useRunningGames'
 
 // Admin/GM-only tools. These routes are gated by AdminGuard; this list just
 // surfaces them so admins don't have to type URLs.
@@ -64,6 +66,9 @@ export default function HomePage() {
           Welcome back, {user?.displayName || user?.email || 'Player'}
         </p>
       </div>
+
+      {/* Every game this GM is running, so they can hop between them */}
+      {isGM && !roleLoading && <RunningGamesList />}
 
       {/* Action Buttons — wait for the role so the view doesn't flash */}
       {!roleLoading && (
@@ -255,6 +260,114 @@ export default function HomePage() {
     </div>
   )
 }
+// ---------------------------------------------------------------------------
+// "Your running games": one card per game the GM started that hasn't ended,
+// with its status, time left (or players joined) and what's waiting for review.
+// ---------------------------------------------------------------------------
+const STATUS_LABEL: Record<RunningStatus, { label: string; bg: string; color: string }> = {
+  active: { label: 'Live', bg: 'rgba(var(--green-rgb), 0.15)', color: 'var(--green)' },
+  paused: { label: 'Paused', bg: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold-deep)' },
+  strategy: { label: 'Strategy', bg: 'rgba(var(--pink-rgb), 0.12)', color: 'var(--pink-deep)' },
+  lobby: { label: 'Lobby', bg: 'rgba(var(--ink-rgb), 0.06)', color: 'var(--ink-muted)' },
+}
+
+function toMillis(t: unknown): number | null {
+  if (t instanceof Date) return t.getTime()
+  const ts = t as { toMillis?: () => number } | null | undefined
+  return ts?.toMillis ? ts.toMillis() : null
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// "1:42 left" for live and paused games (a paused clock stops where it paused),
+// players joined for games that haven't started.
+function gameDetail(g: RunningGame, now: number): string {
+  if (g.status === 'active' || g.status === 'paused') {
+    const endsAt = toMillis(g.ends_at)
+    if (endsAt !== null) {
+      const from = g.status === 'paused' ? toMillis(g.paused_at) ?? now : now
+      const ms = Math.max(0, endsAt - from)
+      const h = Math.floor(ms / 3600000)
+      const m = Math.floor((ms % 3600000) / 60000)
+      return `${h}:${String(m).padStart(2, '0')} left`
+    }
+  }
+  return `${plural(g.players, 'player')} joined`
+}
+
+function RunningGamesList() {
+  const navigate = useNavigate()
+  const games = useRunningGames()
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (games.length === 0) return null
+
+  return (
+    <div style={{ width: '100%', maxWidth: 320, marginBottom: 24 }}>
+      <p style={{
+        fontSize: '0.7rem',
+        color: 'var(--ink-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
+        fontWeight: 700,
+        margin: '0 0 10px',
+      }}>
+        Your running games ({games.length})
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {games.map((g) => {
+          const status = STATUS_LABEL[g.status]
+          return (
+            <button
+              key={g.id}
+              onClick={() => navigate(g.status === 'lobby' ? `/lobby/${g.id}` : `/gm/${g.id}`)}
+              style={{
+                background: 'var(--paper)',
+                border: '1px solid var(--line)',
+                borderRadius: 10,
+                padding: '12px 14px',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <span style={{ display: 'block', color: 'var(--ink)', fontWeight: 700, fontSize: '0.95rem' }}>
+                {g.name}
+              </span>
+              <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <span style={{ ...tagStyle, background: status.bg, color: status.color }}>{status.label}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{gameDetail(g, now)}</span>
+                {g.pendingSubmissions > 0 && (
+                  <span style={{ ...tagStyle, ...waitingTagStyle }}>{g.pendingSubmissions} to review</span>
+                )}
+                {g.pendingJoins > 0 && (
+                  <span style={{ ...tagStyle, ...waitingTagStyle }}>{plural(g.pendingJoins, 'join request')}</span>
+                )}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const tagStyle: React.CSSProperties = {
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  padding: '2px 8px',
+  borderRadius: 4,
+}
+
+const waitingTagStyle: React.CSSProperties = {
+  background: 'rgba(var(--marigold-rgb), 0.15)',
+  color: 'var(--marigold-deep)',
+}
+
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1 1 140px',
   background: 'none',

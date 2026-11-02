@@ -20,26 +20,24 @@ import ExportPage from './pages/ExportPage'
 import ResultsPage from './pages/ResultsPage.tsx'
 import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
+import RunningGamesProvider from './components/RunningGamesProvider'
 import SeedMaps from './pages/SeedMaps'
 import SideQuestExplorer from './pages/SideQuestExplorer'
 import ProfilePage from './pages/ProfilePage'
 import LeaderboardPage from './pages/LeaderboardPage'
 
 // ---------------------------------------------------------------------------
-// Checks Firestore for an active game this user is part of (player or GM).
+// Checks Firestore for an active game this user is playing in.
 // Returns the redirect path if found, null otherwise.
 // ---------------------------------------------------------------------------
 async function findActiveGameForUser(uid: string): Promise<string | null> {
   try {
-    // Check if user is a GM of an active game
-    // (games where created_by == uid and status == 'active' or 'strategy')
+    // A GM running any game stays on the home screen, which lists every game
+    // they're running (GMs often run several at once).
     const gamesRef = collection(db, 'games')
     const gmQuery = query(gamesRef, where('created_by', '==', uid), where('status', 'in', ['lobby', 'active', 'strategy', 'paused']))
     const gmSnap = await getDocs(gmQuery)
-    if (!gmSnap.empty) {
-      const g = gmSnap.docs[0]
-      return g.data().status === 'lobby' ? `/lobby/${g.id}` : `/gm/${g.id}`
-    }
+    if (!gmSnap.empty) return null
 
     // Check if user is a player on a team in an active game
     // collectionGroup lets us query ALL 'teams' subcollections across all games
@@ -76,7 +74,7 @@ async function findActiveGameForUser(uid: string): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Runs once on mount — if user has an active game, redirects them there.
+// Runs once on mount — if a player has an active game, redirects them there.
 // Shown on the home route only so it doesn't interrupt mid-game navigation.
 // ---------------------------------------------------------------------------
 function ActiveGameRedirect({ uid }: { uid: string }) {
@@ -127,7 +125,10 @@ export default function App() {
         ActiveGameRedirect only runs on the home route ("/").
         It checks Firestore once and silently redirects if an active game is found.
         Players who closed the browser mid-game land back where they left off.
+        RunningGamesProvider keeps a GM's running games (and their timers) live
+        on every screen.
       */}
+      <RunningGamesProvider uid={user.uid}>
       <Routes>
         <Route path="/" element={
           <>
@@ -178,6 +179,7 @@ export default function App() {
         <Route path="/results/:gameId" element={<ResultsPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      </RunningGamesProvider>
     </BrowserRouter>
   )
 }

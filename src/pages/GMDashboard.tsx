@@ -33,7 +33,9 @@ import {
 import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
-import { approveSubmission, checkZoneLockouts, runZoneSchedules } from '../lib/scoring'
+import { approveSubmission } from '../lib/scoring'
+import { useRunningGames } from '../hooks/useRunningGames'
+import { useGameTimers } from '../hooks/useGameTimers'
 import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
 import EndGameReveal from '../components/EndGameReveal'
 import { ReactionOverlay } from '../components/Reactions'
@@ -80,6 +82,7 @@ interface GameData {
   id: string
   name: string
   status: string
+  created_by?: string
   join_code: string
   zones: string[]
   started_at: any
@@ -369,26 +372,15 @@ export default function GMDashboard() {
     setJoinBusy(null)
   }
 
-  // Zone open/close schedules and timed zone LOCKOUTS run only from the GM's
-  // screen: security rules let only the GM change which zones are open or
-  // award points. Immediate + foreground + once a minute.
-  useEffect(() => {
-    if (game?.status !== 'active' || !gameId) return
-    const run = () => {
-      checkZoneLockouts(gameId).catch((err) => console.error('Zone lockout check failed:', err))
-      runZoneSchedules(gameId)
-    }
-    run()
-    const interval = setInterval(run, 60000)
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') run()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [game?.status, gameId])
+  // Timed events (milestone messages, zone schedules, timed lockouts) for the
+  // GM's own games run app-wide from RunningGamesProvider, on any screen. An
+  // admin covering someone else's game runs them for that game from here.
+  const runningGames = useRunningGames()
+  useGameTimers(game && game.created_by !== user?.uid ? [game] : [], user?.uid)
+  // Submissions and join requests waiting in the GM's other running games.
+  const waitingElsewhere = runningGames
+    .filter((g) => g.id !== gameId)
+    .reduce((n, g) => n + g.pendingSubmissions + g.pendingJoins, 0)
 
   // Smallest team with room (or just the smallest if all are full).
   const defaultTeamFor = (): string => {
@@ -511,63 +503,12 @@ export default function GMDashboard() {
       const secs = Math.floor((diff % 60000) / 1000)
       setTimeLeft(hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}` : `${mins}:${String(secs).padStart(2, '0')}`)
 
-      // ---- Automated milestone broadcasts ----
-      // Only fires once per milestone, persisted on the game doc so it
-      // survives GM browser refreshes and doesn't double-send.
-      if (!gameId || !user || game.status !== 'active') return
-
-      const totalMins = game.settings.duration_minutes ?? 180
-      const minsRemaining = Math.floor(diff / 60000)
-      const halfwayMins = Math.floor(totalMins / 2)
-
-      const milestones: { key: string; minsRemaining: number; message: string }[] = [
-        {
-          key: 'halfway',
-          minsRemaining: halfwayMins,
-          message: `⏱ Halfway point! You have ${halfwayMins} minutes left. Check the map. Now's a good time to make your move.`,
-        },
-        {
-          key: '30min',
-          minsRemaining: 30,
-          message: `⚠️ 30 minutes remaining! Start thinking about your return route and final zone pushes.`,
-        },
-        {
-          key: '5min',
-          minsRemaining: 5,
-          message: `🚨 5 minutes left! Head back to the start now. Don't forget Side Quests: most zones, most transport modes, most challenges.`,
-        },
-      ]
-
-      const alreadySent: string[] = game.milestone_broadcasts_sent ?? []
-
-      for (const milestone of milestones) {
-        // Fire when the countdown ticks to exactly that minute (within the same tick)
-        if (
-          minsRemaining === milestone.minsRemaining &&
-          secs === 0 &&
-          !alreadySent.includes(milestone.key)
-        ) {
-          const send = async () => {
-            await sendGMBroadcast(gameId, user.uid, 'Foray', milestone.message)
-            await updateDoc(doc(db, 'games', gameId), {
-              milestone_broadcasts_sent: arrayUnion(milestone.key),
-            })
-          }
-          try {
-            await send()
-          } catch (err) {
-            console.error('Milestone broadcast failed:', err, milestone.key)
-            toast.error(`The ${milestone.key === 'halfway' ? 'halfway' : milestone.minsRemaining + ' minute'} broadcast didn't send.`, {
-              retry: () => send().catch((e) => toast.error('Still couldn\'t send: ' + (e as Error).message)),
-            })
-          }
-          break // Only one milestone per tick
-        }
-      }
+      // Milestone messages (halfway, 30 and 5 minutes) are sent by
+      // lib/gameTimers for every running game, not from this countdown.
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [game?.ends_at, game?.status, game?.milestone_broadcasts_sent])
+  }, [game?.ends_at, game?.status])
 
   useEffect(() => {
     if (!gameId) return
@@ -1279,6 +1220,17 @@ export default function GMDashboard() {
 
       {/* TOP BAR */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
+        {/* Back to the home screen's list of running games, plus what's waiting in the others */}
+        <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', padding: 0 }}>
+            ← Your games
+          </button>
+          {waitingElsewhere > 0 && (
+            <button onClick={() => navigate('/')} style={{ background: 'rgba(var(--marigold-rgb), 0.15)', border: 'none', color: 'var(--marigold-deep)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: 4 }}>
+              {waitingElsewhere} to review in other games
+            </button>
+          )}
+        </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
             <span style={{ fontFamily: "'Martian Mono', monospace", fontSize: '0.68rem', color: 'var(--marigold-deep)', textTransform: 'uppercase', letterSpacing: 2 }}>GM Dashboard</span>

@@ -19,6 +19,7 @@
 import {
   collection, doc, getDoc, getDocs,
   updateDoc, query, where, serverTimestamp, writeBatch, arrayRemove, arrayUnion,
+  runTransaction,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { isPointInPolygon } from './geo'
@@ -282,21 +283,33 @@ export async function checkZoneLockouts(gameId: string): Promise<string[]> {
   if (!startedAt || !endsAt) return []
 
   const elapsedPct = Math.min(100, ((Date.now() - startedAt) / (endsAt - startedAt)) * 100)
-  const alreadyLocked: string[] = gameData.locked_zones ?? []
+  const due = schedule
+    .filter((entry) => elapsedPct >= entry.lock_at_pct)
+    .map((entry) => entry.zone_id)
+  if (due.every((zoneId) => (gameData.locked_zones ?? []).includes(zoneId))) return []
+
+  // Claim the due zones first. Two GM screens checking at the same moment
+  // can't both lock a zone and award its bonus twice: only the screen whose
+  // transaction adds a zone to locked_zones goes on to lock it.
+  const gameRef = doc(db, 'games', gameId)
+  const claimed = await runTransaction(db, async (tx) => {
+    const locked: string[] = (await tx.get(gameRef)).data()?.locked_zones ?? []
+    const mine = due.filter((zoneId) => !locked.includes(zoneId))
+    if (mine.length > 0) tx.update(gameRef, { locked_zones: arrayUnion(...mine) })
+    return mine
+  })
+
   const newlyLocked: string[] = []
-
-  for (const entry of schedule) {
-    if (alreadyLocked.includes(entry.zone_id)) continue
-    if (elapsedPct < entry.lock_at_pct) continue
-
-    await lockZone(gameId, entry.zone_id, settings)
-    newlyLocked.push(entry.zone_id)
-  }
-
-  if (newlyLocked.length > 0) {
-    await updateDoc(doc(db, 'games', gameId), {
-      locked_zones: [...alreadyLocked, ...newlyLocked],
-    })
+  for (const zoneId of claimed) {
+    try {
+      await lockZone(gameId, zoneId, settings)
+      newlyLocked.push(zoneId)
+    } catch (err) {
+      // lockZone commits in one batch, so nothing was written: hand the claim
+      // back and the next check tries again.
+      await updateDoc(gameRef, { locked_zones: arrayRemove(zoneId) }).catch(() => {})
+      throw err
+    }
   }
 
   return newlyLocked

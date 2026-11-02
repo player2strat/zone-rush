@@ -58,18 +58,18 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
 - **Storage rules** — not in the repo; confirm in the console that uploads are limited to signed-in users and listing is off.
 - **Reel email** — before turning email on, send one email per recipient (or BCC) instead of one shared To: line.
 
-## Running several games at once
+## Running several games at once (built Nov 2026, browser first)
 
-GMs will normally run more than one live game at a time. It already works (each game has its own `/gm/<id>` dashboard and the rules check GM status per game), but the app assumes one game per GM:
-- **Home auto-jumps into one game.** `findActiveGameForUser` in `App.tsx` sends a GM to the first running game it finds (`gmSnap.docs[0]`), so the others are only reachable by their URL.
-- **Create is hard to reach mid-game.** The same jump fires on the home screen, so a GM with a live game can't tap Create without typing `/create`.
-- **No list of live games.** Past Forays only shows ended games.
+GMs normally run more than one live game at a time, from a browser for now.
+- **Home lists your running games.** A GM who started any game in lobby/strategy/active/paused stays on the home screen, which shows each one (status, time left or players joined, submissions and join requests waiting). Players still auto-jump into their game.
+- **"Your games" link** on the GM dashboard and the lobby, plus a "N to review in other games" tag on the dashboard.
+- **Timed events run for every game.** `components/RunningGamesProvider` runs `lib/gameTimers` for all of the GM's active games on any screen: milestone messages (`lib/milestones`; sent up to 5 minutes late with the real minutes left, then skipped), zone schedules and timed lockouts. Milestones and lockouts are claimed in a transaction first, so two tabs never double-send or double-award. An admin covering someone else's game runs that game's timers from its dashboard.
 
-Fix: when a GM has two or more games in lobby/strategy/active/paused, the home screen shows a "Your running games" list (name, status, open button) instead of auto-jumping, with Create still visible. One game keeps today's jump. Later, maybe: a small badge on each dashboard when another of your games has pending submissions or late-join requests, since each dashboard only listens to its own game.
+## Next: GMs on a phone, and timers with no GM screen open
 
-## Zone schedules
-
-- **Server-side schedule guarantee** — zone open/close schedules run only on the GM dashboard (on load, foreground, and once a minute; writes are atomic) — the security rules don't let players change which zones are open. If the GM's screen is asleep, a change lands when it wakes. A Vercel cron using the existing Admin SDK (`api/_lib/admin.ts`), or a Cloud Functions scheduled job (Blaze plan), would make timing exact.
+Today every timed event needs a GM browser open somewhere. On a phone that's locked or has Foray closed, nothing runs until it's opened again.
+- **Server-side timers**: a Vercel cron using the existing Admin SDK (`api/_lib/admin.ts`), or a Cloud Functions scheduled job (Blaze plan), calling the same claim-first logic as `lib/gameTimers` every minute. Milestones, zone schedules and lockouts then happen on time with no GM screen open.
+- **Mobile GM dashboard**: the dashboard and running-games list are built for a laptop browser; check them on a phone once the server-side timers exist.
 
 ## Borough maps (Brooklyn, Bronx, Queens, Staten Island, All NYC)
 

@@ -677,7 +677,7 @@ export default function LobbyPage() {
               padding: 0, marginBottom: 12,
             }}
           >
-            {isGM ? '← Back to Home' : '← Leave Lobby'}
+            {isGM ? '← Your games' : '← Leave Lobby'}
           </button>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
