@@ -281,13 +281,25 @@ export default function CreateGame() {
     ? zones.filter((z) => z.map_id === selectedMapId)
     : []
 
-  // Group visible zones by borough
+  // Group visible zones by borough. Zones drawn in Zone Builder have no borough
+  // of their own, so they join the map's borough (or the one borough the map's
+  // other zones share) instead of landing in "Other".
+  const labeledBoroughs = new Set(visibleZones.map((z) => z.borough).filter(Boolean))
+  const fallbackBorough = maps.find((m) => m.id === selectedMapId)?.borough
+    || (labeledBoroughs.size === 1 ? [...labeledBoroughs][0] : undefined)
+    || 'Other'
   const visibleZonesByBorough = visibleZones.reduce<Record<string, ZoneDoc[]>>((acc, z) => {
-    const borough = z.borough || 'Other'
+    const borough = z.borough || fallbackBorough
     if (!acc[borough]) acc[borough] = []
     acc[borough].push(z)
     return acc
   }, {})
+  // Unlabeled zones sorted first on load; put them in name order with the rest.
+  for (const group of Object.values(visibleZonesByBorough)) {
+    group.sort((a, b) => a.district_number && b.district_number
+      ? a.district_number - b.district_number
+      : a.name.localeCompare(b.name))
+  }
 
   // Closure presets filtered to fit within game duration
   const availablePresets = schedulePresets(durationMinutes, 'Never')

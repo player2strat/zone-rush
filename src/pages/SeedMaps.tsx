@@ -881,6 +881,17 @@ export default function SeedMaps() {
       }
       await writeZoneDocs(copies)
       log(`  ✓ ${copies.length} zones copied`)
+      // Drop copies whose original was deleted (or redrawn as a new zone) since
+      // the last build, so All NYC never keeps a stale zone on top of a new one.
+      const keep = new Set(copies.map((c) => c.id))
+      const existing = await getDocs(query(collection(db, 'zones'), where('map_id', '==', MAP_ALL_NYC_ID)))
+      const stale = existing.docs.filter((d) => !keep.has(d.id))
+      for (let i = 0; i < stale.length; i += 450) {
+        const batch = writeBatch(db)
+        for (const d of stale.slice(i, i + 450)) batch.delete(d.ref)
+        await batch.commit()
+      }
+      if (stale.length > 0) log(`  ✓ removed ${stale.length} old zone${stale.length === 1 ? '' : 's'} no longer on the borough maps`)
       const published = await writeMapDoc(seed.all_nyc)
       log(`  ✓ map: ${seed.all_nyc.name} (${seed.all_nyc.id})`)
       log('')
@@ -1003,6 +1014,7 @@ export default function SeedMaps() {
             Full-borough maps built from the same city neighborhood data as Manhattan.
             New maps start hidden; publish them in Zone Builder once they look right.
             Build All NYC last: it copies the five borough maps as they are right now.
+            Click it again after editing a borough map to bring All NYC up to date.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
             {SEED_BOROUGHS.map((b) => (

@@ -1809,15 +1809,19 @@ export default function ZoneBuilder() {
         `zone_${selectedMapId}_${Date.now().toString(36)}${Math.floor(
           Math.random() * 1000
         )}`;
+      // A new zone takes its map's borough so game setup files it with the
+      // map's other zones.
+      const created = {
+        id: newId,
+        map_id: selectedMapId,
+        city: cityId,
+        ...(selectedMap?.borough ? { borough: selectedMap.borough } : {}),
+        ...fields,
+      };
       if (editingZoneId) {
         batch.set(doc(db, "zones", editingZoneId), fields, { merge: true });
       } else {
-        batch.set(doc(db, "zones", newId), {
-          id: newId,
-          map_id: selectedMapId,
-          city: cityId,
-          ...fields,
-        });
+        batch.set(doc(db, "zones", newId), created);
       }
       for (const cl of clipped) {
         batch.set(
@@ -1878,10 +1882,7 @@ export default function ZoneBuilder() {
             : z;
         });
         if (!editingZoneId) {
-          next = [
-            ...next,
-            { id: newId, map_id: selectedMapId, city: cityId, ...fields },
-          ];
+          next = [...next, created];
         }
         return next;
       });
