@@ -20,7 +20,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, getDoc, getDocs, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../lib/firebase'
-import { defaultTeamName, defaultTeamColor } from '../lib/teamDefaults'
+import { defaultTeamName, defaultTeamColor, TEAM_NAME_MAX } from '../lib/teamDefaults'
 import { snapshotZonesIntoBatch } from '../lib/gameZones'
 import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
@@ -28,6 +28,9 @@ import { Icon } from '../components/Icon'
 
 // One-off custom side quests are hidden for now; GMs pick from the presets only.
 const ALLOW_CUSTOM_SIDE_QUESTS = false
+
+// Longest game name. Long names are cut with "…" on the GM's game cards.
+const GAME_NAME_MAX = 40
 
 // ---------------------------------------------------------------------------
 // Types
@@ -366,7 +369,7 @@ export default function CreateGame() {
       batch.set(joinCodeRef(joinCode), { game_id: gameId, created_at: serverTimestamp() })
       batch.set(doc(db, 'games', gameId), {
         id: gameId,
-        name: gameName.trim(),
+        name: gameName.trim().slice(0, GAME_NAME_MAX),
         city: cityFilter,
         status: 'lobby',
         created_by: user.uid,
@@ -521,6 +524,7 @@ export default function CreateGame() {
                 type="text"
                 value={gameName}
                 onChange={(e) => setGameName(e.target.value)}
+                maxLength={GAME_NAME_MAX}
                 placeholder="Saturday Night Brooklyn Rush"
                 style={inputStyle}
                 autoFocus
@@ -586,7 +590,7 @@ export default function CreateGame() {
                         value={name}
                         onChange={(e) => handleTeamNameChange(i, e.target.value)}
                         placeholder={defaultTeamName(i)}
-                        maxLength={28}
+                        maxLength={TEAM_NAME_MAX}
                         style={{
                           flex: 1,
                           background: 'transparent',

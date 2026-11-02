@@ -28,7 +28,7 @@ import { db, auth } from '../lib/firebase'
 import { removeFromRoster } from '../lib/gameMembership'
 import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
-import { defaultTeamName, defaultTeamColor, firstFreeTeamIndex } from '../lib/teamDefaults'
+import { defaultTeamName, defaultTeamColor, firstFreeTeamIndex, TEAM_NAME_MAX } from '../lib/teamDefaults'
 import { createTestTeam } from '../lib/testMode'
 import GameStrip from '../components/GameStrip'
 
@@ -392,7 +392,7 @@ export default function LobbyPage() {
   // -----------------------------------------------------------------------
 
   const handleRenameTeam = async (teamId: string) => {
-    const newName = editingTeamName[teamId]?.trim()
+    const newName = editingTeamName[teamId]?.trim().slice(0, TEAM_NAME_MAX)
     if (!newName || !gameId) return
     setSavingRoster(true)
     try {
@@ -1220,6 +1220,7 @@ export default function LobbyPage() {
                           <div style={{ display: 'flex', gap: 6, flex: 1 }}>
                             <input
                               autoFocus
+                              maxLength={TEAM_NAME_MAX}
                               value={editingTeamName[team.id]}
                               onChange={(e) => setEditingTeamName((prev) => ({ ...prev, [team.id]: e.target.value }))}
                               onKeyDown={(e) => {

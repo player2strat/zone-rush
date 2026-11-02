@@ -6,6 +6,10 @@
 // in both places, which is why this lives in one module.
 // =============================================================================
 
+// Longest team name, at setup and when renaming in the lobby. 28 characters
+// fits whole on a game card in the GM's scoreboard strip.
+export const TEAM_NAME_MAX = 28
+
 export const TEAM_NAMES = [
   'The Bodega Cats',
   'Subway Surfers',
