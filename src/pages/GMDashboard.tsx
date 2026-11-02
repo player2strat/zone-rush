@@ -34,8 +34,9 @@ import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission } from '../lib/scoring'
-import { useRunningGames } from '../hooks/useRunningGames'
+import { useRunningGames, waitingCount } from '../hooks/useRunningGames'
 import { useGameTimers } from '../hooks/useGameTimers'
+import GMAlertSettings from '../components/GMAlertSettings'
 import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
 import EndGameReveal from '../components/EndGameReveal'
 import { ReactionOverlay } from '../components/Reactions'
@@ -377,10 +378,11 @@ export default function GMDashboard() {
   // admin covering someone else's game runs them for that game from here.
   const runningGames = useRunningGames()
   useGameTimers(game && game.created_by !== user?.uid ? [game] : [], user?.uid)
-  // Submissions and join requests waiting in the GM's other running games.
+  // Everything waiting in the GM's other running games (submissions, side
+  // quest photos, join requests, "Message GM" pings).
   const waitingElsewhere = runningGames
     .filter((g) => g.id !== gameId)
-    .reduce((n, g) => n + g.pendingSubmissions + g.pendingJoins, 0)
+    .reduce((n, g) => n + waitingCount(g), 0)
 
   // Smallest team with room (or just the smallest if all are full).
   const defaultTeamFor = (): string => {
@@ -1227,9 +1229,12 @@ export default function GMDashboard() {
           </button>
           {waitingElsewhere > 0 && (
             <button onClick={() => navigate('/')} style={{ background: 'rgba(var(--marigold-rgb), 0.15)', border: 'none', color: 'var(--marigold-deep)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: 4 }}>
-              {waitingElsewhere} to review in other games
+              {waitingElsewhere} waiting in other games
             </button>
           )}
+          <span style={{ marginLeft: 'auto' }}>
+            <GMAlertSettings />
+          </span>
         </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>

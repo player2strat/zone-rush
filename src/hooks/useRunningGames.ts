@@ -1,9 +1,10 @@
 // =============================================================================
 // Foray — the GM's running games
 //
-// Every game the signed-in GM created that hasn't ended, with how many
-// submissions and join requests each one is waiting on. The live feed lives in
-// components/RunningGamesProvider (mounted once in App); read it here.
+// Every game the signed-in GM created that hasn't ended, with what each one is
+// waiting on: submissions and side quest photos to review, join requests, and
+// unread "Message GM" pings. The live feed (and the alerts when something new
+// arrives) lives in components/RunningGamesProvider, mounted once in App.
 // =============================================================================
 
 import { createContext, useContext } from 'react'
@@ -20,8 +21,15 @@ export interface RunningGame {
   settings?: { duration_minutes?: number }
   milestone_broadcasts_sent?: string[]
   pendingSubmissions: number
+  pendingSideQuests: number
   pendingJoins: number
+  unreadMessages: number
   players: number
+}
+
+/** Everything in this game that's waiting for the GM. */
+export function waitingCount(g: RunningGame): number {
+  return g.pendingSubmissions + g.pendingSideQuests + g.pendingJoins + g.unreadMessages
 }
 
 export const RunningGamesContext = createContext<RunningGame[]>([])

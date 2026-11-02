@@ -62,13 +62,15 @@ the code and syncs into the claude.ai project (if connected as a knowledge sourc
 
 GMs normally run more than one live game at a time, from a browser for now.
 - **Home lists your running games.** A GM who started any game in lobby/strategy/active/paused stays on the home screen, which shows each one (status, time left or players joined, submissions and join requests waiting). Players still auto-jump into their game.
-- **"Your games" link** on the GM dashboard and the lobby, plus a "N to review in other games" tag on the dashboard.
+- **"Your games" link** on the GM dashboard and the lobby, plus a "N waiting in other games" tag on the dashboard. "Waiting" counts submissions, side quest photos, join requests and unread "Message GM" pings.
+- **GM alerts** (`lib/gmAlerts`): anything new in any running game plays a chime and shows a desktop pop-up (skipped when the GM is already looking at that game's dashboard), and the browser tab title shows the total waiting, e.g. "(4) Foray". Sound and pop-up switches sit on the home list and the dashboard, saved per browser.
 - **Timed events run for every game.** `components/RunningGamesProvider` runs `lib/gameTimers` for all of the GM's active games on any screen: milestone messages (`lib/milestones`; sent up to 5 minutes late with the real minutes left, then skipped), zone schedules and timed lockouts. Milestones and lockouts are claimed in a transaction first, so two tabs never double-send or double-award. An admin covering someone else's game runs that game's timers from its dashboard.
 
 ## Next: GMs on a phone, and timers with no GM screen open
 
 Today every timed event needs a GM browser open somewhere. On a phone that's locked or has Foray closed, nothing runs until it's opened again.
 - **Server-side timers**: a Vercel cron using the existing Admin SDK (`api/_lib/admin.ts`), or a Cloud Functions scheduled job (Blaze plan), calling the same claim-first logic as `lib/gameTimers` every minute. Milestones, zone schedules and lockouts then happen on time with no GM screen open.
+- **Push notifications**: GM alerts only work while Foray is open in a browser tab. Alerts with the browser closed or the phone locked need web push (a service worker plus Firebase Cloud Messaging), sent from the same server job.
 - **Mobile GM dashboard**: the dashboard and running-games list are built for a laptop browser; check them on a phone once the server-side timers exist.
 
 ## Borough maps (Brooklyn, Bronx, Queens, Staten Island, All NYC)

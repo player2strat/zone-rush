@@ -9,6 +9,7 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useUserRole } from '../hooks/useUserRole'
 import { useRunningGames, type RunningGame, type RunningStatus } from '../hooks/useRunningGames'
+import GMAlertSettings from '../components/GMAlertSettings'
 
 // Admin/GM-only tools. These routes are gated by AdminGuard; this list just
 // surfaces them so admins don't have to type URLs.
@@ -262,7 +263,8 @@ export default function HomePage() {
 }
 // ---------------------------------------------------------------------------
 // "Your running games": one card per game the GM started that hasn't ended,
-// with its status, time left (or players joined) and what's waiting for review.
+// with its status, time left (or players joined) and what's waiting for the
+// GM: submissions and side quest photos, join requests, "Message GM" pings.
 // ---------------------------------------------------------------------------
 const STATUS_LABEL: Record<RunningStatus, { label: string; bg: string; color: string }> = {
   active: { label: 'Live', bg: 'rgba(var(--green-rgb), 0.15)', color: 'var(--green)' },
@@ -314,10 +316,13 @@ function RunningGamesList() {
         textTransform: 'uppercase',
         letterSpacing: 1.5,
         fontWeight: 700,
-        margin: '0 0 10px',
+        margin: '0 0 6px',
       }}>
         Your running games ({games.length})
       </p>
+      <div style={{ marginBottom: 10 }}>
+        <GMAlertSettings />
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {games.map((g) => {
           const status = STATUS_LABEL[g.status]
@@ -341,11 +346,14 @@ function RunningGamesList() {
               <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <span style={{ ...tagStyle, background: status.bg, color: status.color }}>{status.label}</span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{gameDetail(g, now)}</span>
-                {g.pendingSubmissions > 0 && (
-                  <span style={{ ...tagStyle, ...waitingTagStyle }}>{g.pendingSubmissions} to review</span>
+                {g.pendingSubmissions + g.pendingSideQuests > 0 && (
+                  <span style={{ ...tagStyle, ...waitingTagStyle }}>{g.pendingSubmissions + g.pendingSideQuests} to review</span>
                 )}
                 {g.pendingJoins > 0 && (
                   <span style={{ ...tagStyle, ...waitingTagStyle }}>{plural(g.pendingJoins, 'join request')}</span>
+                )}
+                {g.unreadMessages > 0 && (
+                  <span style={{ ...tagStyle, ...waitingTagStyle }}>{plural(g.unreadMessages, 'message')}</span>
                 )}
               </span>
             </button>
