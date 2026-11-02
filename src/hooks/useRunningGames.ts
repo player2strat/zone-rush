@@ -1,16 +1,24 @@
 // =============================================================================
 // Foray — the GM's running games
 //
-// Every game the signed-in GM created that hasn't ended, with what each one is
-// waiting on: submissions and side quest photos to review, join requests, and
-// unread "Message GM" pings. The live feed (and the alerts when something new
-// arrives) lives in components/RunningGamesProvider, mounted once in App.
+// Every game the signed-in GM created that hasn't ended, with its team
+// standings and what it's waiting on: submissions and side quest photos to
+// review, join requests, and unread "Message GM" pings. The live feed (and the
+// alerts when something new arrives) lives in components/RunningGamesProvider,
+// mounted once in App.
 // =============================================================================
 
 import { createContext, useContext } from 'react'
 
 export type RunningStatus = 'lobby' | 'strategy' | 'active' | 'paused'
 export const RUNNING_STATUSES: RunningStatus[] = ['lobby', 'strategy', 'active', 'paused']
+
+export interface RunningTeam {
+  id: string
+  name: string
+  color: string
+  points: number
+}
 
 export interface RunningGame {
   id: string
@@ -25,6 +33,7 @@ export interface RunningGame {
   pendingJoins: number
   unreadMessages: number
   players: number
+  teams: RunningTeam[]            // highest points first
 }
 
 /** Everything in this game that's waiting for the GM. */

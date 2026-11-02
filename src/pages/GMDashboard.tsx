@@ -34,9 +34,9 @@ import { db, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission } from '../lib/scoring'
-import { useRunningGames, waitingCount } from '../hooks/useRunningGames'
 import { useGameTimers } from '../hooks/useGameTimers'
 import GMAlertSettings from '../components/GMAlertSettings'
+import OtherGamesMenu from '../components/OtherGamesMenu'
 import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
 import EndGameReveal from '../components/EndGameReveal'
 import { ReactionOverlay } from '../components/Reactions'
@@ -376,13 +376,7 @@ export default function GMDashboard() {
   // Timed events (milestone messages, zone schedules, timed lockouts) for the
   // GM's own games run app-wide from RunningGamesProvider, on any screen. An
   // admin covering someone else's game runs them for that game from here.
-  const runningGames = useRunningGames()
   useGameTimers(game && game.created_by !== user?.uid ? [game] : [], user?.uid)
-  // Everything waiting in the GM's other running games (submissions, side
-  // quest photos, join requests, "Message GM" pings).
-  const waitingElsewhere = runningGames
-    .filter((g) => g.id !== gameId)
-    .reduce((n, g) => n + waitingCount(g), 0)
 
   // Smallest team with room (or just the smallest if all are full).
   const defaultTeamFor = (): string => {
@@ -1222,16 +1216,12 @@ export default function GMDashboard() {
 
       {/* TOP BAR */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
-        {/* Back to the home screen's list of running games, plus what's waiting in the others */}
+        {/* Back to the home screen's list of running games; summary cards of the others */}
         <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', padding: 0 }}>
             ← Your games
           </button>
-          {waitingElsewhere > 0 && (
-            <button onClick={() => navigate('/')} style={{ background: 'rgba(var(--marigold-rgb), 0.15)', border: 'none', color: 'var(--marigold-deep)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: 4 }}>
-              {waitingElsewhere} waiting in other games
-            </button>
-          )}
+          <OtherGamesMenu currentGameId={gameId} />
           <span style={{ marginLeft: 'auto' }}>
             <GMAlertSettings />
           </span>

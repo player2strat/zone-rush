@@ -21,11 +21,18 @@ interface GameRouteGuardProps {
   children: ReactNode
 }
 
-export default function GameRouteGuard({
+export default function GameRouteGuard(props: GameRouteGuardProps) {
+  const { gameId } = useParams<{ gameId: string }>()
+  // Keyed by game: going straight from one game's screen to another's (a GM
+  // switching games) starts fresh instead of reusing the last game's state.
+  return <GuardForGame key={gameId} gameId={gameId} {...props} />
+}
+
+function GuardForGame({
+  gameId,
   expectedPathPrefix,
   children,
-}: GameRouteGuardProps) {
-  const { gameId } = useParams<{ gameId: string }>()
+}: GameRouteGuardProps & { gameId: string | undefined }) {
   const route = useGameRoute(gameId)
 
   if (route.loading) {

@@ -2,10 +2,10 @@
 // Foray — RunningGamesProvider
 //
 // One live feed of the signed-in GM's running games (hooks/useRunningGames),
-// with what each one is waiting on. Mounted once in App, for GMs and admins
+// with team standings and what each one is waiting on. Mounted once in App, for GMs and admins
 // only. From here:
-//  - the home screen lists these games, and each dashboard shows what's
-//    waiting in the others;
+//  - the home screen shows a summary card for each game, and each dashboard
+//    lists the others' cards under its "waiting in other games" tag;
 //  - anything new (a submission, side quest photo, join request or "Message
 //    GM" ping) plays a chime and shows a desktop pop-up (lib/gmAlerts), unless
 //    the GM is already looking at that game;
@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  collection, doc, getDoc, onSnapshot, query, where,
+  collection, onSnapshot, query, where,
   type DocumentData, type Query,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
@@ -25,7 +25,7 @@ import { useGameTimers } from '../hooks/useGameTimers'
 import { playChime, primeChime, showPopup } from '../lib/gmAlerts'
 import {
   RunningGamesContext, RUNNING_STATUSES, waitingCount,
-  type RunningGame, type RunningStatus,
+  type RunningGame, type RunningStatus, type RunningTeam,
 } from '../hooks/useRunningGames'
 
 type Counts = {
@@ -35,25 +35,14 @@ type Counts = {
   messages: number
   players: number
 }
-type GameDoc = Omit<RunningGame, 'pendingSubmissions' | 'pendingSideQuests' | 'pendingJoins' | 'unreadMessages' | 'players'>
+type GameDoc = Omit<RunningGame,
+  'pendingSubmissions' | 'pendingSideQuests' | 'pendingJoins' | 'unreadMessages' | 'players' | 'teams'>
 
 const NO_COUNTS: Counts = { subs: 0, sideQuests: 0, joins: 0, messages: 0, players: 0 }
 const APP_TITLE = 'Foray'
 
 // Live games first, then the ones still being set up.
 const STATUS_ORDER: Record<RunningStatus, number> = { active: 0, paused: 1, strategy: 2, lobby: 3 }
-
-// Team names for alert text, looked up once per team.
-const teamNames = new Map<string, Promise<string>>()
-function teamName(gameId: string, teamId: string): Promise<string> {
-  const key = `${gameId}/${teamId}`
-  if (!teamNames.has(key)) {
-    teamNames.set(key, getDoc(doc(db, 'games', gameId, 'teams', teamId))
-      .then((snap) => (snap.data()?.name as string) || 'A team')
-      .catch(() => 'A team'))
-  }
-  return teamNames.get(key)!
-}
 
 const clip = (text: unknown) => {
   const s = String(text ?? '').trim()
@@ -65,6 +54,7 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
   const isGM = role === 'admin' || role === 'gm'
   const [docs, setDocs] = useState<GameDoc[]>([])
   const [counts, setCounts] = useState<Record<string, Counts>>({})
+  const [teams, setTeams] = useState<Record<string, RunningTeam[]>>({})
 
   useEffect(() => {
     if (!isGM) return
@@ -102,13 +92,29 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
     return () => window.removeEventListener('pointerdown', primeChime)
   }, [isGM])
 
-  // Per game: live counts of everything waiting, and an alert for anything
-  // that arrives after the first load.
+  // Per game: team standings, live counts of everything waiting, and an alert
+  // for anything that arrives after the first load.
   const idsKey = docs.map((d) => d.id).sort().join(',')
   useEffect(() => {
     if (!idsKey) return
     const unsubs: (() => void)[] = []
     for (const id of idsKey.split(',')) {
+      const teamNames = new Map<string, string>()
+      unsubs.push(onSnapshot(
+        collection(db, 'games', id, 'teams'),
+        (snap) => {
+          const list = snap.docs
+            .map((d) => {
+              const t = d.data()
+              teamNames.set(d.id, t.name)
+              return { id: d.id, name: t.name || 'Team', color: t.color || 'var(--ink-faint)', points: t.total_points ?? 0 }
+            })
+            .sort((a, b) => b.points - a.points)
+          setTeams((prev) => ({ ...prev, [id]: list }))
+        },
+        (err) => console.warn('Running game teams failed:', id, err)
+      ))
+
       const alert = (itemId: string, text: string) => {
         playChime()
         const watching = path.current === `/gm/${id}` && document.visibilityState === 'visible'
@@ -119,7 +125,7 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
       const watch = (
         q: Query,
         field: keyof Counts,
-        describe: ((data: DocumentData) => string | Promise<string>) | null,
+        describe: ((data: DocumentData) => string) | null,
         keep: (data: DocumentData) => boolean = () => true
       ) => {
         let loaded = false
@@ -131,7 +137,7 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
             if (loaded && describe) {
               for (const change of snap.docChanges()) {
                 if (change.type !== 'added' || !keep(change.doc.data())) continue
-                Promise.resolve(describe(change.doc.data())).then((text) => alert(change.doc.id, text))
+                alert(change.doc.id, describe(change.doc.data()))
               }
             }
             loaded = true
@@ -143,7 +149,7 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
       watch(
         query(collection(db, 'submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
         'subs',
-        async (d) => `${await teamName(id, d.team_id)} sent a challenge to review`
+        (d) => `${teamNames.get(d.team_id) || 'A team'} sent a challenge to review`
       )
       watch(
         query(collection(db, 'side_quest_submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
@@ -178,10 +184,11 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
             pendingJoins: c.joins,
             unreadMessages: c.messages,
             players: c.players,
+            teams: teams[d.id] ?? [],
           }
         })
         .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name)),
-    [isGM, docs, counts]
+    [isGM, docs, counts, teams]
   )
 
   // "(4) Foray" in the browser tab while anything is waiting, in any game.
