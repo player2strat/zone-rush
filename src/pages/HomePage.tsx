@@ -28,6 +28,9 @@ export default function HomePage() {
   // GM/admin see the Game Master view (Create + Join + admin tools).
   // Everyone else sees the Player view (Join only).
   const isGM = role === 'admin' || role === 'gm'
+  // With games running, a smaller logo keeps Create Game on screen below the list.
+  const runningGames = useRunningGames()
+  const compact = isGM && runningGames.length > 0
 
   const handleSignOut = async () => {
     await signOut(auth)
@@ -46,11 +49,11 @@ export default function HomePage() {
       padding: 24,
     }}>
       {/* Logo / Title */}
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
+      <div style={{ textAlign: 'center', marginBottom: compact ? 24 : 48 }}>
         <img
           src="/brand/logo.svg"
           alt="Foray"
-          style={{ width: '100%', maxWidth: 280, height: 'auto', display: 'block', margin: '0 auto 20px' }}
+          style={{ width: '100%', maxWidth: compact ? 170 : 280, height: 'auto', display: 'block', margin: compact ? '0 auto 12px' : '0 auto 20px' }}
         />
         <h1 style={{
           fontSize: '1.5rem',
@@ -178,6 +181,8 @@ export default function HomePage() {
           marginTop: 32,
           width: '100%',
           maxWidth: 320,
+          // Padding and border inside the 320, so it lines up with the rest.
+          boxSizing: 'border-box',
           border: '1px solid var(--line)',
           borderRadius: 12,
           padding: 16,
