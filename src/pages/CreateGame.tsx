@@ -794,20 +794,45 @@ export default function CreateGame() {
                   <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading zones...</p>
                 ) : (
                   <>
-                    {Object.entries(visibleZonesByBorough).map(([borough, boroughZones]) => (
+                    {Object.entries(visibleZonesByBorough).map(([borough, boroughZones]) => {
+                      const boroughIds = boroughZones.map((z) => z.id)
+                      const selectedInBorough = boroughIds.filter((id) => selectedZones.includes(id)).length
+                      return (
                       <div key={borough} style={{ marginBottom: 16 }}>
-                        {/* Borough header — only show if multiple boroughs visible */}
+                        {/* Borough header with its own select/clear — only when multiple boroughs are visible */}
                         {Object.keys(visibleZonesByBorough).length > 1 && (
-                          <p style={{
-                            fontSize: '0.7rem',
-                            color: 'var(--ink-faint)',
-                            textTransform: 'uppercase',
-                            letterSpacing: 1,
-                            fontWeight: 700,
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             marginBottom: 8,
                           }}>
-                            {borough} ({boroughZones.length})
-                          </p>
+                            <p style={{
+                              fontSize: '0.7rem',
+                              color: 'var(--ink-faint)',
+                              textTransform: 'uppercase',
+                              letterSpacing: 1,
+                              fontWeight: 700,
+                            }}>
+                              {borough} ({selectedInBorough} of {boroughZones.length})
+                            </p>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {selectedInBorough < boroughZones.length && (
+                                <button
+                                  onClick={() => setSelectedZones((prev) => [...prev, ...boroughIds.filter((id) => !prev.includes(id))])}
+                                  style={ghostBtnStyle}
+                                >
+                                  Select all
+                                </button>
+                              )}
+                              {selectedInBorough > 0 && (
+                                <button
+                                  onClick={() => setSelectedZones((prev) => prev.filter((id) => !boroughIds.includes(id)))}
+                                  style={ghostBtnStyle}
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         )}
                         <div style={{ display: 'grid', gap: 6 }}>
                           {boroughZones.map((zone) => {
@@ -852,7 +877,8 @@ export default function CreateGame() {
                           })}
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
 
                     {error && <p style={errorStyle}>{error}</p>}
 
