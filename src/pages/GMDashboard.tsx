@@ -36,7 +36,7 @@ import { isPointInPolygon } from '../lib/geo'
 import { approveSubmission } from '../lib/scoring'
 import { useGameTimers } from '../hooks/useGameTimers'
 import GMAlertSettings from '../components/GMAlertSettings'
-import OtherGamesMenu from '../components/OtherGamesMenu'
+import GameStrip from '../components/GameStrip'
 import type { SideQuest, SideQuestSubmission, EndGameAward } from '../types/game'
 import EndGameReveal from '../components/EndGameReveal'
 import { ReactionOverlay } from '../components/Reactions'
@@ -1214,14 +1214,16 @@ export default function GMDashboard() {
     <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", display: 'flex', flexDirection: 'column' }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
+      {/* Scoreboard of the GM's running games (only when there's more than this one) */}
+      <GameStrip currentGameId={gameId} />
+
       {/* TOP BAR */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, flexShrink: 0 }}>
-        {/* Back to the home screen's list of running games; summary cards of the others */}
+        {/* Back to the home screen's list of running games, and the alert switches */}
         <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', padding: 0 }}>
             ← Your games
           </button>
-          <OtherGamesMenu currentGameId={gameId} />
           <span style={{ marginLeft: 'auto' }}>
             <GMAlertSettings />
           </span>

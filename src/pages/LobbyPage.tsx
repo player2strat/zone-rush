@@ -30,6 +30,7 @@ import { dealChallenges } from '../lib/dealChallenges'
 import { logEvent } from '../lib/activityLog'
 import { defaultTeamName, defaultTeamColor, firstFreeTeamIndex } from '../lib/teamDefaults'
 import { createTestTeam } from '../lib/testMode'
+import GameStrip from '../components/GameStrip'
 
 interface GameData {
   id: string
@@ -665,6 +666,12 @@ export default function LobbyPage() {
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: 24,
     }}>
+      {/* GM only: scoreboard of their running games, full width above the lobby */}
+      {isGM && (
+        <div style={{ margin: '-24px -24px 24px' }}>
+          <GameStrip currentGameId={gameId} />
+        </div>
+      )}
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
 
         {/* ── Header ── */}
