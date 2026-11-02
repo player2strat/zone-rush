@@ -6,7 +6,8 @@
 // time left, top two teams and what's waiting. The open game's tile is
 // highlighted; clicking another tile switches to that game. It sits above the
 // game rather than over it, and scrolls sideways (arrows or trackpad) when the
-// tiles don't fit. Hidden unless the GM has another game running.
+// tiles don't fit. A "+ New game" tile ends the row. Hidden unless the GM
+// has another game running.
 // =============================================================================
 
 import { useEffect, useRef, useState } from 'react'
@@ -73,6 +74,26 @@ export default function GameStrip({ currentGameId }: { currentGameId: string | u
             onOpen={() => navigate(g.status === 'lobby' ? `/lobby/${g.id}` : `/gm/${g.id}`)}
           />
         ))}
+        {/* Closes the row, and starts another game without a trip home */}
+        <button
+          onClick={() => navigate('/create')}
+          style={{
+            flex: '0 0 auto',
+            width: 120,
+            margin: 8,
+            borderRadius: 8,
+            border: '1px dashed var(--line-strong)',
+            background: 'transparent',
+            color: 'var(--ink-muted)',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+        >
+          + New game
+        </button>
       </div>
       {more.left && <Arrow side="left" onClick={() => scrollBy(-1)} />}
       {more.right && <Arrow side="right" onClick={() => scrollBy(1)} />}
@@ -101,6 +122,7 @@ function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; 
         textAlign: 'left',
         fontFamily: 'inherit',
         border: 'none',
+        borderRadius: 0,
         borderRight: '1px solid var(--line)',
         background: current ? 'rgba(var(--marigold-rgb), 0.12)' : 'transparent',
         boxShadow: current ? 'inset 0 -3px 0 var(--marigold)' : 'none',
@@ -153,7 +175,9 @@ function Arrow({ side, onClick }: { side: 'left' | 'right'; onClick: () => void 
         bottom: 0,
         [side]: 0,
         width: 32,
+        padding: 0,
         border: 'none',
+        borderRadius: 0,
         [side === 'left' ? 'borderRight' : 'borderLeft']: '1px solid var(--line)',
         background: 'var(--paper)',
         color: 'var(--ink-muted)',
