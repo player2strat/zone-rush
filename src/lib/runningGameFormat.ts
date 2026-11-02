@@ -53,6 +53,15 @@ export function wrapUpStep(g: RunningGame): string | null {
 /** When an ended game's clock ran out (or it was ended), in ms; null if unknown. */
 export const endedAt = (g: { ends_at?: unknown }) => toMillis(g.ends_at)
 
+/** "Ended 40 min ago" / "Ended 3 hr ago" for an ended game; null otherwise. */
+export function endedAgo(g: RunningGame, now: number): string | null {
+  if (g.status !== 'ended') return null
+  const at = endedAt(g)
+  if (at === null) return 'Ended'
+  const mins = Math.max(0, Math.round((now - at) / 60000))
+  return mins < 60 ? `Ended ${mins} min ago` : `Ended ${Math.floor(mins / 60)} hr ago`
+}
+
 /** What's waiting for the GM, e.g. "2 to review, 1 message". */
 export function waitingParts(g: RunningGame): string[] {
   const toReview = g.pendingSubmissions + g.pendingSideQuests

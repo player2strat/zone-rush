@@ -2,19 +2,20 @@
 // Foray — GameSummaryCard
 //
 // A clickable summary of one of the GM's running games for the home screen's
-// list: status, time left (or players joined, or for an ended game the next
-// wrap-up step), number of teams, the top of the standings, and what's waiting
-// (submissions and side quest photos to review, messages, join requests).
-// Clicking it opens that game.
+// list: status, time left (or players joined, or when it ended), number of
+// teams, the top two teams, and what's waiting (an ended game's next wrap-up
+// step, submissions and side quest photos to review, messages, join requests)
+// or "All caught up". Every card is the same height. Clicking it opens that game.
 // =============================================================================
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { RunningGame } from '../hooks/useRunningGames'
-import { STATUS_LABEL, plural, showsStandings, timeLeft, waitingParts, wrapUpStep } from '../lib/runningGameFormat'
+import { STATUS_LABEL, endedAgo, plural, showsStandings, timeLeft, waitingParts, wrapUpStep } from '../lib/runningGameFormat'
 
-// Teams shown in the standings line; the rest are counted as "+N".
-const TOP_TEAMS = 3
+// Teams shown in the standings line (two fit the home column with readable
+// names); the rest are counted as "+N", and hovering lists them all.
+const TOP_TEAMS = 2
 
 export default function GameSummaryCard({ game }: { game: RunningGame }) {
   const navigate = useNavigate()
@@ -28,10 +29,21 @@ export default function GameSummaryCard({ game }: { game: RunningGame }) {
   const top = game.teams.slice(0, TOP_TEAMS)
   const more = game.teams.length - top.length
   const waiting = waitingParts(game)
+  const wrapUp = wrapUpStep(game)
+  const standings = showsStandings(game)
+  // Every card has the same four lines at fixed heights, whatever's on them,
+  // so the cards in the list are all one size.
+  const line = (height: number): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 6, height, overflow: 'hidden', whiteSpace: 'nowrap',
+  })
 
   return (
     <button
       onClick={() => navigate(game.status === 'lobby' ? `/lobby/${game.id}` : `/gm/${game.id}`)}
+      title={standings && game.teams.length > 0
+        // Tied teams share a rank, as on the strip.
+        ? game.teams.map((t) => `${1 + game.teams.filter((o) => o.points > t.points).length}. ${t.name}: ${t.points}`).join('\n')
+        : undefined}
       style={{
         width: '100%',
         background: 'var(--paper)',
@@ -46,43 +58,45 @@ export default function GameSummaryCard({ game }: { game: RunningGame }) {
         gap: 6,
       }}
     >
-      <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: 'var(--ink)', fontWeight: 700, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ ...line(22), justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ color: 'var(--ink)', fontWeight: 700, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {game.name}
         </span>
         <span style={{ ...tagStyle, background: status.bg, color: status.color, flexShrink: 0 }}>{status.label}</span>
       </span>
 
-      <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
-        {/* An ended game shows the next wrap-up step on its dashboard */}
-        {wrapUpStep(game)
-          ? <strong style={{ color: 'var(--marigold-deep)' }}>{wrapUpStep(game)}</strong>
-          : timeLeft(game, now) ?? `${plural(game.players, 'player')} joined`}
+      <span style={{ ...line(18), display: 'block', textOverflow: 'ellipsis', fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
+        {endedAgo(game, now) ?? timeLeft(game, now) ?? `${plural(game.players, 'player')} joined`}
         {game.teams.length > 0 && ` · ${plural(game.teams.length, 'team')}`}
       </span>
 
-      {/* Standings: top teams by points, once the game is underway (or final) */}
-      {showsStandings(game) && top.length > 0 && (
-        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 12px', fontSize: '0.78rem', color: 'var(--ink-soft)' }}>
-          {top.map((t) => (
-            <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{t.name}</span>
-              <strong style={{ color: 'var(--ink)' }}>{t.points}</strong>
-            </span>
-          ))}
-          {more > 0 && <span style={{ color: 'var(--ink-faint)' }}>+{more}</span>}
-        </span>
-      )}
+      {/* Standings once the game is underway (or final); before that, who's
+          playing. Names shrink with "…" to keep it on one line. */}
+      <span style={{ ...line(18), gap: 12, fontSize: '0.78rem', color: 'var(--ink-soft)' }}>
+        {top.map((t) => (
+          <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, flex: '0 1 auto' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
+            {standings && <strong style={{ color: 'var(--ink)', flexShrink: 0 }}>{t.points}</strong>}
+          </span>
+        ))}
+        {more > 0 && <span style={{ color: 'var(--ink-faint)', fontWeight: 700, flexShrink: 0 }}>+{more}</span>}
+        {top.length === 0 && <span style={{ color: 'var(--ink-faint)' }}>No teams yet</span>}
+      </span>
 
-      {/* What's waiting for the GM in this game */}
-      {waiting.length > 0 && (
-        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {waiting.map((w) => (
-            <span key={w} style={{ ...tagStyle, background: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold-deep)' }}>{w}</span>
-          ))}
-        </span>
-      )}
+      {/* What's waiting for the GM in this game; an ended game leads with its
+          next wrap-up step, so it's never "caught up" */}
+      <span style={{ ...line(20) }}>
+        {wrapUp && (
+          <span style={{ ...tagStyle, flexShrink: 0, background: 'var(--marigold)', color: 'var(--ink)' }}>{wrapUp}</span>
+        )}
+        {waiting.map((w) => (
+          <span key={w} style={{ ...tagStyle, flexShrink: 0, background: 'rgba(var(--marigold-rgb), 0.15)', color: 'var(--marigold-deep)' }}>{w}</span>
+        ))}
+        {!wrapUp && waiting.length === 0 && (
+          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--green)' }}>All caught up</span>
+        )}
+      </span>
     </button>
   )
 }
