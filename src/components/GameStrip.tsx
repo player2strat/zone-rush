@@ -3,16 +3,16 @@
 //
 // A scoreboard strip across the top of a GM's game (dashboard or lobby), like
 // a sports site's row of scores: one tile per running game with its status,
-// time left, top two teams and what's waiting. The open game's tile is
-// highlighted; clicking another tile switches to that game. It sits above the
-// game rather than over it, and scrolls sideways (arrows or trackpad) when the
-// tiles don't fit. A "+ New game" tile ends the row. Hidden unless the GM
-// has another game running.
+// top two teams, time left and what's waiting (spelled out, or "All caught
+// up"). The open game's tile is highlighted; clicking another tile switches
+// to that game. It sits above the game rather than over it, and scrolls
+// sideways (arrows or trackpad) when the tiles don't fit. A "+ New game" tile
+// ends the row. Hidden unless the GM has another game running.
 // =============================================================================
 
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useRunningGames, waitingCount, type RunningGame } from '../hooks/useRunningGames'
+import { useRunningGames, type RunningGame } from '../hooks/useRunningGames'
 import { STATUS_LABEL, isUnderway, plural, timeLeft, waitingParts } from '../lib/runningGameFormat'
 
 export default function GameStrip({ currentGameId }: { currentGameId: string | undefined }) {
@@ -63,8 +63,8 @@ export default function GameStrip({ currentGameId }: { currentGameId: string | u
   }
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0, background: 'rgba(var(--ink-rgb), 0.025)', borderBottom: '1px solid var(--line)' }}>
-      <div ref={scroller} style={{ display: 'flex', overflowX: 'auto', scrollbarWidth: 'none', position: 'relative' }}>
+    <div style={{ position: 'relative', flexShrink: 0, background: 'rgba(var(--ink-rgb), 0.03)', borderBottom: '1px solid var(--line)' }}>
+      <div ref={scroller} style={{ display: 'flex', gap: 8, padding: '8px 12px', overflowX: 'auto', scrollbarWidth: 'none', position: 'relative' }}>
         {games.map((g) => (
           <Tile
             key={g.id}
@@ -74,18 +74,17 @@ export default function GameStrip({ currentGameId }: { currentGameId: string | u
             onOpen={() => navigate(g.status === 'lobby' ? `/lobby/${g.id}` : `/gm/${g.id}`)}
           />
         ))}
-        {/* Closes the row, and starts another game without a trip home */}
+        {/* Ends the row, and starts another game without a trip home */}
         <button
           onClick={() => navigate('/create')}
           style={{
             flex: '0 0 auto',
-            width: 120,
-            margin: 8,
-            borderRadius: 8,
+            width: 110,
+            borderRadius: 10,
             border: '1px dashed var(--line-strong)',
             background: 'transparent',
             color: 'var(--ink-muted)',
-            fontSize: '0.75rem',
+            fontSize: '0.78rem',
             fontWeight: 700,
             fontFamily: 'inherit',
             cursor: 'pointer',
@@ -101,65 +100,75 @@ export default function GameStrip({ currentGameId }: { currentGameId: string | u
   )
 }
 
+// One game: name and status, the top two teams (or who's joined, before it
+// starts), the clock, and what's waiting spelled out, or "All caught up".
 function Tile({ game, now, current, onOpen }: { game: RunningGame; now: number; current: boolean; onOpen: () => void }) {
   const status = STATUS_LABEL[game.status]
-  const waiting = waitingCount(game)
+  const waiting = waitingParts(game)
   const clock = timeLeft(game, now)
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', minHeight: 18 }
+  const clip: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
   return (
     <button
       data-current={current}
       aria-current={current ? 'page' : undefined}
       onClick={current ? undefined : onOpen}
-      title={waiting > 0 ? waitingParts(game).join(', ') : undefined}
       style={{
         flex: '0 0 auto',
-        width: 190,
-        padding: '8px 12px 9px',
+        // Wide enough for the clock plus two "waiting" chips on one line.
+        width: 264,
+        padding: '9px 12px 10px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 3,
+        gap: 4,
         textAlign: 'left',
         fontFamily: 'inherit',
-        border: 'none',
-        borderRadius: 0,
-        borderRight: '1px solid var(--line)',
-        background: current ? 'rgba(var(--marigold-rgb), 0.12)' : 'transparent',
-        boxShadow: current ? 'inset 0 -3px 0 var(--marigold)' : 'none',
+        fontWeight: 400,
+        borderRadius: 10,
+        border: current ? '2px solid var(--marigold)' : '1px solid var(--line)',
+        background: current ? 'rgba(var(--marigold-rgb), 0.12)' : 'var(--paper)',
         cursor: current ? 'default' : 'pointer',
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {game.name}
+      <span style={row}>
+        <span style={{ ...clip, fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink)' }}>{game.name}</span>
+        <span style={{ flexShrink: 0, fontSize: '0.64rem', fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: status.bg, color: status.color }}>
+          {current ? `${status.label} · Open` : status.label}
         </span>
-        {waiting > 0 && (
-          <span style={{ flexShrink: 0, minWidth: 18, padding: '0 5px', borderRadius: 999, background: 'var(--marigold)', color: 'var(--ink)', fontSize: '0.66rem', fontWeight: 800, textAlign: 'center', lineHeight: '18px' }}>
-            {waiting}
-          </span>
-        )}
-      </span>
-
-      <span style={{ fontSize: '0.66rem', color: 'var(--ink-muted)' }}>
-        <strong style={{ color: status.color, textTransform: 'uppercase', letterSpacing: 0.5 }}>{status.label}</strong>
-        {clock && ` · ${clock}`}
       </span>
 
       {isUnderway(game) ? (
         // Top two teams, like the two rows of a score.
         game.teams.slice(0, 2).map((t) => (
-          <span key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.74rem' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-            <span style={{ flex: 1, minWidth: 0, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+          <span key={t.id} style={row}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+            <span style={{ ...clip, color: 'var(--ink-soft)' }}>{t.name}</span>
             <strong style={{ color: 'var(--ink)' }}>{t.points}</strong>
           </span>
         ))
       ) : (
         <>
-          <span style={{ fontSize: '0.74rem', color: 'var(--ink-soft)' }}>{plural(game.players, 'player')} joined</span>
-          <span style={{ fontSize: '0.74rem', color: 'var(--ink-soft)' }}>{plural(game.teams.length, 'team')}</span>
+          <span style={{ ...row, color: 'var(--ink-soft)' }}>{plural(game.players, 'player')} joined</span>
+          <span style={{ ...row, color: 'var(--ink-soft)' }}>{plural(game.teams.length, 'team')}</span>
         </>
       )}
+
+      {/* The clock, then what's waiting for the GM here, spelled out */}
+      <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px', marginTop: 3 }}>
+        <span style={{ marginRight: 'auto', paddingRight: 4, fontFamily: clock ? "'Martian Mono', monospace" : 'inherit', fontSize: '0.72rem', fontWeight: 700, color: clock ? 'var(--marigold-deep)' : 'var(--ink-faint)' }}>
+          {clock ?? 'Not started'}
+        </span>
+        {waiting.length === 0 ? (
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--green)' }}>All caught up</span>
+        ) : (
+          waiting.map((w) => (
+            <span key={w} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(var(--marigold-rgb), 0.18)', color: 'var(--marigold-deep)' }}>
+              {w}
+            </span>
+          ))
+        )}
+      </span>
     </button>
   )
 }
