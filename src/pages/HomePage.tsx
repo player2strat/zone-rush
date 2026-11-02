@@ -54,7 +54,7 @@ export default function HomePage() {
           fontWeight: 700,
           margin: 0,
         }}>
-          {isGM ? 'Game Master' : 'Ready to explore?'}
+          {role === 'admin' ? 'Admin' : isGM ? 'Game Master' : 'Ready to explore?'}
         </h1>
         <p style={{
           color: 'var(--ink-muted)',
