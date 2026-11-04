@@ -77,6 +77,7 @@ function isValidHand(hand: Challenge[], rules: HandCompositionRules): boolean {
  * @param handSize         - Cards per team (from game.settings.hand_size)
  * @param teamIds          - Team document IDs to deal to
  * @param compositionRules - Optional hand composition rules (falls back to defaults)
+ * @returns The hand dealt to each team, by team id
  */
 export async function dealChallenges(
   gameId: string,
@@ -85,7 +86,7 @@ export async function dealChallenges(
   handSize: number,
   teamIds: string[],
   compositionRules?: HandCompositionRules
-): Promise<void> {
+): Promise<Record<string, string[]>> {
   const rules: HandCompositionRules = compositionRules ?? DEFAULT_RULES
 
   // 1. Fetch all active challenges
@@ -174,9 +175,10 @@ export async function dealChallenges(
     const handIds = hand.map((c) => c.id)
     const teamRef = doc(db, 'games', gameId, 'teams', teamId)
     await updateDoc(teamRef, { hand: handIds, discard_used: 0 })
+    return [teamId, handIds] as const
   })
 
-  await Promise.all(dealPromises)
+  return Object.fromEntries(await Promise.all(dealPromises))
 }
 
 // --------------- Replacement Card Draw ---------------

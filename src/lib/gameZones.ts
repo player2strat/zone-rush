@@ -11,7 +11,7 @@
 // =============================================================================
 
 import {
-  collection, doc, getDoc, getDocs,
+  collection, doc, documentId, getDocs, query, where,
   type WriteBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -58,26 +58,37 @@ export async function loadGameZoneMap(gameId: string): Promise<Map<string, GameZ
   return new Map(zones.map((z) => [z.id, z]))
 }
 
+// Firestore's limit on ids in one "in" query.
+const IN_QUERY_MAX = 30
+
 /**
  * Copy the given library zones into games/{gameId}/zones on the provided
- * batch (the caller commits). Reads each zone doc fresh so the snapshot
- * matches the library at the moment of creation. Skips ids that don't exist.
+ * batch (the caller commits). Reads the zone docs fresh so the snapshot
+ * matches the library at the moment of creation, 30 to a query rather than
+ * one read per zone (an All NYC game has hundreds). Skips ids that don't
+ * exist.
  */
 export async function snapshotZonesIntoBatch(
   batch: WriteBatch,
   gameId: string,
   zoneIds: string[]
 ): Promise<number> {
-  const docs = await Promise.all(zoneIds.map((id) => getDoc(doc(db, 'zones', id))))
+  const ids = [...new Set(zoneIds)]
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += IN_QUERY_MAX) chunks.push(ids.slice(i, i + IN_QUERY_MAX))
+  const snaps = await Promise.all(
+    chunks.map((chunk) => getDocs(query(collection(db, 'zones'), where(documentId(), 'in', chunk))))
+  )
   let n = 0
-  docs.forEach((snap) => {
-    if (!snap.exists()) return
-    batch.set(doc(db, 'games', gameId, 'zones', snap.id), {
-      ...snap.data(),
-      id: snap.id,
-      snapshot_of: snap.id,
-    })
-    n++
-  })
+  for (const snap of snaps) {
+    for (const d of snap.docs) {
+      batch.set(doc(db, 'games', gameId, 'zones', d.id), {
+        ...d.data(),
+        id: d.id,
+        snapshot_of: d.id,
+      })
+      n++
+    }
+  }
   return n
 }

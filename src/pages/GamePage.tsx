@@ -377,10 +377,15 @@ export default function GamePage() {
   // Find player's team and listen for updates
   useEffect(() => {
     if (!gameId || !user) return
+    // Only the newest snapshot's cards are shown: an older card fetch that
+    // finishes late is dropped.
+    let latest = 0
+    let stopped = false
 
     const unsub = onSnapshot(
       collection(db, 'games', gameId, 'teams'),
       async (snapshot) => {
+        const mine = ++latest
         let foundTeam: TeamData | null = null
         const teamsArr: TeamData[] = []
 
@@ -393,26 +398,38 @@ export default function GamePage() {
         setMyTeam(foundTeam)
         setAllTeams(teamsArr)
 
-      if (foundTeam) {
-          const teamHand = (foundTeam as TeamData).hand
+        try {
+          const teamHand = (foundTeam as TeamData | null)?.hand
           if (teamHand && teamHand.length > 0) {
             // Fetch all challenges in parallel instead of sequentially.
             // 6 sequential reads on mobile = 1.5-3s. Parallel = ~300ms.
             const challengeDocs = await Promise.all(
               teamHand.map((chId) => getDoc(doc(db, 'challenges', chId)))
             )
+            if (stopped || mine !== latest) return
             const loaded: Challenge[] = challengeDocs
               .filter((d) => d.exists())
               .map((d) => ({ id: d.id, ...d.data() } as Challenge))
             setChallenges(loaded)
           }
+        } catch (err) {
+          // The next team update fetches the cards again.
+          console.warn('Could not load your cards:', err)
+        } finally {
+          // Never leave the player on "Loading game..." because a card read failed.
+          if (!stopped) setLoading(false)
         }
-
-        setLoading(false)
+      },
+      (err) => {
+        console.warn('Team listener failed:', err)
+        if (!stopped) setLoading(false)
       }
     )
 
-    return () => unsub()
+    return () => {
+      stopped = true
+      unsub()
+    }
   }, [gameId, user])
 
   // Listen to zone_scores

@@ -21,13 +21,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   doc, getDoc, onSnapshot, updateDoc, collection,
-  getDocs, setDoc, arrayUnion, runTransaction,
+  getDocs, setDoc, arrayUnion, runTransaction, writeBatch,
 } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { db, auth } from '../lib/firebase'
 import { removeFromRoster } from '../lib/gameMembership'
 import { dealChallenges } from '../lib/dealChallenges'
-import { logEvent } from '../lib/activityLog'
+import { logEventInBatch } from '../lib/activityLog'
 import { defaultTeamName, defaultTeamColor, firstFreeTeamIndex, TEAM_NAME_MAX } from '../lib/teamDefaults'
 import { createTestTeam } from '../lib/testMode'
 import GameStrip from '../components/GameStrip'
@@ -103,6 +103,7 @@ export default function LobbyPage() {
   const [myNameError, setMyNameError] = useState('')
   const [savingMyName, setSavingMyName] = useState(false)
   const [savingRoster, setSavingRoster] = useState(false)
+  const [starting, setStarting] = useState(false)
 
   // Case-insensitive, trimmed check: is this name already taken by someone
   // ELSE on the target team? (Excludes the current user so re-picking your
@@ -532,7 +533,7 @@ export default function LobbyPage() {
   // -----------------------------------------------------------------------
 
   const handleStartGame = async () => {
-    if (!gameId || !game) return
+    if (!gameId || !game || starting) return
 
     const activeTeams = teams.filter((t) => t.members.length > 0)
     if (activeTeams.length < 1) {
@@ -540,6 +541,8 @@ export default function LobbyPage() {
       return
     }
 
+    // Greys out the button so a second click can't deal a second set of hands.
+    setStarting(true)
     try {
       // Re-check each empty team inside a transaction: if a player joined it
       // a moment ago, keep it and deal it a hand instead of deleting it.
@@ -567,25 +570,17 @@ export default function LobbyPage() {
         maxHard: game.settings.hand_max_hard ?? 2,
       }
 
-      await dealChallenges(gameId, city, game.zones, handSize, teamIds, compositionRules)
+      const hands = await dealChallenges(gameId, city, game.zones, handSize, teamIds, compositionRules)
 
-      // Activity log: record the initial deal for each team.
-      // We re-read each team doc to see exactly what dealChallenges wrote.
-      for (const teamId of teamIds) {
-        try {
-          const teamSnap = await getDoc(doc(db, 'games', gameId, 'teams', teamId))
-          if (!teamSnap.exists()) continue
-          const dealtHand: string[] = teamSnap.data().hand ?? []
-
-          // Save the immutable record of the starting hand. Same pattern as
-          // `discarded_challenges` — write-once, never modified.
-          await updateDoc(doc(db, 'games', gameId, 'teams', teamId), {
-            dealt_challenges: dealtHand,
-          })
-
-          // Log one card_drawn event per dealt card
+      // Activity log, in one save so players aren't kept waiting: each team's
+      // starting hand (dealt_challenges, write-once like
+      // discarded_challenges) and one card_drawn event per dealt card.
+      try {
+        const log = writeBatch(db)
+        for (const [teamId, dealtHand] of Object.entries(hands)) {
+          log.update(doc(db, 'games', gameId, 'teams', teamId), { dealt_challenges: dealtHand })
           for (const cardId of dealtHand) {
-            await logEvent(gameId, {
+            logEventInBatch(log, gameId, {
               team_id: teamId,
               event_type: 'card_drawn',
               actor_id: user?.uid ?? null,
@@ -593,10 +588,11 @@ export default function LobbyPage() {
               metadata: { reason: 'initial_deal' },
             })
           }
-        } catch (logErr) {
-          // Logging must never block game start
-          console.error('Initial deal logging failed for team', teamId, logErr)
         }
+        await log.commit()
+      } catch (logErr) {
+        // Logging must never block game start
+        console.error('Initial deal logging failed', logErr)
       }
 
       const now = new Date()
@@ -607,8 +603,11 @@ export default function LobbyPage() {
         started_at: now,
         ends_at: endTime,
       })
+      // No setStarting(false): the game is live, and this screen is about to
+      // switch to the dashboard.
     } catch (err) {
       setError('Failed to start: ' + (err as Error).message)
+      setStarting(false)
     }
   }
 
@@ -1105,6 +1104,7 @@ export default function LobbyPage() {
               {/* Start Game */}
               <button
                 onClick={handleStartGame}
+                disabled={starting}
                 style={{
                   width: '100%',
                   background: 'rgba(var(--marigold-rgb), 0.15)',
@@ -1112,11 +1112,12 @@ export default function LobbyPage() {
                   color: 'var(--marigold-deep)',
                   padding: '14px 24px', borderRadius: 10,
                   fontSize: '1rem', fontWeight: 700,
-                  cursor: 'pointer', fontFamily: 'inherit',
+                  cursor: starting ? 'wait' : 'pointer', fontFamily: 'inherit',
                   marginBottom: 8,
+                  opacity: starting ? 0.6 : 1,
                 }}
               >
-                Start Game
+                {starting ? 'Starting...' : 'Start Game'}
               </button>
               <p style={{
                 fontSize: '0.78rem', color: 'var(--ink-muted)',

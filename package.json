@@ -23,7 +23,7 @@
     "@turf/intersect": "^7.3.5",
     "@turf/union": "^7.3.5",
     "client-zip": "^2.5.1",
-    "firebase": "^12.9.0",
+    "firebase": "^12.19.0",
     "firebase-admin": "^13.10.0",
     "jszip": "^3.10.1",
     "mapbox-gl": "^3.18.1",

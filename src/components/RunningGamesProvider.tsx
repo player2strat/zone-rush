@@ -56,6 +56,92 @@ const clip = (text: unknown) => {
   return s.length > 100 ? s.slice(0, 99) + '…' : s
 }
 
+// A game's live listeners (see the provider). stopTimer is set while it's
+// off the list and about to stop.
+type GameWatch = { stop: () => void; stopTimer?: ReturnType<typeof setTimeout> }
+const DROP_DELAY_MS = 5000
+
+/**
+ * Start one game's listeners: its teams (standings), and everything waiting
+ * for the GM (submissions, side quest photos, join requests, unread "Message
+ * GM" pings) plus its player count. onNew fires for items that arrive after
+ * the first load. Returns a function that stops them all.
+ */
+function watchGame(
+  id: string,
+  uid: string,
+  on: {
+    onTeams: (list: RunningTeam[]) => void
+    onCount: (field: keyof Counts, n: number) => void
+    onNew: (itemId: string, text: string) => void
+  }
+): () => void {
+  const unsubs: (() => void)[] = []
+  const teamNames = new Map<string, string>()
+  unsubs.push(onSnapshot(
+    collection(db, 'games', id, 'teams'),
+    (snap) => {
+      const list = snap.docs
+        .map((d) => {
+          const t = d.data()
+          teamNames.set(d.id, t.name)
+          return { id: d.id, name: t.name || 'Team', color: t.color || 'var(--ink-faint)', points: t.total_points ?? 0 }
+        })
+        .sort((a, b) => b.points - a.points)
+      on.onTeams(list)
+    },
+    (err) => console.warn('Running game teams failed:', id, err)
+  ))
+
+  const watch = (
+    q: Query,
+    field: keyof Counts,
+    describe: ((data: DocumentData) => string) | null,
+    keep: (data: DocumentData) => boolean = () => true
+  ) => {
+    let loaded = false
+    unsubs.push(onSnapshot(
+      q,
+      (snap) => {
+        on.onCount(field, snap.docs.filter((d) => keep(d.data())).length)
+        if (loaded && describe) {
+          for (const change of snap.docChanges()) {
+            if (change.type !== 'added' || !keep(change.doc.data())) continue
+            on.onNew(change.doc.id, describe(change.doc.data()))
+          }
+        }
+        loaded = true
+      },
+      (err) => console.warn('Running game counts failed:', id, field, err)
+    ))
+  }
+
+  watch(
+    query(collection(db, 'submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
+    'subs',
+    (d) => `${teamNames.get(d.team_id) || 'A team'} sent a challenge to review`
+  )
+  watch(
+    query(collection(db, 'side_quest_submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
+    'sideQuests',
+    (d) => `${d.submitter_name || 'A player'} sent a side quest photo to review`
+  )
+  watch(
+    query(collection(db, 'games', id, 'join_requests'), where('status', '==', 'pending')),
+    'joins',
+    (d) => `${d.name || 'A player'} asked to join`
+  )
+  watch(
+    query(collection(db, 'games', id, 'messages'), where('channel_type', '==', 'team_to_gm')),
+    'messages',
+    (d) => `${d.from_name || 'A player'}: ${clip(d.text)}`,
+    (d) => !(d.read_by ?? []).includes(uid)
+  )
+  watch(collection(db, 'games', id, 'players'), 'players', null)
+
+  return () => unsubs.forEach((u) => u())
+}
+
 export default function RunningGamesProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const { role } = useUserRole()
   const isGM = role === 'admin' || role === 'gm'
@@ -133,83 +219,61 @@ export default function RunningGamesProvider({ uid, children }: { uid: string; c
 
   // Per game: team standings, live counts of everything waiting, and an alert
   // for anything that arrives after the first load.
+  //
+  // Each game's listeners start once and stay running while it's on the
+  // list. A new game, or one moving from running to ended, only adds or drops
+  // its own listeners; it never restarts every other game's. (Restarting them
+  // all at once, the moment a game was created or started, could freeze
+  // Firestore's live updates until a refresh.) A game that drops off the list
+  // keeps its listeners a few seconds, so one that ends (it leaves the
+  // running feed a moment before it joins the ended feed) carries straight on.
   const idsKey = docs.map((d) => d.id).sort().join(',')
+  const watches = useRef(new Map<string, GameWatch>())
   useEffect(() => {
-    if (!idsKey) return
-    const unsubs: (() => void)[] = []
-    for (const id of idsKey.split(',')) {
-      const teamNames = new Map<string, string>()
-      unsubs.push(onSnapshot(
-        collection(db, 'games', id, 'teams'),
-        (snap) => {
-          const list = snap.docs
-            .map((d) => {
-              const t = d.data()
-              teamNames.set(d.id, t.name)
-              return { id: d.id, name: t.name || 'Team', color: t.color || 'var(--ink-faint)', points: t.total_points ?? 0 }
-            })
-            .sort((a, b) => b.points - a.points)
-          setTeams((prev) => ({ ...prev, [id]: list }))
-        },
-        (err) => console.warn('Running game teams failed:', id, err)
-      ))
-
-      const alert = (itemId: string, text: string) => {
-        playChime()
-        const watching = path.current === `/gm/${id}` && document.visibilityState === 'visible'
-        if (!watching) {
-          showPopup(names.current[id] || APP_TITLE, text, `${id}:${itemId}`, () => go.current(`/gm/${id}`))
+    const live = watches.current
+    const wanted = new Set(idsKey ? idsKey.split(',') : [])
+    for (const [id, w] of live) {
+      if (wanted.has(id)) {
+        if (w.stopTimer) {
+          clearTimeout(w.stopTimer)
+          w.stopTimer = undefined
         }
+      } else if (!w.stopTimer) {
+        w.stopTimer = setTimeout(() => {
+          w.stop()
+          live.delete(id)
+        }, DROP_DELAY_MS)
       }
-      const watch = (
-        q: Query,
-        field: keyof Counts,
-        describe: ((data: DocumentData) => string) | null,
-        keep: (data: DocumentData) => boolean = () => true
-      ) => {
-        let loaded = false
-        unsubs.push(onSnapshot(
-          q,
-          (snap) => {
-            const n = snap.docs.filter((d) => keep(d.data())).length
-            setCounts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? NO_COUNTS), [field]: n } }))
-            if (loaded && describe) {
-              for (const change of snap.docChanges()) {
-                if (change.type !== 'added' || !keep(change.doc.data())) continue
-                alert(change.doc.id, describe(change.doc.data()))
-              }
-            }
-            loaded = true
-          },
-          (err) => console.warn('Running game counts failed:', id, field, err)
-        ))
-      }
-
-      watch(
-        query(collection(db, 'submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
-        'subs',
-        (d) => `${teamNames.get(d.team_id) || 'A team'} sent a challenge to review`
-      )
-      watch(
-        query(collection(db, 'side_quest_submissions'), where('game_id', '==', id), where('status', '==', 'pending')),
-        'sideQuests',
-        (d) => `${d.submitter_name || 'A player'} sent a side quest photo to review`
-      )
-      watch(
-        query(collection(db, 'games', id, 'join_requests'), where('status', '==', 'pending')),
-        'joins',
-        (d) => `${d.name || 'A player'} asked to join`
-      )
-      watch(
-        query(collection(db, 'games', id, 'messages'), where('channel_type', '==', 'team_to_gm')),
-        'messages',
-        (d) => `${d.from_name || 'A player'}: ${clip(d.text)}`,
-        (d) => !(d.read_by ?? []).includes(uid)
-      )
-      watch(collection(db, 'games', id, 'players'), 'players', null)
     }
-    return () => unsubs.forEach((u) => u())
+    for (const id of wanted) {
+      if (live.has(id)) continue
+      live.set(id, {
+        stop: watchGame(id, uid, {
+          onTeams: (list) => setTeams((prev) => ({ ...prev, [id]: list })),
+          onCount: (field, n) => setCounts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? NO_COUNTS), [field]: n } })),
+          onNew: (itemId, text) => {
+            playChime()
+            const watching = path.current === `/gm/${id}` && document.visibilityState === 'visible'
+            if (!watching) {
+              showPopup(names.current[id] || APP_TITLE, text, `${id}:${itemId}`, () => go.current(`/gm/${id}`))
+            }
+          },
+        }),
+      })
+    }
   }, [idsKey, uid])
+  // Leaving (sign-out) or switching accounts stops them all; the effect above
+  // then starts fresh ones for the new account.
+  useEffect(() => {
+    const live = watches.current
+    return () => {
+      live.forEach((w) => {
+        clearTimeout(w.stopTimer)
+        w.stop()
+      })
+      live.clear()
+    }
+  }, [uid])
 
   const games = useMemo(
     () =>

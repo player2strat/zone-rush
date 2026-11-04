@@ -36,6 +36,7 @@ import {
   serverTimestamp,
   doc,
   getDoc,
+  type WriteBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { loadGameZones } from './gameZones'
@@ -83,6 +84,21 @@ export async function logEvent(
     // Logging must never break gameplay — swallow and surface to console only
     console.error('[activityLog] Write failed:', err, event)
   }
+}
+
+/**
+ * Add an event to the caller's batch instead of writing it on its own, for
+ * logging many at once (the initial deal). The caller commits.
+ */
+export function logEventInBatch(
+  batch: WriteBatch,
+  gameId: string,
+  event: ActivityEvent
+): void {
+  batch.set(doc(collection(db, 'games', gameId, 'events')), {
+    ...event,
+    timestamp: serverTimestamp(),
+  })
 }
 
 // --------------- Reader / Merger ---------------
