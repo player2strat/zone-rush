@@ -7,6 +7,8 @@
 //   - "Spreadsheet + media" → one zip: the CSV, every photo/video/audio file
 //                             under media/<team>/, and errors.txt for any file
 //                             that couldn't be downloaded.
+// Plus "Stats by tag": how each challenge tag did in that game (tags come
+// from the challenges as they are now, so tags added later still count).
 //
 // READ-ONLY: nothing on this page writes to Firestore or Storage.
 // Built for Chrome on a laptop, where the zip is written straight to disk as
@@ -19,7 +21,8 @@ import { useNavigate } from 'react-router-dom'
 import { auth } from '../lib/firebase'
 import { useUserRole } from '../hooks/useUserRole'
 import { isPermissionDenied } from '../lib/gameMembership'
-import { countGame, listExportGames, loadExportRows, mapLimit } from '../lib/gameExport'
+import { countGame, listExportGames, loadExportRows, loadTagStats, mapLimit } from '../lib/gameExport'
+import { completionRate, type TagStatRow } from '../lib/tagStats'
 import {
   buildSubmissionsCsv, canStreamToDisk, exportFileName, exportZipStream, pickZipFile, saveBlob,
   type ExportGame, type ZipProgress,
@@ -27,6 +30,7 @@ import {
 import { EXPORT_TIME_ZONE, formatBytes } from '../lib/exportFormat'
 
 type Counts = { teams: number; submissions: number } | 'error'
+type TagStatsState = TagStatRow[] | 'loading' | { error: string }
 type Tone = 'ok' | 'warn' | 'error'
 
 interface Job {
@@ -78,6 +82,8 @@ export default function ExportPage() {
   const [job, setJob] = useState<Job | null>(null)
   const [results, setResults] = useState<Record<string, { tone: Tone; text: string }>>({})
   const [gmFilter, setGmFilter] = useState(ALL_GMS)
+  const [tagStats, setTagStats] = useState<Record<string, TagStatsState>>({})
+  const [statsOpen, setStatsOpen] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   // One option per GM, A to Z. Keyed by uid, since two GMs could share a name.
@@ -200,6 +206,17 @@ export default function ExportPage() {
     }
   }
 
+  const toggleTagStats = (game: ExportGame) => {
+    if (statsOpen === game.id) { setStatsOpen(null); return }
+    setStatsOpen(game.id)
+    const have = tagStats[game.id]
+    if (have && have !== 'loading' && !('error' in have)) return
+    setTagStats((prev) => ({ ...prev, [game.id]: 'loading' }))
+    loadTagStats(game.id)
+      .then((rows) => setTagStats((prev) => ({ ...prev, [game.id]: rows })))
+      .catch((err) => setTagStats((prev) => ({ ...prev, [game.id]: { error: errorText(err) } })))
+  }
+
   const buttonStyle = (primary: boolean, enabled: boolean): CSSProperties => ({
     background: !enabled ? 'rgba(var(--ink-rgb), 0.03)' : primary ? 'rgba(var(--pink-rgb), 0.15)' : 'var(--surface)',
     border: `1px solid ${!enabled ? 'var(--line)' : primary ? 'rgba(var(--pink-rgb), 0.45)' : 'var(--line-strong)'}`,
@@ -311,7 +328,11 @@ export default function ExportPage() {
                     <button disabled={!enabled} onClick={() => exportZip(g)} style={buttonStyle(true, enabled)}>
                       Spreadsheet + media
                     </button>
+                    <button onClick={() => toggleTagStats(g)} style={buttonStyle(false, true)}>
+                      {statsOpen === g.id ? 'Hide stats' : 'Stats by tag'}
+                    </button>
                   </div>
+                  {statsOpen === g.id && <TagStatsTable state={tagStats[g.id]} />}
 
                   {(running || result) && (
                     <div style={{ flexBasis: '100%', fontSize: '0.82rem', lineHeight: 1.5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
@@ -340,6 +361,55 @@ export default function ExportPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const TH: CSSProperties = { textAlign: 'right', padding: '6px 8px', fontWeight: 700, color: 'var(--ink-muted)', whiteSpace: 'nowrap' }
+const TD: CSSProperties = { textAlign: 'right', padding: '6px 8px', fontVariantNumeric: 'tabular-nums' }
+
+/** One row per challenge tag: cards held, attempts, completions, rejections, discards, points. */
+function TagStatsTable({ state }: { state: TagStatsState | undefined }) {
+  const box: CSSProperties = { flexBasis: '100%', fontSize: '0.82rem', lineHeight: 1.5 }
+  if (!state || state === 'loading') return <div style={{ ...box, color: 'var(--ink-faint)' }}>Counting…</div>
+  if ('error' in state) return <div style={{ ...box, color: 'var(--red-deep)' }}>Couldn't load stats. {state.error}</div>
+  if (state.length === 0) return <div style={{ ...box, color: 'var(--ink-faint)' }}>No cards were dealt in this game.</div>
+  return (
+    <div style={box}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 560 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--line-strong)' }}>
+              <th style={{ ...TH, textAlign: 'left' }}>Tag</th>
+              <th style={TH}>Cards held</th>
+              <th style={TH}>Attempted</th>
+              <th style={TH}>Completed</th>
+              <th style={TH}>Completion</th>
+              <th style={TH}>Rejected</th>
+              <th style={TH}>Discarded</th>
+              <th style={TH}>Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.map((r) => (
+              <tr key={r.key || 'none'} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ ...TD, textAlign: 'left', fontWeight: 600, color: r.key ? 'var(--ink)' : 'var(--ink-muted)' }}>{r.label}</td>
+                <td style={TD}>{r.held}</td>
+                <td style={TD}>{r.attempted}</td>
+                <td style={TD}>{r.completed}</td>
+                <td style={TD}>{completionRate(r)}</td>
+                <td style={TD}>{r.rejected}</td>
+                <td style={TD}>{r.discarded}</td>
+                <td style={TD}>{r.points}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ color: 'var(--ink-faint)', fontSize: '0.76rem', margin: '8px 0 0' }}>
+        Counted per team: a card two teams held counts twice. A card with several tags counts in each of them,
+        so the rows don't add up to the game total. Completion is completed cards out of cards held.
+      </p>
     </div>
   )
 }

@@ -24,6 +24,7 @@ function row(id: string, over: Partial<ExportRow> = {}): ExportRow {
     challengeTitle: 'Find a bodega cat',
     challengeDescription: 'Photo with the cat',
     difficulty: 'easy',
+    tags: ['Animals', 'Universal'],
     zoneName: 'Park Slope',
     submittedByName: 'Sam',
     submittedAt: new Date(Date.UTC(2026, 8, 20, 18, 5, 33)),
@@ -53,12 +54,13 @@ describe('buildSubmissionsCsv', () => {
     const csv = buildSubmissionsCsv(GAME, [row('a')])
     const header = csv.slice(1).split('\r\n')[0]
     expect(header).toBe([
-      'Game', 'Team', 'Challenge', 'Challenge description', 'Difficulty', 'Zone', 'Submitted by',
+      'Game', 'Team', 'Challenge', 'Challenge description', 'Difficulty', 'Tags', 'Zone', 'Submitted by',
       'Status', 'GM notes', 'Submitted at (New York time)', 'submission_id',
       'game_id', 'team_id', 'gps_lat', 'gps_lng', 'zz_new_field',
     ].map((h) => `"${h}"`).join(','))
     expect(csv).toContain('"2026-09-20 2:05:33 PM"')
     expect(csv).toContain('"kept"')
+    expect(csv).toContain('"Animals, Universal"')
   })
 })
 

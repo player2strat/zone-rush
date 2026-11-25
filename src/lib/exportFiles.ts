@@ -42,6 +42,7 @@ export interface ExportRow {
   challengeTitle: string
   challengeDescription: string
   difficulty: string
+  tags: string[]                    // the challenge's tag labels ("Food", "Park", …)
   zoneName: string
   submittedByName: string
   submittedAt: Date | null
@@ -69,7 +70,7 @@ export function mediaPathFor(row: ExportRow): string | null {
 // ─── CSV ─────────────────────────────────────────────────────────────────────
 
 const FRIENDLY_HEADER = [
-  'Game', 'Team', 'Challenge', 'Challenge description', 'Difficulty', 'Zone',
+  'Game', 'Team', 'Challenge', 'Challenge description', 'Difficulty', 'Tags', 'Zone',
   'Submitted by', 'Status', 'GM notes', 'Submitted at (New York time)',
 ]
 
@@ -113,6 +114,7 @@ export function buildSubmissionsCsv(
     r.challengeTitle,
     r.challengeDescription,
     r.difficulty,
+    r.tags.join(', '),
     r.zoneName,
     r.submittedByName,
     rawCellText(r.raw.status),

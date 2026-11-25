@@ -18,6 +18,8 @@ import { loadGameZoneMap, type GameZone } from './gameZones'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { toDate } from './exportFormat'
 import type { ExportGame, ExportRow } from './exportFiles'
+import { sortTags, tagLabel } from './challengeImport'
+import { computeTagStats, type TagStatRow } from './tagStats'
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping the order. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -86,6 +88,10 @@ async function getDocsById(path: string, ids: string[]): Promise<Map<string, Rec
 
 const text = (v: unknown) => (typeof v === 'string' ? v : '')
 
+/** A challenge doc's tag keys, in the sheet's order. */
+const challengeTags = (c: Record<string, unknown> | null | undefined): string[] =>
+  Array.isArray(c?.tags) ? sortTags((c.tags as unknown[]).filter((t): t is string => typeof t === 'string')) : []
+
 /** Every submission in the game (any status), oldest first, with readable names. */
 export async function loadExportRows(game: ExportGame): Promise<ExportRow[]> {
   const [subsSnap, teamsSnap, zones] = await Promise.all([
@@ -126,6 +132,7 @@ export async function loadExportRows(game: ExportGame): Promise<ExportRow[]> {
       challengeTitle: text(challenge?.title) || challengeId,
       challengeDescription: text(challenge?.description) || text(raw.challenge_description),
       difficulty: text(challenge?.difficulty) || text(raw.challenge_difficulty),
+      tags: challengeTags(challenge).map(tagLabel),
       zoneName: (zoneId && text(zones.get(zoneId)?.name)) || formatZoneLabel(zoneId),
       submittedByName: text(users.get(uid)?.display_name) || memberNames.get(uid) || uid,
       submittedAt: toDate(raw.submitted_at),
@@ -134,4 +141,41 @@ export async function loadExportRows(game: ExportGame): Promise<ExportRow[]> {
     }
   })
   return rows.sort((a, b) => (a.submittedAt?.getTime() ?? 0) - (b.submittedAt?.getTime() ?? 0))
+}
+
+/**
+ * How each challenge tag did in a game: cards the teams held, attempts,
+ * approvals and points. Tags are read from the challenges as they are now,
+ * so tags added after a game still count for it.
+ */
+export async function loadTagStats(gameId: string): Promise<TagStatRow[]> {
+  const [subsSnap, teamsSnap] = await Promise.all([
+    getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId))),
+    getDocs(collection(db, 'games', gameId, 'teams')),
+  ])
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+  // Teams with players only (games start with empty pre-named teams).
+  const teams = teamsSnap.docs
+    .filter((d) => ids(d.data().members).length > 0)
+    .map((d) => {
+      const t = d.data()
+      return {
+        id: d.id,
+        held: [...ids(t.dealt_challenges), ...ids(t.hand), ...ids(t.discarded_challenges)],
+        discarded: ids(t.discarded_challenges),
+      }
+    })
+  const submissions = subsSnap.docs.map((d) => {
+    const s = d.data()
+    return {
+      teamId: text(s.team_id),
+      challengeId: text(s.challenge_id),
+      status: text(s.status),
+      points: typeof s.points_awarded === 'number' ? s.points_awarded : 0,
+    }
+  })
+  const allIds = [...new Set([...teams.flatMap((t) => t.held), ...submissions.map((s) => s.challengeId)].filter(Boolean))]
+  const docs = await getDocsById('challenges', allIds)
+  const tagsById = new Map(allIds.map((id) => [id, challengeTags(docs.get(id))]))
+  return computeTagStats({ tagsById, teams, submissions })
 }
