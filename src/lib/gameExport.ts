@@ -20,6 +20,7 @@ import { toDate } from './exportFormat'
 import type { ExportGame, ExportRow } from './exportFiles'
 import { sortTags, tagLabel } from './challengeImport'
 import { computeChallengeStats, computeTagStats, type TagStatRow, type TagStatsInput } from './tagStats'
+import { buildCardRows, type CardChallenge, type CardRow, type CardSubmission, type CardTeam } from './cardAnalytics'
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping the order. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -205,4 +206,76 @@ async function loadGamePlay(gameId: string): Promise<Pick<TagStatsInput, 'teams'
     }
   })
   return { teams, submissions }
+}
+
+/**
+ * "Cards for analysis": every card each team held in this game, with tags
+ * and outcome (see lib/cardAnalytics.ts). Challenges and player names are
+ * fetched once per id, shared across games through `cache`.
+ */
+export async function loadCardRows(game: ExportGame, cache: CardCache = newCardCache()): Promise<CardRow[]> {
+  const [subsSnap, teamsSnap, zones] = await Promise.all([
+    getDocs(query(collection(db, 'submissions'), where('game_id', '==', game.id))),
+    getDocs(collection(db, 'games', game.id, 'teams')),
+    loadGameZoneMap(game.id).catch(() => new Map<string, GameZone>()),
+  ])
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+  const memberNames = new Map<string, string>()
+  const teams: CardTeam[] = teamsSnap.docs
+    .filter((d) => ids(d.data().members).length > 0)
+    .map((d) => {
+      const t = d.data()
+      const names = ids(t.member_names)
+      ids(t.members).forEach((uid, i) => { if (names[i]) memberNames.set(uid, names[i]) })
+      return { id: d.id, name: text(t.name) || d.id, dealt: ids(t.dealt_challenges), hand: ids(t.hand), discarded: ids(t.discarded_challenges) }
+    })
+  const raws = subsSnap.docs.map((d) => d.data())
+
+  const challengeIds = [...new Set([...teams.flatMap((t) => [...t.dealt, ...t.hand, ...t.discarded]), ...raws.map((s) => text(s.challenge_id))].filter(Boolean))]
+  const uids = [...new Set(raws.map((s) => text(s.submitted_by)).filter(Boolean))]
+  await Promise.all([fillCache(cache.challenges, 'challenges', challengeIds), fillCache(cache.users, 'users', uids)])
+
+  const submissions: CardSubmission[] = raws.map((s) => {
+    const uid = text(s.submitted_by)
+    const zoneId = text(s.zone_id)
+    return {
+      teamId: text(s.team_id),
+      challengeId: text(s.challenge_id),
+      status: text(s.status),
+      points: typeof s.points_awarded === 'number' ? s.points_awarded : 0,
+      submittedAt: toDate(s.submitted_at),
+      reviewedAt: toDate(s.reviewed_at),
+      tier2Attempted: s.attempted_tier2 === true,
+      tier2Approved: s.tier2_approved === true,
+      zoneName: zoneId ? (text(zones.get(zoneId)?.name) || formatZoneLabel(zoneId)) : '',
+      submittedByName: text(cache.users.get(uid)?.display_name) || memberNames.get(uid) || '',
+    }
+  })
+  const challenges = new Map<string, CardChallenge | null>(challengeIds.map((id) => {
+    const c = cache.challenges.get(id)
+    return [id, c ? {
+      text: text(c.description) || text(c.title),
+      difficulty: text(c.difficulty),
+      verification: text(c.verification_type),
+      sequential: c.challenge_type === 'sequential',
+      tags: challengeTags(c),
+    } : null]
+  }))
+  return buildCardRows(
+    { id: game.id, name: game.name, date: game.startedAt, practice: game.practice },
+    teams, submissions, challenges,
+  )
+}
+
+export interface CardCache {
+  challenges: Map<string, Record<string, unknown> | null>
+  users: Map<string, Record<string, unknown> | null>
+}
+export const newCardCache = (): CardCache => ({ challenges: new Map(), users: new Map() })
+
+async function fillCache(cache: Map<string, Record<string, unknown> | null>, path: string, ids: string[]) {
+  const missing = ids.filter((id) => !cache.has(id))
+  if (!missing.length) return
+  const found = await getDocsById(path, missing)
+  found.forEach((v, k) => cache.set(k, v))
 }
