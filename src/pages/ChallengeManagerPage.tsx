@@ -26,6 +26,7 @@ import { saveBlob } from '../lib/exportFiles'
 import { nyDate } from '../lib/exportFormat'
 import { completionRate, type TagStatRow } from '../lib/tagStats'
 import { NO_TAGS_KEY, summarizeChallenges, type SummaryCard } from '../lib/challengeSummary'
+import Segmented from '../components/Segmented'
 
 interface Managed extends AppChallenge {
   points?: number
@@ -516,45 +517,6 @@ function Overview({ challenges, onOnly, setOnOnly, pick }: {
         A challenge with several tags counts under each of them, so the tags add up to more than the total.
         Click any card to see those challenges.
       </p>
-    </div>
-  )
-}
-
-// ─── Segmented switch ────────────────────────────────────────────────────────
-
-/** A quiet two-way switch: a soft grey track with the chosen option on a white chip. */
-function Segmented<T extends string>({ label, options, value, onChange, small = false }: {
-  label: string
-  options: readonly (readonly [T, string])[]
-  value: T
-  onChange: (v: T) => void
-  small?: boolean
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} style={{ display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10, background: 'rgba(var(--ink-rgb), 0.06)' }}>
-      {options.map(([key, name]) => {
-        const on = key === value
-        return (
-          <button
-            key={key}
-            role="radio"
-            aria-checked={on}
-            className="seg-btn"
-            // Clicking shouldn't leave a focus ring; keyboard focus still shows one.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onChange(key)}
-            style={{
-              border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-              padding: small ? '5px 12px' : '7px 18px', fontSize: small ? '0.78rem' : '0.88rem', fontWeight: on ? 700 : 600,
-              background: on ? 'var(--surface)' : 'transparent',
-              color: on ? 'var(--ink)' : 'var(--ink-muted)',
-              boxShadow: on ? '0 1px 2px rgba(0, 0, 0, 0.12)' : 'none',
-            }}
-          >
-            {name}
-          </button>
-        )
-      })}
     </div>
   )
 }

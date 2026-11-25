@@ -13,6 +13,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { db } from '../lib/firebase'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 import { isPermissionDenied } from '../lib/gameMembership'
+import Segmented from '../components/Segmented'
 
 interface ExplorerSub {
   id: string
@@ -137,7 +138,7 @@ export default function SideQuestExplorer() {
           ← Home
         </button>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px' }}>
-          🧩 Side Quest Explorer
+          Side Quest Explorer
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', margin: '0 0 20px' }}>
           Every submission across all games, for reviewing history and sharing
@@ -155,21 +156,13 @@ export default function SideQuestExplorer() {
               <option key={q.id} value={q.id}>{q.title}</option>
             ))}
           </select>
-          {(['approved', 'pending', 'rejected', 'all'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              style={{
-                background: statusFilter === f ? 'rgba(var(--pink-rgb), 0.15)' : 'rgba(var(--ink-rgb), 0.03)',
-                border: `1px solid ${statusFilter === f ? 'rgba(var(--pink-rgb), 0.4)' : 'var(--line)'}`,
-                color: statusFilter === f ? 'var(--pink)' : 'var(--ink-faint)',
-                padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize',
-              }}
-            >
-              {f}
-            </button>
-          ))}
+          <Segmented
+            label="Status"
+            small
+            options={[['approved', 'Approved'], ['pending', 'Pending'], ['rejected', 'Rejected'], ['all', 'All']]}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
           <div style={{ flex: 1 }} />
           <button
             onClick={exportCsv}
@@ -182,7 +175,7 @@ export default function SideQuestExplorer() {
               cursor: visible.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
             }}
           >
-            ⬇ Export CSV ({visible.length})
+            Export CSV ({visible.length})
           </button>
         </div>
 
@@ -203,7 +196,7 @@ export default function SideQuestExplorer() {
               <div key={s.id} style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
                 {deadMedia.has(s.id) ? (
                   <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-ghost)', fontSize: '0.75rem', background: 'var(--surface)' }}>
-                    🖼️ Media no longer available
+                    Media no longer available
                   </div>
                 ) : (
                   <a href={s.media_url} target="_blank" rel="noreferrer">
@@ -218,10 +211,11 @@ export default function SideQuestExplorer() {
                   <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--ink-soft)', fontWeight: 600 }}>
                     {s.submitter_name}
                     <span style={{
-                      float: 'right', fontWeight: 700, fontSize: '0.68rem',
-                      color: s.status === 'approved' ? 'var(--green)' : s.status === 'rejected' ? 'var(--red)' : 'var(--marigold-deep)',
+                      float: 'right', fontWeight: 700, fontSize: '0.66rem', padding: '1px 8px', borderRadius: 99,
+                      color: s.status === 'approved' ? 'var(--green-deep)' : s.status === 'rejected' ? 'var(--red-deep)' : 'var(--marigold-deep)',
+                      background: s.status === 'approved' ? 'rgba(var(--green-rgb), 0.14)' : s.status === 'rejected' ? 'rgba(var(--red-rgb), 0.12)' : 'rgba(var(--marigold-rgb), 0.2)',
                     }}>
-                      {s.status}
+                      {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
                     </span>
                   </p>
                   <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--ink-muted)' }}>
@@ -236,7 +230,7 @@ export default function SideQuestExplorer() {
                       target="_blank" rel="noreferrer"
                       style={{ fontSize: '0.7rem', color: 'var(--blue)', textDecoration: 'none' }}
                     >
-                      📍 {s.gps_lat.toFixed(5)}, {s.gps_lng.toFixed(5)}
+                      View on map ({s.gps_lat.toFixed(4)}, {s.gps_lng.toFixed(4)})
                     </a>
                   )}
                 </div>

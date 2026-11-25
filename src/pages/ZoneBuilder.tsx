@@ -2043,7 +2043,7 @@ export default function ZoneBuilder() {
                 cursor: creatingBusy ? "not-allowed" : "pointer",
               }}
             >
-              {creatingBusy ? "Importing…" : "⬆ Import map from GeoJSON"}
+              {creatingBusy ? "Importing…" : "Import map from GeoJSON"}
               <input
                 type="file"
                 accept=".geojson,.json"
@@ -2416,7 +2416,7 @@ export default function ZoneBuilder() {
             </div>
           ) : (
             <button onClick={openEditMap} style={secondaryFullBtnStyle}>
-              ✎ Edit map details
+              Edit map details
             </button>
           ))}
 
@@ -2507,7 +2507,7 @@ export default function ZoneBuilder() {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 4 }}>
-              ✎ Drawing {drawingMode === "boundary" ? "map boundary" : "zone"}…
+              Drawing {drawingMode === "boundary" ? "map boundary" : "zone"}…
             </div>
             <div
               style={{ color: "var(--ink-muted)", fontSize: "0.8rem", marginBottom: 12 }}
@@ -2536,7 +2536,7 @@ export default function ZoneBuilder() {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 6 }}>
-              {tool === "merge" ? "⧈ Merge zones" : "✂ Split zone"}
+              {tool === "merge" ? "Merge zones" : "Split zone"}
             </div>
             {tool === "merge" && (
               <>
@@ -2627,21 +2627,21 @@ export default function ZoneBuilder() {
         {selectedMap && !drawingMode && !pendingGeometry && !pendingBoundary && !tool && (
           <>
             <button onClick={startDrawZone} style={primaryBtnStyle}>
-              ✏️ Draw a zone
+              Draw a zone
             </button>
             {zones.length >= 2 && (
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button onClick={startMergeTool} style={{ ...secondaryBtnStyle, flex: 1 }}>
-                  ⧈ Merge zones
+                  Merge zones
                 </button>
                 <button onClick={startSplitTool} style={{ ...secondaryBtnStyle, flex: 1 }}>
-                  ✂ Split zone
+                  Split zone
                 </button>
               </div>
             )}
             {zones.length === 1 && (
               <button onClick={startSplitTool} style={secondaryFullBtnStyle}>
-                ✂ Split zone
+                Split zone
               </button>
             )}
             <button onClick={startDrawBoundary} style={secondaryFullBtnStyle}>
@@ -2656,7 +2656,7 @@ export default function ZoneBuilder() {
                 textAlign: "center",
               }}
             >
-              ⬆ Import boundary (GeoJSON)
+              Import boundary (GeoJSON)
               <input
                 type="file"
                 accept=".geojson,.json"
@@ -2939,7 +2939,7 @@ export default function ZoneBuilder() {
                     opacity: saving ? 0.6 : 1,
                   }}
                 >
-                  ✂ Fit neighbors &amp; save
+                  Fit neighbors &amp; save
                 </button>
               </div>
             )}

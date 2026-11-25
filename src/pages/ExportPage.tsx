@@ -382,7 +382,9 @@ export default function ExportPage() {
               const result = results[g.id]
               return (
                 <div key={g.id} style={{
-                  background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12,
+                  // A game with its stats open gets a slightly stronger edge, like an open row elsewhere.
+                  background: 'var(--surface)', border: `1px solid ${statsOpen === g.id ? 'var(--line-strong)' : 'var(--line)'}`, borderRadius: 12,
+                  boxShadow: statsOpen === g.id ? '0 1px 3px rgba(0, 0, 0, 0.08)' : 'none',
                   padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
                 }}>
                   <div style={{ flex: '1 1 260px', minWidth: 0 }}>
