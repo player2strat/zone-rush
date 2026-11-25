@@ -1,6 +1,6 @@
 // =============================================================================
 // Foray — Import Challenges (admin only)
-// Route: /admin/import-challenges
+// Route: /admin/import-challenges (opened from the Challenge Manager)
 //
 // Brings the challenge spreadsheet into the live app: tags, reworded text,
 // difficulty and photo/video for existing challenges, plus new challenges.
@@ -141,8 +141,8 @@ export default function ImportChallengesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", padding: '24px 16px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}>
-          ← Home
+        <button onClick={() => navigate('/admin/challenges')} style={{ background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0, marginBottom: 12 }}>
+          ← Challenge Manager
         </button>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 6px' }}>Import Challenges</h1>
         <p style={note}>

@@ -5,7 +5,8 @@
 // Day-to-day challenge editing in the app: search and filter, switch a
 // challenge on or off, edit wording / difficulty / photo-video / tags, add a
 // new one, see how each has done across games, and download everything as a
-// spreadsheet in the same layout the Import Challenges page reads.
+// spreadsheet in the same layout the Import Challenges page reads ("Import
+// from spreadsheet" opens that page; it has no Home link of its own).
 //
 // Challenges are never deleted: "Off" (is_active false) keeps a challenge and
 // its history but stops it being dealt in new games. Every change saves to
@@ -217,6 +218,7 @@ export default function ChallengeManagerPage() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <button onClick={openNew} style={button('primary')}>+ Add challenge</button>
               <button onClick={download} style={button('plain')}>Download as spreadsheet</button>
+              <button onClick={() => navigate('/admin/import-challenges')} style={button('plain')}>Import from spreadsheet</button>
               <button
                 onClick={() => loadStats(stats !== 'loading' && stats !== null ? stats.practice : false)}
                 disabled={stats === 'loading'}

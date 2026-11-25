@@ -11,7 +11,6 @@ import JoinGame from './pages/JoinGame'
 import LateJoinPage from './pages/LateJoinPage'
 import PastForaysPage from './pages/PastForaysPage'
 import LobbyPage from './pages/LobbyPage'
-import AdminSeed from './pages/AdminSeed'
 import GamePage from './pages/GamePage'
 import GMDashboard from './pages/GMDashboard'
 import ZoneManager from './pages/ZoneManager'
@@ -172,7 +171,8 @@ export default function App() {
             </GameRouteGuard>
           }
         />
-        <Route path="/admin/seed" element={<AdminGuard><AdminSeed /></AdminGuard>} />
+        {/* Old Seed Challenges page: replaced by the Challenge Manager. */}
+        <Route path="/admin/seed" element={<Navigate to="/admin/challenges" replace />} />
         <Route path="/admin/zones" element={<AdminGuard><ZoneManager /></AdminGuard>} />
         <Route path="/admin/zone-builder" element={<AdminGuard><ZoneBuilder /></AdminGuard>} />
         <Route path="/admin/seed-maps" element={<AdminGuard><SeedMaps /></AdminGuard>} />
