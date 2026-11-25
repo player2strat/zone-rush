@@ -25,6 +25,7 @@ import { snapshotZonesIntoBatch } from '../lib/gameZones'
 import { joinCodeRef } from '../lib/gameMembership'
 import { SIDE_QUEST_PRESETS } from '../lib/sideQuestPresets'
 import { Icon } from '../components/Icon'
+import ZonePickerMap, { type PickerZone } from '../components/ZonePickerMap'
 import { useUserRole } from '../hooks/useUserRole'
 
 // One-off custom side quests are hidden for now; GMs pick from the presets only.
@@ -43,6 +44,18 @@ interface ZoneDoc {
   district_number?: number
   borough?: string
   city: string
+  boundary: PickerZone['boundary']  // outline for the zone picker map
+}
+
+// Zone outlines are stored as a JSON string; a bad or missing one just means
+// that zone isn't drawn on the picker map (it's still in the list).
+function parseBoundary(raw: unknown): PickerZone['boundary'] {
+  try {
+    const g = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return g && (g.type === 'Polygon' || g.type === 'MultiPolygon') ? g : null
+  } catch {
+    return null
+  }
 }
 
 // A selectable map from the top-level `maps` collection. A map OWNS its zones
@@ -233,6 +246,7 @@ export default function CreateGame() {
             district_number: data.district_number,
             borough: data.borough,
             city: data.city,
+            boundary: parseBoundary(data.boundary),
           })
         })
         zoneDocs.sort((a, b) => {
@@ -758,7 +772,7 @@ export default function CreateGame() {
                       {activeMap?.name || 'Zones'}
                     </h1>
                     <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
-                      All zones included. Toggle any off if needed
+                      All zones included. Turn any off in the list or tap them on the map
                     </p>
                   </div>
                   <button
@@ -780,6 +794,12 @@ export default function CreateGame() {
                     Change map
                   </button>
                 </div>
+
+                {/* Map of this map's zones: selected ones fill in, and a tap
+                    on a zone toggles it like its row below. */}
+                {visibleZones.some((z) => z.boundary) && (
+                  <ZonePickerMap zones={visibleZones} selected={selectedZones} onToggle={toggleZone} />
+                )}
 
                 {/* Zone count + bulk select/clear. Shown whenever the map has
                     zones, so the controls never disappear at zero selected. */}
