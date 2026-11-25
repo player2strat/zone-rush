@@ -18,6 +18,7 @@ import ZoneManager from './pages/ZoneManager'
 import ZoneBuilder from './pages/ZoneBuilder'
 import ExportPage from './pages/ExportPage'
 import ImportChallengesPage from './pages/ImportChallengesPage'
+import ChallengeManagerPage from './pages/ChallengeManagerPage'
 import ResultsPage from './pages/ResultsPage.tsx'
 import GameRouteGuard from './components/GameRouteGuard'
 import AdminGuard from './components/AdminGuard'
@@ -179,6 +180,7 @@ export default function App() {
         {/* Read-only: download a game's submissions as a CSV or a zip with media. */}
         <Route path="/admin/export" element={<AdminGuard><ExportPage /></AdminGuard>} />
         <Route path="/admin/import-challenges" element={<AdminGuard><ImportChallengesPage /></AdminGuard>} />
+        <Route path="/admin/challenges" element={<AdminGuard><ChallengeManagerPage /></AdminGuard>} />
         <Route path="/results/:gameId" element={<ResultsPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

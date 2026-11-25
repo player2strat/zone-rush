@@ -18,6 +18,7 @@ const ADMIN_LINKS = [
   { path: '/admin/side-quests', label: 'Side Quest Explorer', desc: 'All-time submissions & partner export' },
   { path: '/admin/export', label: 'Export Submissions', desc: "Download a game's submissions & media" },
   { path: '/admin/seed-maps', label: 'Seed Maps', desc: 'Seed starter maps' },
+  { path: '/admin/challenges', label: 'Challenge Manager', desc: 'Edit, add & switch challenges on or off' },
   { path: '/admin/import-challenges', label: 'Import Challenges', desc: 'Tags & new challenges from the sheet' },
   { path: '/admin/seed', label: 'Seed Challenges', desc: 'Seed challenge cards' },
 ]

@@ -30,18 +30,36 @@ export interface TagStatRow {
 export const NO_TAGS = ''
 
 export function computeTagStats({ tagsById, teams, submissions }: TagStatsInput): TagStatRow[] {
+  const rows = aggregate(teams, submissions, (id) => {
+    const tags = tagsById.get(id) ?? []
+    return tags.length ? tags : [NO_TAGS]
+  }, (key) => (key === NO_TAGS ? 'No tags' : tagLabel(key)))
+  const order = sortTags([...rows.keys()].filter((k) => k !== NO_TAGS))
+  return [...order, ...(rows.has(NO_TAGS) ? [NO_TAGS] : [])].map((k) => rows.get(k)!)
+}
+
+/**
+ * The same counts per challenge, across any number of games (team ids must
+ * be unique across them, e.g. "gameId/teamId"). Keyed by challenge id.
+ */
+export function computeChallengeStats(teams: TagStatsInput['teams'], submissions: TagStatsInput['submissions']): Map<string, TagStatRow> {
+  return aggregate(teams, submissions, (id) => [id], (id) => id)
+}
+
+function aggregate(
+  teams: TagStatsInput['teams'],
+  submissions: TagStatsInput['submissions'],
+  tagsOf: (challengeId: string) => string[],
+  labelOf: (key: string) => string,
+): Map<string, TagStatRow> {
   const rows = new Map<string, TagStatRow>()
   const rowFor = (key: string) => {
     let r = rows.get(key)
     if (!r) {
-      r = { key, label: key === NO_TAGS ? 'No tags' : tagLabel(key), held: 0, attempted: 0, completed: 0, rejected: 0, discarded: 0, points: 0 }
+      r = { key, label: labelOf(key), held: 0, attempted: 0, completed: 0, rejected: 0, discarded: 0, points: 0 }
       rows.set(key, r)
     }
     return r
-  }
-  const tagsOf = (id: string) => {
-    const tags = tagsById.get(id) ?? []
-    return tags.length ? tags : [NO_TAGS]
   }
 
   // Cards each team held: anything dealt, drawn, discarded or submitted.
@@ -77,8 +95,7 @@ export function computeTagStats({ tagsById, teams, submissions }: TagStatsInput)
     })
   })
 
-  const order = sortTags([...rows.keys()].filter((k) => k !== NO_TAGS))
-  return [...order, ...(rows.has(NO_TAGS) ? [NO_TAGS] : [])].map((k) => rows.get(k)!)
+  return rows
 }
 
 /** Share of held cards that were completed, as a whole percent ("–" when none were held). */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildWrites, idColumnText, parseChallengeSheet, parseCsv, planImport, tagKeyForHeader, tagLabel,
+  buildWrites, challengesToCsv, idColumnText, newChallengeDoc, nextChallengeId, parseChallengeSheet, parseCsv, planImport, tagKeyForHeader, tagLabel,
   type AppChallenge,
 } from './challengeImport'
 
@@ -125,5 +125,37 @@ describe('buildWrites', () => {
       { op: 'update', id: 'ch_003', data: { is_active: false } },
       { op: 'update', id: 'seq_005', data: { is_active: false } },
     ])
+  })
+})
+
+describe('Active column and downloading as a sheet', () => {
+  it('an Active column can switch challenges off, and new inactive rows are created off', () => {
+    const rows = parseChallengeSheet([
+      ['ID', 'Challenge', 'Difficulty', 'Response Type', 'Active', 'Food'],
+      ['ch_001', 'Support libraries! Give a thumbs up', 'Easy', 'Photo', 'FALSE', 'FALSE'],
+      ['ch_004', 'Already off', 'Medium', 'Photo', 'FALSE', 'FALSE'],
+      ['', 'Brand new', 'Easy', 'Video', 'FALSE', 'TRUE'],
+    ]).rows
+    expect(rows.map((r) => r.active)).toEqual([false, false, false])
+    const plan = planImport(rows, app)
+    expect(plan.rows[0].changes.map((c) => c.field)).toEqual(['switch_off'])
+    expect(plan.rows[1].kind).toBe('unchanged')          // off, and the sheet says off
+    const writes = buildWrites(plan, 'u')
+    expect(writes.find((w) => w.id === 'ch_001')?.data).toEqual({ tags: [], is_active: false })
+    expect(writes.find((w) => w.op === 'create')?.data).toMatchObject({ description: 'Brand new', is_active: false, tags: ['food'] })
+  })
+
+  it('a downloaded sheet imports back with no changes', () => {
+    const tagged = app.map((c, i) => ({ ...c, tags: i === 0 ? ['food', 'night_time'] : [] }))
+    const csv = challengesToCsv(tagged)
+    expect(csv.split('\r\n')[0]).toContain('"ID","Challenge","Difficulty","Response Type","Active","Purchase of something"')
+    const plan = planImport(parseChallengeSheet(parseCsv(csv)).rows, tagged)
+    expect(plan.counts).toEqual({ update: 0, unchanged: 5, new: 0, skip: 0, switchOff: 0 })
+  })
+
+  it('next free id', () => {
+    expect(nextChallengeId(['ch_001', 'seq_099', 'ch_100'])).toBe('ch_101')
+    expect(newChallengeDoc('ch_101', { text: 'x', difficulty: 'hard', verification: 'video', tags: ['animals', 'food'], active: true }, 'u'))
+      .toMatchObject({ points: 5, tags: ['food', 'animals'], is_active: true, challenge_type: 'standard' })
   })
 })

@@ -15,6 +15,8 @@
 // No Firebase imports here, so it can be tested on its own.
 // =============================================================================
 
+import { buildCsv } from './exportFormat'
+
 // ─── Tags ────────────────────────────────────────────────────────────────────
 
 export interface TagDef {
@@ -105,6 +107,7 @@ export interface SheetRow {
   difficulty: Difficulty | null
   verification: Verification | null
   tags: string[]
+  active: boolean | null       // the Active column (null when the sheet has none: listed = on)
 }
 
 export interface ParsedSheet {
@@ -139,11 +142,12 @@ export function parseChallengeSheet(cells: string[][]): ParsedSheet {
   if (textCol === -1) textCol = idCol === 0 ? 1 : 0
   const diffCol = find((s) => s.startsWith('difficulty'))
   const typeCol = find((s) => s.startsWith('response'))
+  const activeCol = find((s) => s === 'active' || s === 'is active')
   if (diffCol === -1) problems.push('No "Difficulty" column found.')
   if (typeCol === -1) problems.push('No "Response Type" column found.')
 
   // Tag columns: every other named column whose cells are all TRUE/FALSE-style.
-  const used = new Set([idCol, textCol, diffCol, typeCol])
+  const used = new Set([idCol, textCol, diffCol, typeCol, activeCol])
   const tagCols = h
     .map((name, i) => ({ name, i }))
     .filter(({ name, i }) => name !== '' && !used.has(i))
@@ -162,6 +166,7 @@ export function parseChallengeSheet(cells: string[][]): ParsedSheet {
       difficulty: diffCol === -1 ? null : readDifficulty(r[diffCol] ?? ''),
       verification: typeCol === -1 ? null : readVerification(r[typeCol] ?? ''),
       tags: sortTags(tagCols.filter(({ i }) => TRUE_CELLS.has((r[i] ?? '').trim().toLowerCase())).map((c) => c.key)),
+      active: activeCol === -1 || (r[activeCol] ?? '').trim() === '' ? null : TRUE_CELLS.has((r[activeCol] ?? '').trim().toLowerCase()),
     })
   })
   return { rows, tagKeys: sortTags(tagCols.map((c) => c.key)), hasIdColumn: idCol !== -1, problems }
@@ -193,6 +198,7 @@ export type Change =
   | { field: 'difficulty'; from: string; to: Difficulty }
   | { field: 'type'; from: string; to: Verification }
   | { field: 'switch_on' }
+  | { field: 'switch_off' }
 
 export interface PlanRow {
   row: SheetRow
@@ -219,7 +225,7 @@ function sameTags(a: string[] = [], b: string[] = []): boolean {
 }
 
 /** Next free number after every ch_/seq_ id in use, e.g. 100 after seq_099. */
-function nextIdNumber(ids: Iterable<string>): number {
+export function nextIdNumber(ids: Iterable<string>): number {
   let max = 0
   for (const id of ids) {
     const m = /^(?:ch|seq)_(\d+)$/.exec(id)
@@ -229,6 +235,9 @@ function nextIdNumber(ids: Iterable<string>): number {
 }
 
 const pad = (n: number) => String(n).padStart(3, '0')
+
+/** The next free regular challenge id, e.g. ch_120. */
+export const nextChallengeId = (ids: Iterable<string>) => `ch_${pad(nextIdNumber(ids))}`
 
 /** The opening phrase, up to the first . ! ? or : ("Leave your mark."), when it's a real phrase. */
 function opener(s: string): string {
@@ -300,7 +309,9 @@ export function planImport(sheet: SheetRow[], app: AppChallenge[]): ImportPlan {
     }
     if (match.difficulty !== row.difficulty) changes.push({ field: 'difficulty', from: match.difficulty ?? '', to: row.difficulty })
     if (match.verification_type !== row.verification) changes.push({ field: 'type', from: match.verification_type ?? '', to: row.verification })
-    if (match.is_active === false) changes.push({ field: 'switch_on' })
+    // Listed in the sheet means on, unless its Active column says FALSE.
+    if (row.active === false) { if (match.is_active !== false) changes.push({ field: 'switch_off' }) }
+    else if (match.is_active === false) changes.push({ field: 'switch_on' })
     return { row, id: match.id, kind: changes.length ? 'update' : 'unchanged', matchedBy, changes, note }
   })
 
@@ -314,6 +325,36 @@ export function planImport(sheet: SheetRow[], app: AppChallenge[]): ImportPlan {
 }
 
 // ─── Turning the plan into Firestore writes ──────────────────────────────────
+
+export interface ChallengeFields {
+  text: string
+  difficulty: Difficulty
+  verification: Verification
+  tags: string[]
+  active: boolean
+}
+
+/** A new challenge doc, with the same defaults every existing challenge has. */
+export function newChallengeDoc(id: string, f: ChallengeFields, uid: string): Record<string, unknown> {
+  return {
+    id,
+    title: titleFor(f.text),
+    description: f.text,
+    difficulty: f.difficulty,
+    points: POINTS[f.difficulty],
+    verification_type: f.verification,
+    tags: sortTags(f.tags),
+    challenge_type: 'standard',
+    time_estimate: 'medium',
+    player_profile: 'adventurer',
+    tier2: null,
+    city_tags: ['nyc'],
+    zone_tags: [],
+    source: 'official',
+    is_active: f.active,
+    created_by: uid,
+  }
+}
 
 export type Write =
   | { op: 'update'; id: string; data: Record<string, unknown> }
@@ -334,30 +375,17 @@ export function buildWrites(plan: ImportPlan, uid: string): Write[] {
         if (c.field === 'difficulty') { data.difficulty = c.to; data.points = POINTS[c.to] }
         if (c.field === 'type') data.verification_type = c.to
         if (c.field === 'switch_on') data.is_active = true
+        if (c.field === 'switch_off') data.is_active = false
       }
       writes.push({ op: 'update', id: p.id, data })
     } else if (p.kind === 'new' && p.row.difficulty && p.row.verification) {
       writes.push({
         op: 'create',
         id: p.id,
-        data: {
-          id: p.id,
-          title: titleFor(p.row.text),
-          description: p.row.text,
-          difficulty: p.row.difficulty,
-          points: POINTS[p.row.difficulty],
-          verification_type: p.row.verification,
-          tags: p.row.tags,
-          challenge_type: 'standard',
-          time_estimate: 'medium',
-          player_profile: 'adventurer',
-          tier2: null,
-          city_tags: ['nyc'],
-          zone_tags: [],
-          source: 'official',
-          is_active: true,
-          created_by: uid,
-        },
+        data: newChallengeDoc(p.id, {
+          text: p.row.text, difficulty: p.row.difficulty, verification: p.row.verification,
+          tags: p.row.tags, active: p.row.active !== false,
+        }, uid),
       })
     }
   }
@@ -379,3 +407,29 @@ export function idColumnText(plan: ImportPlan): string {
 export function rowsAreContiguous(rows: SheetRow[]): boolean {
   return rows.every((r, i) => r.rowNumber === i + 2)
 }
+
+// ─── Downloading the challenges as a sheet ───────────────────────────────────
+
+/**
+ * Every challenge as a CSV in the sheet's own layout (ID, text, Difficulty,
+ * Response Type, Active, one TRUE/FALSE column per tag), so it opens in
+ * Google Sheets and can be imported back unchanged.
+ */
+export function challengesToCsv(challenges: AppChallenge[]): string {
+  const extra = sortTags(challenges.flatMap((c) => c.tags ?? [])).filter((k) => !CHALLENGE_TAGS.some((t) => t.key === k))
+  const tagCols = [...CHALLENGE_TAGS.map((t) => ({ key: t.key, header: t.header })), ...extra.map((k) => ({ key: k, header: tagLabel(k) }))]
+  const header = ['ID', 'Challenge', 'Difficulty', 'Response Type', 'Active', ...tagCols.map((t) => t.header)]
+  const sorted = [...challenges].sort((a, b) => (idNumber(a.id) - idNumber(b.id)) || a.id.localeCompare(b.id))
+  const body = sorted.map((c) => [
+    c.id,
+    c.description ?? c.title ?? '',
+    cap(c.difficulty ?? ''),
+    cap(c.verification_type ?? ''),
+    c.is_active === false ? 'FALSE' : 'TRUE',
+    ...tagCols.map((t) => ((c.tags ?? []).includes(t.key) ? 'TRUE' : 'FALSE')),
+  ])
+  return buildCsv(header, body)
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const idNumber = (id: string) => Number(/_(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEGER)

@@ -43,6 +43,7 @@ function changeText(c: Change): string {
     case 'difficulty': return `Difficulty: ${cap(c.from || 'none')} → ${cap(c.to)}`
     case 'type': return `Photo/video: ${cap(c.from || 'none')} → ${cap(c.to)}`
     case 'switch_on': return 'Switched back on (it was off)'
+    case 'switch_off': return 'Switched off (Active is FALSE in the sheet)'
   }
 }
 

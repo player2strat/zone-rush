@@ -19,7 +19,7 @@ import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { toDate } from './exportFormat'
 import type { ExportGame, ExportRow } from './exportFiles'
 import { sortTags, tagLabel } from './challengeImport'
-import { computeTagStats, type TagStatRow } from './tagStats'
+import { computeChallengeStats, computeTagStats, type TagStatRow, type TagStatsInput } from './tagStats'
 
 /** Run `fn` over `items`, at most `limit` at a time, keeping the order. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -149,6 +149,36 @@ export async function loadExportRows(game: ExportGame): Promise<ExportRow[]> {
  * so tags added after a game still count for it.
  */
 export async function loadTagStats(gameId: string): Promise<TagStatRow[]> {
+  const { teams, submissions } = await loadGamePlay(gameId)
+  const allIds = [...new Set([...teams.flatMap((t) => t.held), ...submissions.map((s) => s.challengeId)].filter(Boolean))]
+  const docs = await getDocsById('challenges', allIds)
+  const tagsById = new Map(allIds.map((id) => [id, challengeTags(docs.get(id))]))
+  return computeTagStats({ tagsById, teams, submissions })
+}
+
+/**
+ * How every challenge did across all finished-or-running games (admins can
+ * read them all). Practice games are left out unless asked for.
+ */
+export async function loadAllChallengeStats(includePractice: boolean): Promise<{ stats: Map<string, TagStatRow>; games: number }> {
+  const snap = await getDocs(collection(db, 'games'))
+  const games = snap.docs.filter((d) => {
+    const g = d.data()
+    return g.started_at != null && (includePractice || g.practice !== true)
+  })
+  const plays = await mapLimit(games, 6, (d) => loadGamePlay(d.id))
+  const teams: TagStatsInput['teams'] = []
+  const submissions: TagStatsInput['submissions'] = []
+  plays.forEach((p, i) => {
+    const gameId = games[i].id
+    p.teams.forEach((t) => teams.push({ ...t, id: `${gameId}/${t.id}` }))
+    p.submissions.forEach((s) => submissions.push({ ...s, teamId: `${gameId}/${s.teamId}` }))
+  })
+  return { stats: computeChallengeStats(teams, submissions), games: games.length }
+}
+
+/** A game's teams (with players) and the cards they held, plus its submissions. */
+async function loadGamePlay(gameId: string): Promise<Pick<TagStatsInput, 'teams' | 'submissions'>> {
   const [subsSnap, teamsSnap] = await Promise.all([
     getDocs(query(collection(db, 'submissions'), where('game_id', '==', gameId))),
     getDocs(collection(db, 'games', gameId, 'teams')),
@@ -174,8 +204,5 @@ export async function loadTagStats(gameId: string): Promise<TagStatRow[]> {
       points: typeof s.points_awarded === 'number' ? s.points_awarded : 0,
     }
   })
-  const allIds = [...new Set([...teams.flatMap((t) => t.held), ...submissions.map((s) => s.challengeId)].filter(Boolean))]
-  const docs = await getDocsById('challenges', allIds)
-  const tagsById = new Map(allIds.map((id) => [id, challengeTags(docs.get(id))]))
-  return computeTagStats({ tagsById, teams, submissions })
+  return { teams, submissions }
 }

@@ -4,8 +4,10 @@
 // Purpose: One-click seeding of challenges into Firestore
 //
 // The cards count every challenge in Firestore (what games deal from), which
-// can be more than the seed file holds. Seeding only adds or overwrites the
-// seed file's challenges; it never removes the others.
+// can be more than the seed file holds. Seeding only ADDS seed-file challenges
+// whose id isn't in Firestore yet. It never overwrites or removes anything:
+// the live challenges (ch_001 on) are managed in the Challenge Manager and
+// the Import Challenges page, and the old seed file reuses those ids.
 // =============================================================================
 
 import { useEffect, useState } from "react";
@@ -81,8 +83,18 @@ export default function AdminSeed() {
 
     let success = 0;
     let failed = 0;
+    let skipped = 0;
+    let existing: Set<string>;
+    try {
+      existing = new Set((await getDocs(collection(db, "challenges"))).docs.map((d) => d.id));
+    } catch (err) {
+      addLog("ERROR: couldn't check existing challenges, so nothing was seeded: " + (err as Error).message);
+      setStatus("error");
+      return;
+    }
 
     for (const challenge of challengeSeedData) {
+      if (existing.has(challenge.id)) { skipped++; continue; }
       try {
         const docRef = doc(db, "challenges", challenge.id);
         await setDoc(docRef, {
@@ -100,7 +112,7 @@ export default function AdminSeed() {
       }
     }
 
-    addLog("Done! " + success + " seeded, " + failed + " failed.");
+    addLog("Done! " + success + " added, " + skipped + " already there (left unchanged), " + failed + " failed.");
     setStatus("done");
     await checkExisting();
   };
@@ -118,8 +130,9 @@ export default function AdminSeed() {
         </button>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: 8 }}>Admin: Seed Challenges</h1>
         <p style={{ color: "var(--ink-muted)", marginBottom: 24, fontSize: "0.9rem", lineHeight: 1.5 }}>
-          The cards count every challenge in Firestore. "Seed All Challenges" adds the {seedTotal} challenges
-          in the seed file, overwriting any that are already there, and leaves all other challenges alone.
+          The cards count every challenge in Firestore. "Seed All Challenges" adds any of the {seedTotal} challenges
+          in the seed file whose ID isn't taken yet. It never changes or removes existing challenges; use the
+          Challenge Manager for that.
         </p>
 
         {countError ? (
