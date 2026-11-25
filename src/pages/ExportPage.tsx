@@ -1,5 +1,5 @@
 // =============================================================================
-// Foray — Export (admin/GM)
+// Foray — Game Reports (admin only; route /admin/export, file name kept)
 //
 // Download every submission from a game, to archive it (e.g. in Google
 // Drive). Each game has two buttons:
@@ -299,12 +299,13 @@ export default function ExportPage() {
           ← Home
         </button>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px' }}>
-          ⬇ Export Submissions
+          Game Reports
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', margin: '0 0 6px', lineHeight: 1.5 }}>
-          Download every submission from a game (approved, pending and rejected) to archive it.
-          "Spreadsheet only" is a CSV; "Spreadsheet + media" is a zip with the CSV and every
-          photo, video and audio file, sorted into a folder per team.
+          See how each game went and download its data. "Stats by tag" shows how each kind of challenge did.
+          "Challenge results" is a spreadsheet of every challenge each team had and what they did with it.
+          "Spreadsheet only" lists every submission; "Spreadsheet + media" adds every photo, video and
+          audio file, sorted into a folder per team.
         </p>
         <p style={{ color: 'var(--ink-faint)', fontSize: '0.8rem', margin: '0 0 20px', lineHeight: 1.5 }}>
           {streamToDisk
