@@ -15,7 +15,7 @@ import GMAlertSettings from '../components/GMAlertSettings'
 // surfaces them so admins don't have to type URLs.
 const ADMIN_LINKS = [
   { path: '/admin/zones', label: 'Zone Manager', desc: 'Import & edit zone metadata' },
-  { path: '/admin/side-quests', label: 'Side Quest Explorer', desc: 'All-time submissions & partner export' },
+  { path: '/admin/side-quests', label: 'Side Quest Submissions', desc: 'Side quest photos from every game & partner export' },
   { path: '/admin/export', label: 'Game Reports', desc: 'Stats by tag, challenge results & submission downloads' },
   { path: '/admin/seed-maps', label: 'Seed Maps', desc: 'Seed starter maps' },
   { path: '/admin/challenges', label: 'Challenge Manager', desc: 'Edit, add, import & switch challenges on or off' },

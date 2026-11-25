@@ -1,5 +1,5 @@
 // =============================================================================
-// Foray — Side Quest Explorer (admin)
+// Foray — Side Quest Submissions (admin; was "Side Quest Explorer", file name kept)
 //
 // All-time view of side quest submissions ACROSS games, aggregated by
 // quest_id. Recurring presets (e.g. Pothole Reporting) share a fixed id in
@@ -138,7 +138,7 @@ export default function SideQuestExplorer() {
           ← Home
         </button>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 4px' }}>
-          Side Quest Explorer
+          Side Quest Submissions
         </h1>
         <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', margin: '0 0 20px' }}>
           Every submission across all games, for reviewing history and sharing
@@ -182,7 +182,7 @@ export default function SideQuestExplorer() {
         {/* Results */}
         {adminOnly ? (
           <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>
-            The Side Quest Explorer reads every game's submissions, so it's for admin accounts only.
+            This page reads every game's submissions, so it's for admin accounts only.
           </p>
         ) : loadedQuestId !== questId ? (
           <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading…</p>
