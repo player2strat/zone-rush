@@ -1,11 +1,12 @@
 // =============================================================================
-// Foray — "Cards for analysis" download (admin Export page)
+// Foray — "Challenge results" download (admin Export page)
 //
-// One row per card per team: every challenge a team held in a game (dealt,
-// drawn later, discarded or submitted) with its tags as TRUE/FALSE columns
-// and what the team did with it. Unlike the submissions spreadsheet, it
-// includes the cards teams skipped, which is where most of the behavior is.
-// Made for pivot tables in Google Sheets; one game or many in one file.
+// One row per challenge per team: every challenge a team had in a game
+// (dealt, drawn later, discarded or submitted), what the team did with it,
+// and a column per tag marked "Yes". Unlike the submissions spreadsheet, it
+// includes the challenges teams skipped, which is where most of the
+// behavior is. Kept to the columns a person can read at a glance; works with
+// pivot tables in Google Sheets. One game or many in one file.
 //
 // The app doesn't record when a card was drawn, so there's no "time held".
 // No GPS or locations here.
@@ -14,7 +15,7 @@
 // =============================================================================
 
 import { CHALLENGE_TAGS, sortTags, tagLabel } from './challengeImport'
-import { buildCsv, nyReadable } from './exportFormat'
+import { buildCsv, nyDate, nyReadable } from './exportFormat'
 
 export interface CardGame {
   id: string
@@ -52,7 +53,7 @@ export interface CardChallenge {
   tags: string[]
 }
 
-export type Outcome = 'Completed' | 'Pending review' | 'Rejected' | 'Discarded' | 'Held, not attempted'
+export type Outcome = 'Completed' | 'Pending review' | 'Rejected' | 'Discarded' | 'Not attempted'
 
 export interface CardRow {
   game: CardGame
@@ -100,7 +101,7 @@ export function buildCardRows(
         : subs.some((s) => s.status === 'pending') ? 'Pending review'
           : subs.some((s) => s.status === 'rejected') ? 'Rejected'
             : discarded.has(id) ? 'Discarded'
-              : 'Held, not attempted'
+              : 'Not attempted'
       rows.push({
         game,
         teamName: team.name,
@@ -127,33 +128,29 @@ export function buildCardRows(
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-const yes = (b: boolean) => (b ? 'TRUE' : 'FALSE')
 
-/** The CSV: game and card details, one TRUE/FALSE column per tag, then what happened. */
+/**
+ * The CSV: what happened first (game, team, challenge, outcome, points),
+ * then details, then one column per tag with "Yes" where it applies.
+ */
 export function buildCardsCsv(rows: CardRow[]): string {
   const extra = sortTags(rows.flatMap((r) => r.challenge?.tags ?? [])).filter((k) => !CHALLENGE_TAGS.some((t) => t.key === k))
   const tagKeys = [...CHALLENGE_TAGS.map((t) => t.key), ...extra]
   const header = [
-    'Game', 'Game date', 'Practice game', 'Team',
-    'Challenge ID', 'Challenge', 'Difficulty', 'Proof', 'Choose Your Own Adventure', 'Tag count',
+    'Game', 'Game date', 'Team', 'Challenge', 'Outcome', 'Points earned', 'Difficulty', 'Photo or video',
+    'Zone', 'Submitted by', 'Completed at (New York time)', 'In starting hand', 'Attempts', 'Rejections',
+    'Minutes to review', 'Challenge ID',
     ...tagKeys.map(tagLabel),
-    'Starting hand', 'Outcome', 'Completed', 'Attempts', 'Rejections', 'Points earned',
-    'Tier 2 attempted', 'Tier 2 approved',
-    'First submitted (New York time)', 'Completed at (New York time)', 'Minutes to review',
-    'Zone', 'Submitted by', 'Game ID',
   ]
   const body = rows.map((r) => {
     const tags = r.challenge?.tags ?? []
     return [
-      r.game.name, r.game.date ? nyReadable(r.game.date) : '', yes(r.game.practice), r.teamName,
-      r.challengeId, r.challenge?.text ?? '(challenge no longer exists)', cap(r.challenge?.difficulty ?? ''),
-      cap(r.challenge?.verification ?? ''), yes(r.challenge?.sequential ?? false), tags.length,
-      ...tagKeys.map((k) => yes(tags.includes(k))),
-      yes(r.startingHand), r.outcome, yes(r.outcome === 'Completed'), r.attempts, r.rejections, r.pointsEarned,
-      yes(r.tier2Attempted), yes(r.tier2Approved),
-      r.firstSubmittedAt ? nyReadable(r.firstSubmittedAt) : '', r.completedAt ? nyReadable(r.completedAt) : '',
-      r.minutesToReview ?? '',
-      r.zoneName, r.submittedByName, r.game.id,
+      r.game.name, r.game.date ? nyDate(r.game.date) : '', r.teamName,
+      r.challenge?.text ?? '(challenge no longer exists)', r.outcome, r.pointsEarned,
+      cap(r.challenge?.difficulty ?? ''), cap(r.challenge?.verification ?? ''),
+      r.zoneName, r.submittedByName, r.completedAt ? nyReadable(r.completedAt) : '',
+      r.startingHand ? 'Yes' : 'No', r.attempts, r.rejections, r.minutesToReview ?? '', r.challengeId,
+      ...tagKeys.map((k) => (tags.includes(k) ? 'Yes' : '')),
     ]
   })
   return buildCsv(header, body)

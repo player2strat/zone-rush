@@ -9,8 +9,8 @@
 //                             that couldn't be downloaded.
 // Plus "Stats by tag": how each challenge tag did in that game (tags come
 // from the challenges as they are now, so tags added later still count), and
-// "Cards for analysis": one row per card per team with TRUE/FALSE tag columns
-// and its outcome, for one game or all of them (lib/cardAnalytics.ts).
+// "Challenge results": one row per challenge per team with its outcome and
+// tags, for one game or all of them (lib/cardAnalytics.ts).
 //
 // READ-ONLY: nothing on this page writes to Firestore or Storage.
 // Built for Chrome on a laptop, where the zip is written straight to disk as
@@ -211,15 +211,15 @@ export default function ExportPage() {
     }
   }
 
-  const cardsFileName = (label: string) => `foray-cards_${safeFileName(label, 60, 'game').replace(/ /g, '-')}_${nyDate(new Date())}.csv`
+  const cardsFileName = (label: string) => `foray-challenge-results_${safeFileName(label, 60, 'game').replace(/ /g, '-')}_${nyDate(new Date())}.csv`
   const cardsSummary = (rows: CardRow[]) => {
     const done = rows.filter((r) => r.outcome === 'Completed').length
-    return `${rows.length} card${rows.length === 1 ? '' : 's'}, ${done} completed`
+    return `${rows.length} row${rows.length === 1 ? '' : 's'}, ${done} completed`
   }
 
   const exportCards = async (game: ExportGame) => {
     const fileName = cardsFileName(game.name)
-    setJob({ gameId: game.id, kind: 'cards', message: 'Reading cards…' })
+    setJob({ gameId: game.id, kind: 'cards', message: 'Reading challenges…' })
     try {
       const rows = await loadCardRows(game)
       saveBlob(new Blob([buildCardsCsv(rows)], { type: 'text/csv;charset=utf-8' }), fileName)
@@ -347,10 +347,11 @@ export default function ExportPage() {
               padding: '14px 16px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 4,
             }}>
               <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Cards for analysis: all games</div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Challenge results: all games</div>
                 <div style={{ color: 'var(--ink-muted)', fontSize: '0.8rem', marginTop: 4, lineHeight: 1.5 }}>
-                  One spreadsheet row per card each team held (completed, rejected, discarded or skipped), with a
-                  TRUE/FALSE column per tag, ready for pivot tables. {gamesLabel(allGamesForCards.length)}
+                  A spreadsheet of every challenge each team had and what they did with it: completed, skipped,
+                  discarded or rejected, with its tags. Handy for seeing which kinds of challenges teams go for
+                  or avoid. {gamesLabel(allGamesForCards.length)}
                   {gmFilter === ALL_GMS ? '' : ' for this GM'}{includePractice ? ', practice games included' : ', not counting practice games'}.
                 </div>
                 <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: '0.8rem', color: 'var(--ink-muted)', marginTop: 6, cursor: 'pointer' }}>
@@ -422,10 +423,10 @@ export default function ExportPage() {
                     <button
                       disabled={!!job || !g.startedAt}
                       onClick={() => exportCards(g)}
-                      title="One row per card each team held, with tag columns, for pivot tables"
+                      title="Every challenge each team had in this game and what they did with it"
                       style={buttonStyle(false, !job && !!g.startedAt)}
                     >
-                      Cards for analysis
+                      Challenge results
                     </button>
                     <button onClick={() => toggleTagStats(g)} style={buttonStyle(false, true)}>
                       {statsOpen === g.id ? 'Hide stats' : 'Stats by tag'}

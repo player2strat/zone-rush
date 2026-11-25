@@ -88,6 +88,7 @@ button {
 button:hover { border-color: var(--ink); }
 button:focus,
 button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.seg-btn:focus-visible { outline: 2px solid rgba(var(--ink-rgb), 0.35); outline-offset: 1px; }
 
 input, textarea, select { color: var(--ink); }
 ::placeholder { color: var(--ink-ghost); }

@@ -28,9 +28,9 @@ describe('buildCardRows', () => {
     expect(rows.map((r) => [r.challengeId, r.startingHand, r.outcome])).toEqual([
       ['ch_001', true, 'Completed'],
       ['ch_002', true, 'Discarded'],
-      ['ch_003', true, 'Held, not attempted'],
+      ['ch_003', true, 'Not attempted'],
       ['ch_004', false, 'Pending review'],      // drawn later, only known from its submission
-      ['ch_005', false, 'Held, not attempted'],
+      ['ch_005', false, 'Not attempted'],
     ])
   })
 
@@ -49,14 +49,15 @@ describe('buildCardRows', () => {
 })
 
 describe('buildCardsCsv', () => {
-  it('has a TRUE/FALSE column per tag and reads back cleanly', () => {
+  it('puts the readable columns first and marks tags with Yes', () => {
     const rows = buildCardRows(game, [{ id: 'red', name: 'Red', dealt: ['ch_001', 'gone'], hand: [], discarded: [] }], [sub({})], challenges)
     const [header, first, second] = parseCsv(buildCardsCsv(rows))
     const col = (name: string) => header.indexOf(name)
-    expect(header.slice(0, 6)).toEqual(['Game', 'Game date', 'Practice game', 'Team', 'Challenge ID', 'Challenge'])
-    expect(first[col('Animals')]).toBe('TRUE')
-    expect(first[col('Food')]).toBe('FALSE')
-    expect(first[col('Tag count')]).toBe('2')
+    expect(header.slice(0, 6)).toEqual(['Game', 'Game date', 'Team', 'Challenge', 'Outcome', 'Points earned'])
+    expect(first[col('Game date')]).toBe('2026-11-14')
+    expect(first[col('Animals')]).toBe('Yes')
+    expect(first[col('Food')]).toBe('')
+    expect(first[col('In starting hand')]).toBe('Yes')
     expect(first[col('Outcome')]).toBe('Completed')
     expect(first[col('Minutes to review')]).toBe('3')
     expect(second[col('Challenge')]).toBe('(challenge no longer exists)')

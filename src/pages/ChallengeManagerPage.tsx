@@ -217,23 +217,13 @@ export default function ChallengeManagerPage() {
         {!challenges && !loadError && <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading challenges…</p>}
 
         {challenges && (
-          <div role="tablist" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line-strong)', marginBottom: 16 }}>
-            {([['list', 'Challenges'], ['overview', 'Overview']] as const).map(([key, name]) => (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => setTab(key)}
-                style={{
-                  background: 'none', border: 'none', fontFamily: 'inherit', cursor: 'pointer',
-                  padding: '8px 14px', fontSize: '0.9rem', fontWeight: 700, marginBottom: -1,
-                  color: tab === key ? 'var(--ink)' : 'var(--ink-muted)',
-                  borderBottom: `3px solid ${tab === key ? 'var(--pink)' : 'transparent'}`,
-                }}
-              >
-                {name}
-              </button>
-            ))}
+          <div style={{ marginBottom: 18 }}>
+            <Segmented
+              label="View"
+              options={[['list', 'Challenges'], ['overview', 'Overview']]}
+              value={tab}
+              onChange={setTab}
+            />
           </div>
         )}
 
@@ -492,23 +482,15 @@ function Overview({ challenges, onOnly, setOnOnly, pick }: {
 
   return (
     <div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 14, fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 14, fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
         Counting
-        {([[false, 'All challenges'], [true, 'Only those switched on']] as const).map(([v, name]) => (
-          <button
-            key={name}
-            onClick={() => setOnOnly(v)}
-            aria-pressed={onOnly === v}
-            style={{
-              padding: '5px 10px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              border: `1px solid ${onOnly === v ? 'rgba(var(--pink-rgb), 0.5)' : 'var(--line-strong)'}`,
-              background: onOnly === v ? 'rgba(var(--pink-rgb), 0.12)' : 'var(--surface)',
-              color: onOnly === v ? 'var(--pink-deep)' : 'var(--ink-soft)',
-            }}
-          >
-            {name}
-          </button>
-        ))}
+        <Segmented
+          label="Counting"
+          small
+          options={[['all', 'All challenges'], ['on', 'Only those switched on']]}
+          value={onOnly ? 'on' : 'all'}
+          onChange={(v) => setOnOnly(v === 'on')}
+        />
       </div>
 
       <div style={grid(120)}>
@@ -534,6 +516,45 @@ function Overview({ challenges, onOnly, setOnOnly, pick }: {
         A challenge with several tags counts under each of them, so the tags add up to more than the total.
         Click any card to see those challenges.
       </p>
+    </div>
+  )
+}
+
+// ─── Segmented switch ────────────────────────────────────────────────────────
+
+/** A quiet two-way switch: a soft grey track with the chosen option on a white chip. */
+function Segmented<T extends string>({ label, options, value, onChange, small = false }: {
+  label: string
+  options: readonly (readonly [T, string])[]
+  value: T
+  onChange: (v: T) => void
+  small?: boolean
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} style={{ display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10, background: 'rgba(var(--ink-rgb), 0.06)' }}>
+      {options.map(([key, name]) => {
+        const on = key === value
+        return (
+          <button
+            key={key}
+            role="radio"
+            aria-checked={on}
+            className="seg-btn"
+            // Clicking shouldn't leave a focus ring; keyboard focus still shows one.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange(key)}
+            style={{
+              border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+              padding: small ? '5px 12px' : '7px 18px', fontSize: small ? '0.78rem' : '0.88rem', fontWeight: on ? 700 : 600,
+              background: on ? 'var(--surface)' : 'transparent',
+              color: on ? 'var(--ink)' : 'var(--ink-muted)',
+              boxShadow: on ? '0 1px 2px rgba(0, 0, 0, 0.12)' : 'none',
+            }}
+          >
+            {name}
+          </button>
+        )
+      })}
     </div>
   )
 }

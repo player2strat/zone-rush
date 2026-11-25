@@ -209,7 +209,7 @@ async function loadGamePlay(gameId: string): Promise<Pick<TagStatsInput, 'teams'
 }
 
 /**
- * "Cards for analysis": every card each team held in this game, with tags
+ * "Challenge results": every challenge each team had in this game, with tags
  * and outcome (see lib/cardAnalytics.ts). Challenges and player names are
  * fetched once per id, shared across games through `cache`.
  */
