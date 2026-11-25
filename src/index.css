@@ -89,6 +89,8 @@ button:hover { border-color: var(--ink); }
 button:focus,
 button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .seg-btn:focus-visible { outline: 2px solid rgba(var(--ink-rgb), 0.35); outline-offset: 1px; }
+/* Full-width row headers (e.g. Zone Manager): the ring sits inside the card so it isn't clipped. */
+.row-btn:focus-visible { outline: 2px solid rgba(var(--ink-rgb), 0.35); outline-offset: -4px; border-radius: 10px; }
 
 input, textarea, select { color: var(--ink); }
 ::placeholder { color: var(--ink-ghost); }

@@ -829,10 +829,14 @@ export default function ZoneManager() {
           <div
             key={zone.id}
             style={{
-              background: zone.isNew
-                ? "rgba(var(--marigold-rgb), 0.05)"
-                : "rgba(var(--ink-rgb), 0.02)",
-              border: `1px solid ${zone.isNew ? "#FFD16640" : "var(--line)"}`,
+              // The open zone sits on a white card with a slightly stronger edge.
+              background: expandedZone === zone.id
+                ? "var(--surface)"
+                : zone.isNew
+                  ? "rgba(var(--marigold-rgb), 0.05)"
+                  : "rgba(var(--ink-rgb), 0.02)",
+              border: `1px solid ${expandedZone === zone.id ? "var(--line-strong)" : zone.isNew ? "#FFD16640" : "var(--line)"}`,
+              boxShadow: expandedZone === zone.id ? "0 1px 3px rgba(0, 0, 0, 0.08)" : "none",
               borderRadius: 12,
               marginBottom: 10,
               overflow: "hidden",
@@ -855,6 +859,10 @@ export default function ZoneManager() {
                 }}
               />
               <button
+                className="row-btn"
+                aria-expanded={expandedZone === zone.id}
+                // Clicking shouldn't leave a focus ring; keyboard focus still shows one.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() =>
                   setExpandedZone(expandedZone === zone.id ? null : zone.id)
                 }
@@ -871,16 +879,19 @@ export default function ZoneManager() {
               }}
             >
               <div style={{ textAlign: "left" }}>
-                <span
-                  style={{
-                    color: "var(--marigold)",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  #{zone.district_number}
-                </span>
-                <span style={{ color: "var(--ink)", marginLeft: 10, fontWeight: 600 }}>
+                {zone.district_number != null && String(zone.district_number) !== "" && (
+                  <span
+                    style={{
+                      color: "var(--ink-faint)",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      marginRight: 10,
+                    }}
+                  >
+                    #{zone.district_number}
+                  </span>
+                )}
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>
                   {zone.name}
                 </span>
                 {zone.isNew && (
@@ -909,13 +920,14 @@ export default function ZoneManager() {
                       style={{
                         marginLeft: 8,
                         fontSize: "0.7rem",
-                        color: mid ? "var(--green)" : "var(--red)",
+                        fontWeight: 600,
+                        color: mid ? "var(--green-deep)" : "var(--red-deep)",
                         background: mid ? "rgba(var(--green-rgb), 0.12)" : "rgba(var(--red-rgb), 0.12)",
                         padding: "2px 8px",
-                        borderRadius: 4,
+                        borderRadius: 99,
                       }}
                     >
-                      🗺 {label}{pending ? " (on save)" : ""}
+                      {label}{pending ? " (on save)" : ""}
                     </span>
                   );
                 })()}
