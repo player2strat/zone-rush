@@ -1136,6 +1136,8 @@ export default function GMDashboard() {
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId)
   const filteredSubmissions = filter === 'all' ? submissions : submissions.filter((s) => s.status === filter)
   const pendingCount = submissions.filter((s) => s.status === 'pending').length
+  // Submissions tab badge: challenges and side quest photos both wait there.
+  const submissionsBadge = pendingCount + sideQuestSubs.filter((s) => s.status === 'pending').length
   // Chat badge = unread flagged messages (the attention queue size).
   const totalUnread = attentionQueue.length
 
@@ -1286,7 +1288,7 @@ export default function GMDashboard() {
       {/* TAB BAR */}
       <div style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', padding: '0 20px', flexShrink: 0 }}>
         {([
-          { id: 'submissions' as const, label: '📋 Submissions', badge: pendingCount > 0 ? pendingCount : null, badgeColor: 'var(--marigold-deep)' },
+          { id: 'submissions' as const, label: '📋 Submissions', badge: submissionsBadge > 0 ? submissionsBadge : null, badgeColor: 'var(--marigold-deep)' },
           { id: 'map' as const, label: '🗺️ Map & Zones', badge: null, badgeColor: '' },
           { id: 'chat' as const, label: '💬 Chat', badge: totalUnread > 0 ? totalUnread : null, badgeColor: 'var(--red)' },
           { id: 'activity' as const, label: '📜 Activity Log', badge: null, badgeColor: '' },
@@ -1741,7 +1743,7 @@ export default function GMDashboard() {
                       const busy = sqProcessing === s.id
                       return (
                         <div key={s.id} style={{ background: 'rgba(var(--ink-rgb), 0.02)', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
-                          <a href={s.media_url} target="_blank" rel="noreferrer">
+                          <a href={s.media_url} target="_blank" rel="noreferrer" title="Open full size" style={{ display: 'block', cursor: 'zoom-in' }}>
                             <img src={s.media_url} alt="" loading="lazy" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', background: 'var(--surface)' }} />
                           </a>
                           <div style={{ padding: '8px 10px' }}>
@@ -1885,7 +1887,9 @@ export default function GMDashboard() {
                             <audio src={sub.media_url} controls style={{ width: '100%', marginTop: 8 }} />
                           </div>
                         ) : (
-                          <img src={sub.media_url} alt="Submission" style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: 'var(--surface)', objectFit: 'contain' }} />
+                          <a href={sub.media_url} target="_blank" rel="noreferrer" title="Open full size" style={{ display: 'block', cursor: 'zoom-in' }}>
+                            <img src={sub.media_url} alt="Submission" style={{ width: '100%', maxHeight: 280, borderRadius: 10, background: 'var(--surface)', objectFit: 'contain', display: 'block' }} />
+                          </a>
                         )}
                       </div>
 
