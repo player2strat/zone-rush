@@ -25,6 +25,7 @@ import { loadAllChallengeStats } from '../lib/gameExport'
 import { saveBlob } from '../lib/exportFiles'
 import { nyDate } from '../lib/exportFormat'
 import { completionRate, type TagStatRow } from '../lib/tagStats'
+import { NO_TAGS_KEY, summarizeChallenges, type SummaryCard } from '../lib/challengeSummary'
 
 interface Managed extends AppChallenge {
   points?: number
@@ -43,7 +44,7 @@ interface Form {
 type Editing = { mode: 'edit'; id: string } | { mode: 'new' } | null
 
 const ANY = '*'
-const NO_TAGS = '-'
+const NO_TAGS = NO_TAGS_KEY
 const idNumber = (id: string) => Number(/_(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEGER)
 const cap = (s = '') => s.charAt(0).toUpperCase() + s.slice(1)
 const squash = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
@@ -84,6 +85,8 @@ export default function ChallengeManagerPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [tab, setTab] = useState<'list' | 'overview'>('list')
+  const [overviewOnOnly, setOverviewOnOnly] = useState(false)
 
   useEffect(() => {
     loadChallenges().then(setChallenges).catch((err) => setLoadError((err as Error).message))
@@ -214,6 +217,43 @@ export default function ChallengeManagerPage() {
         {!challenges && !loadError && <p style={{ color: 'var(--ink-faint)', fontSize: '0.85rem' }}>Loading challenges…</p>}
 
         {challenges && (
+          <div role="tablist" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--line-strong)', marginBottom: 16 }}>
+            {([['list', 'Challenges'], ['overview', 'Overview']] as const).map(([key, name]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                style={{
+                  background: 'none', border: 'none', fontFamily: 'inherit', cursor: 'pointer',
+                  padding: '8px 14px', fontSize: '0.9rem', fontWeight: 700, marginBottom: -1,
+                  color: tab === key ? 'var(--ink)' : 'var(--ink-muted)',
+                  borderBottom: `3px solid ${tab === key ? 'var(--pink)' : 'transparent'}`,
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {challenges && tab === 'overview' && (
+          <Overview
+            challenges={challenges}
+            onOnly={overviewOnOnly}
+            setOnOnly={setOverviewOnOnly}
+            pick={(f) => {
+              setSearch('')
+              setStatus(f.status ?? (overviewOnOnly ? 'on' : 'all'))
+              setDifficulty(f.difficulty ?? ANY)
+              setType(f.type ?? ANY)
+              setTag(f.tag ?? ANY)
+              setTab('list')
+            }}
+          />
+        )}
+
+        {challenges && tab === 'list' && (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <button onClick={openNew} style={button('primary')}>+ Add challenge</button>
@@ -410,6 +450,90 @@ export default function ChallengeManagerPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Overview tab ────────────────────────────────────────────────────────────
+
+const CARD_COLORS: Record<string, string> = {
+  total: 'var(--marigold-deep)', easy: 'var(--green-deep)', medium: 'var(--marigold-deep)', hard: 'var(--red-deep)',
+  on: 'var(--green-deep)', off: 'var(--ink-muted)', photo: 'var(--blue)', video: 'var(--pink-deep)',
+}
+const TAG_COLORS = ['var(--pink-deep)', 'var(--blue)', 'var(--green-deep)', '#E07000', 'var(--red-deep)', 'var(--marigold-deep)']
+
+type Pick = { status?: 'on' | 'off'; difficulty?: string; type?: string; tag?: string }
+
+/** Counts at a glance; clicking a card shows those challenges on the Challenges tab. */
+function Overview({ challenges, onOnly, setOnOnly, pick }: {
+  challenges: Managed[]
+  onOnly: boolean
+  setOnOnly: (v: boolean) => void
+  pick: (f: Pick) => void
+}) {
+  const counted = onOnly ? challenges.filter((c) => c.is_active !== false) : challenges
+  const s = summarizeChallenges(counted)
+  const card = (c: SummaryCard, color: string, onClick: () => void, big = false) => (
+    <button
+      key={c.key}
+      onClick={onClick}
+      title="Show these challenges"
+      style={{
+        background: 'rgba(var(--ink-rgb), 0.03)', border: '1px solid var(--line)', borderRadius: 8,
+        padding: big ? '16px 8px' : '10px 8px', textAlign: 'center', cursor: 'pointer', fontFamily: 'inherit',
+      }}
+    >
+      <div style={{ fontSize: big ? '1.6rem' : '1.2rem', fontWeight: 700, color: c.count ? color : 'var(--ink-ghost)' }}>{c.count}</div>
+      <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', marginTop: 2 }}>{c.label}</div>
+    </button>
+  )
+  const grid = (min: number): CSSProperties => ({ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 8 })
+  const heading: CSSProperties = { fontSize: '0.95rem', fontWeight: 700, margin: '22px 0 8px' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 14, fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+        Counting
+        {([[false, 'All challenges'], [true, 'Only those switched on']] as const).map(([v, name]) => (
+          <button
+            key={name}
+            onClick={() => setOnOnly(v)}
+            aria-pressed={onOnly === v}
+            style={{
+              padding: '5px 10px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              border: `1px solid ${onOnly === v ? 'rgba(var(--pink-rgb), 0.5)' : 'var(--line-strong)'}`,
+              background: onOnly === v ? 'rgba(var(--pink-rgb), 0.12)' : 'var(--surface)',
+              color: onOnly === v ? 'var(--pink-deep)' : 'var(--ink-soft)',
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <div style={grid(120)}>
+        {card({ key: 'total', label: 'Total', count: s.total }, CARD_COLORS.total, () => pick({}), true)}
+        {s.difficulty.filter((c) => c.key !== 'other').map((c) => card(c, CARD_COLORS[c.key], () => pick({ difficulty: c.key }), true))}
+      </div>
+      {s.difficulty.some((c) => c.key === 'other') && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--ink-faint)', margin: '6px 0 0' }}>
+          {s.difficulty.find((c) => c.key === 'other')!.count} with no difficulty set.
+        </p>
+      )}
+
+      <div style={{ ...grid(120), marginTop: 8 }}>
+        {(onOnly ? [] : s.status).map((c) => card(c, CARD_COLORS[c.key], () => pick({ status: c.key as 'on' | 'off' })))}
+        {s.proof.map((c) => card(c, CARD_COLORS[c.key] ?? 'var(--ink-soft)', () => pick({ type: c.key })))}
+      </div>
+
+      <h2 style={heading}>By tag</h2>
+      <div style={grid(120)}>
+        {s.tags.map((c, i) => card(c, c.key === NO_TAGS_KEY ? 'var(--ink)' : TAG_COLORS[i % TAG_COLORS.length], () => pick({ tag: c.key })))}
+      </div>
+      <p style={{ fontSize: '0.78rem', color: 'var(--ink-faint)', margin: '8px 0 0', lineHeight: 1.5 }}>
+        A challenge with several tags counts under each of them, so the tags add up to more than the total.
+        Click any card to see those challenges.
+      </p>
     </div>
   )
 }
