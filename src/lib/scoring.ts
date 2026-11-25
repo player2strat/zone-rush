@@ -70,6 +70,20 @@ export async function approveSubmission(
 
   const { game_id, team_id, zone_id, challenge_id } = submission
 
+  // A team scores each challenge once. Two teammates can both send the same
+  // card; once one is approved, the other must be rejected, never approved
+  // (it would add the points again and deal the team an extra card).
+  const approvedAlready = await getDocs(query(
+    collection(db, 'submissions'),
+    where('game_id', '==', game_id),
+    where('team_id', '==', team_id),
+    where('challenge_id', '==', challenge_id),
+    where('status', '==', 'approved'),
+  ))
+  if (!approvedAlready.empty) {
+    throw new Error('This team already has this challenge approved. Reject this duplicate instead.')
+  }
+
   // 2. Load game settings
   const gameSnap = await getDoc(doc(db, 'games', game_id))
   if (!gameSnap.exists()) throw new Error('Game not found')

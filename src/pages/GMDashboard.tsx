@@ -1141,6 +1141,27 @@ export default function GMDashboard() {
   // Chat badge = unread flagged messages (the attention queue size).
   const totalUnread = attentionQueue.length
 
+  // Pending submissions that repeat one the team already sent (two teammates
+  // with the same card open). A team scores each challenge once, so these
+  // should be rejected. 'approved': that challenge is already approved for the
+  // team. 'later': a teammate's earlier one is still waiting.
+  const duplicateOf = new Map<string, 'approved' | 'later'>()
+  {
+    const seen = new Map<string, 'approved' | 'pending'>()
+    for (const s of submissions) {
+      if (s.status === 'approved') seen.set(`${s.team_id}:${s.challenge_id}`, 'approved')
+    }
+    // The list is newest first; walk it oldest first so the first one sent
+    // stays the original.
+    for (const s of [...submissions].reverse()) {
+      if (s.status !== 'pending') continue
+      const key = `${s.team_id}:${s.challenge_id}`
+      const before = seen.get(key)
+      if (before) duplicateOf.set(s.id, before === 'approved' ? 'approved' : 'later')
+      else seen.set(key, 'pending')
+    }
+  }
+
   const zoneOwnership = new Map<string, { teamId: string; teamColor: string; teamName: string; points: number; status: ZoneScoreData['status'] }>()
   // Track ALL zone scores (not just claimed) so the map can show partial progress shading
   for (const zs of zoneScores) {
@@ -1836,6 +1857,11 @@ export default function GMDashboard() {
                           <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${diffColor}15`, color: diffColor }}>
                             {challenge?.difficulty?.toUpperCase() || '?'} · {basePts}pt
                           </span>
+                          {duplicateOf.has(sub.id) && (
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(var(--red-rgb), 0.12)', color: 'var(--red)' }}>
+                              Duplicate
+                            </span>
+                          )}
                         </div>
                         {sub.status !== 'pending' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1854,6 +1880,14 @@ export default function GMDashboard() {
                           </div>
                         )}
                       </div>
+
+                      {duplicateOf.has(sub.id) && (
+                        <p style={{ margin: '0 0 12px', fontSize: '0.8rem', lineHeight: 1.5, color: 'var(--red)', background: 'rgba(var(--red-rgb), 0.06)', border: '1px solid rgba(var(--red-rgb), 0.2)', borderRadius: 8, padding: '8px 12px' }}>
+                          {duplicateOf.get(sub.id) === 'approved'
+                            ? 'This team already has this challenge approved. Reject this one; approving it would score the challenge twice.'
+                            : 'A teammate sent this challenge first. Review theirs and reject this one, or reject theirs if this photo is better.'}
+                        </p>
+                      )}
 
                                           {/* Challenge text — resolved task for CYOA cards, else description */}
                       {cyoaTask ? (

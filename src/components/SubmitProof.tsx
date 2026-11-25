@@ -19,7 +19,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ref } from 'firebase/storage'
 import { uploadWithProgress } from './SideQuestPanel'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, addDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
 import { db, storage, auth } from '../lib/firebase'
 import { loadGameZones } from '../lib/gameZones'
 import { detectZone } from '../lib/geo'
@@ -28,6 +28,22 @@ import { isLocationSubmittable, locationStatusLabel, type UseLocationResult } fr
 import { compressImage } from '../lib/imageCompress'
 import { formatZoneLabel } from '../utils/formatZoneLabel'
 import { Icon } from './Icon'
+
+/**
+ * True when someone on the team already has this challenge waiting for review
+ * or approved. A rejected one doesn't count: the team may try again. Stops two
+ * teammates with the same card open from both sending it in.
+ */
+async function teamAlreadySent(gameId: string, teamId: string, challengeId: string): Promise<boolean> {
+  const snap = await getDocs(query(
+    collection(db, 'submissions'),
+    where('game_id', '==', gameId),
+    where('team_id', '==', teamId),
+    where('challenge_id', '==', challengeId),
+  ))
+  return snap.docs.some((d) => d.data().status === 'pending' || d.data().status === 'approved')
+}
+const ALREADY_SENT = 'A teammate already submitted this challenge. Check the card for its status.'
 
 interface SubmitProofProps {
   gameId: string
@@ -153,6 +169,14 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
     setUploadStage('locating')
 
     try {
+      // Checked before the upload (so nobody waits on a wasted upload) and
+      // again just before saving (a teammate may have sent it meanwhile).
+      if (await teamAlreadySent(gameId, teamId, challenge.id)) {
+        setError(ALREADY_SENT)
+        setUploading(false)
+        return
+      }
+
       // Re-acquire a FRESH fix at the moment of submit. This is the key fix
       // for "I opened the modal, walked 100m, took a photo, then submitted."
       // The GPS refresh and the photo compression run at the same time; the
@@ -187,6 +211,12 @@ const detectedZoneId = detectZone(location.lat, location.lng, zones)
         fresh.lat !== null && fresh.lng !== null && submitZone !== null
           ? validateSubmissionZone(fresh.lat, fresh.lng, submitZone)
           : false
+
+      if (await teamAlreadySent(gameId, teamId, challenge.id)) {
+        setError(ALREADY_SENT)
+        setUploading(false)
+        return
+      }
 
       await addDoc(collection(db, 'submissions'), {
         game_id: gameId,
